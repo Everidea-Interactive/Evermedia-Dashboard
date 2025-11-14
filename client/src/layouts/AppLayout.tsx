@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +19,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <SideLink to="/accounts" label="Accounts" />
           <SideLink to="/pics" label="PICs" />
         </nav>
+        <div className="p-3">
+          <Link to="/posts/new" className="btn btn-primary w-full text-center text-sm">
+            Add new Post
+          </Link>
+        </div>
       </aside>
       <div className="col-span-12 md:col-span-9 lg:col-span-10 flex flex-col">
         <header className="h-16 border-b bg-gradient-to-r from-white to-indigo-50/40">
@@ -56,4 +61,3 @@ function SideLink({ to, label }: { to: string; label: string }) {
     </NavLink>
   );
 }
-

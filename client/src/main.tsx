@@ -32,6 +32,7 @@ const router = createBrowserRouter([
   { path: '/campaigns/:id/edit', element: <ProtectedLayout><CampaignEditPage /></ProtectedLayout> },
   { path: '/campaigns/:id/kpi', element: <ProtectedLayout><CampaignKpiPage /></ProtectedLayout> },
   { path: '/campaigns/:id/posts', element: <ProtectedLayout><PostsPage /></ProtectedLayout> },
+  { path: '/posts/new', element: <ProtectedLayout><PostsPage /></ProtectedLayout> },
   { path: '/campaigns/:id/accounts', element: <ProtectedLayout><CampaignAccountsPage /></ProtectedLayout> },
   { path: '/campaigns/:campaignId/accounts/:accountId/edit', element: <ProtectedLayout><AccountKpiEditPage /></ProtectedLayout> },
   { path: '/accounts', element: <ProtectedLayout><AccountsPage /></ProtectedLayout> },
