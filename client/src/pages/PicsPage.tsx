@@ -11,6 +11,7 @@ type Pic = {
   id: string;
   name: string;
   contact?: string;
+  notes?: string;
   active: boolean;
   roles: string[];
 };
@@ -22,7 +23,9 @@ export default function PicsPage() {
   const [active, setActive] = useState('true');
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({
     name: '',
     contact: '',
@@ -45,6 +48,16 @@ export default function PicsPage() {
     fetchPics();
   }, [token, role, active]);
 
+  const resetForm = () => {
+    setForm({
+      name: '',
+      contact: '',
+      notes: '',
+      active: true,
+      roles: [],
+    });
+  };
+
   const handleAddPic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -64,13 +77,7 @@ export default function PicsPage() {
           roles: form.roles,
         },
       });
-      setForm({
-        name: '',
-        contact: '',
-        notes: '',
-        active: true,
-        roles: [],
-      });
+      resetForm();
       setShowAddForm(false);
       fetchPics();
     } catch (error: any) {
@@ -78,6 +85,71 @@ export default function PicsPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditPic = (pic: Pic) => {
+    setEditingId(pic.id);
+    setForm({
+      name: pic.name,
+      contact: pic.contact || '',
+      notes: pic.notes || '',
+      active: pic.active,
+      roles: [...pic.roles],
+    });
+    setShowAddForm(false);
+  };
+
+  const handleUpdatePic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId || !form.name.trim()) {
+      alert('Name is required');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api(`/pics/${editingId}`, {
+        method: 'PUT',
+        token,
+        body: {
+          name: form.name,
+          contact: form.contact || undefined,
+          notes: form.notes || undefined,
+          active: form.active,
+          roles: form.roles,
+        },
+      });
+      resetForm();
+      setEditingId(null);
+      fetchPics();
+    } catch (error: any) {
+      alert(error?.error || 'Failed to update PIC');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeletePic = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${name}"?`)) {
+      return;
+    }
+    setDeletingIds(prev => new Set(prev).add(id));
+    try {
+      await api(`/pics/${id}`, { method: 'DELETE', token });
+      fetchPics();
+    } catch (error: any) {
+      alert(error?.error || 'Failed to delete PIC');
+    } finally {
+      setDeletingIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    resetForm();
+    setEditingId(null);
   };
 
   const toggleRole = (roleName: string) => {
@@ -99,7 +171,7 @@ export default function PicsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Filters</h2>
-          <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)}>
+          <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
             {showAddForm ? 'Cancel' : 'Add PIC System'}
           </Button>
         </div>
@@ -117,10 +189,10 @@ export default function PicsPage() {
           </Select>
         </div>
       </Card>
-      {showAddForm && (
+      {(showAddForm || editingId) && (
         <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3">Add PIC System</h2>
-          <form onSubmit={handleAddPic} className="space-y-3">
+          <h2 className="text-lg font-semibold mb-3">{editingId ? 'Edit PIC System' : 'Add PIC System'}</h2>
+          <form onSubmit={editingId ? handleUpdatePic : handleAddPic} className="space-y-3">
             <Input
               label="Name"
               value={form.name}
@@ -164,9 +236,14 @@ export default function PicsPage() {
                 <span className="text-sm font-medium text-gray-700">Active</span>
               </label>
             </div>
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? 'Adding...' : 'Add PIC System'}
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={submitting} className="flex-1">
+                {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update PIC System' : 'Add PIC System')}
+              </Button>
+              <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
+                Cancel
+              </Button>
+            </div>
           </form>
         </Card>
       )}
@@ -186,7 +263,16 @@ export default function PicsPage() {
                     {p.active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
-                <div className="text-sm text-gray-600 mt-2">{p.contact}</div>
+                {p.contact && <div className="text-sm text-gray-600 mt-2">{p.contact}</div>}
+                {p.notes && <div className="text-xs text-gray-500 mt-1">{p.notes}</div>}
+                <div className="flex gap-2 mt-3">
+                  <Button variant="outline" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
+                    Edit
+                  </Button>
+                  <Button variant="outline" onClick={() => handleDeletePic(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5 text-red-600 hover:text-red-700">
+                    {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>
