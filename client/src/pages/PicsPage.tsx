@@ -5,6 +5,8 @@ import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+import Dialog from '../components/ui/Dialog';
+import Toast from '../components/ui/Toast';
 import PageHeader from '../components/PageHeader';
 
 type Pic = {
@@ -26,6 +28,8 @@ export default function PicsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [form, setForm] = useState({
     name: '',
     contact: '',
@@ -61,7 +65,7 @@ export default function PicsPage() {
   const handleAddPic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      alert('Name is required');
+      setToast({ message: 'Name is required', type: 'error' });
       return;
     }
     setSubmitting(true);
@@ -80,8 +84,9 @@ export default function PicsPage() {
       resetForm();
       setShowAddForm(false);
       fetchPics();
+      setToast({ message: 'PIC added successfully', type: 'success' });
     } catch (error: any) {
-      alert(error?.error || 'Failed to add PIC');
+      setToast({ message: error?.error || 'Failed to add PIC', type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +107,7 @@ export default function PicsPage() {
   const handleUpdatePic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingId || !form.name.trim()) {
-      alert('Name is required');
+      setToast({ message: 'Name is required', type: 'error' });
       return;
     }
     setSubmitting(true);
@@ -121,23 +126,29 @@ export default function PicsPage() {
       resetForm();
       setEditingId(null);
       fetchPics();
+      setToast({ message: 'PIC updated successfully', type: 'success' });
     } catch (error: any) {
-      alert(error?.error || 'Failed to update PIC');
+      setToast({ message: error?.error || 'Failed to update PIC', type: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeletePic = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${name}"?`)) {
-      return;
-    }
+  const handleDeleteClick = (id: string, name: string) => {
+    setDeleteConfirm({ id, name });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
     setDeletingIds(prev => new Set(prev).add(id));
+    setDeleteConfirm(null);
     try {
       await api(`/pics/${id}`, { method: 'DELETE', token });
       fetchPics();
+      setToast({ message: 'PIC deleted successfully', type: 'success' });
     } catch (error: any) {
-      alert(error?.error || 'Failed to delete PIC');
+      setToast({ message: error?.error || 'Failed to delete PIC', type: 'error' });
     } finally {
       setDeletingIds(prev => {
         const next = new Set(prev);
@@ -269,7 +280,7 @@ export default function PicsPage() {
                   <Button variant="outline" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
                     Edit
                   </Button>
-                  <Button variant="outline" onClick={() => handleDeletePic(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5 text-red-600 hover:text-red-700">
+                  <Button variant="outline" onClick={() => handleDeleteClick(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5 text-red-600 hover:text-red-700">
                     {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
                   </Button>
                 </div>
@@ -278,6 +289,35 @@ export default function PicsPage() {
           </div>
         )}
       </div>
+      <Dialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete PIC"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-gray-700">
+          Are you sure you want to delete <strong>"{deleteConfirm?.name}"</strong>?
+        </p>
+        <p className="text-sm text-gray-500 mt-2">
+          This action cannot be undone.
+        </p>
+      </Dialog>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
