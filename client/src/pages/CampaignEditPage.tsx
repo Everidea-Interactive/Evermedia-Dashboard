@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import Toast from '../components/ui/Toast';
 import PageHeader from '../components/PageHeader';
 
 const statusOptions = ['PLANNED', 'ACTIVE', 'PAUSED', 'COMPLETED'];
@@ -25,14 +26,18 @@ export default function CampaignEditPage() {
   const [campaign, setCampaign] = useState<any>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [kpis, setKpis] = useState<any[]>([]);
+  const [allCampaigns, setAllCampaigns] = useState<any[]>([]);
   const [form, setForm] = useState({
     name: '',
-    category: '',
+    categories: [] as string[],
     status: 'PLANNED',
     startDate: '',
     endDate: '',
     accountIds: [] as string[],
   });
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [pendingAccount, setPendingAccount] = useState('');
   const [pendingKpis, setPendingKpis] = useState<Record<string, { target: string }>>(() =>
     Object.fromEntries(accountCategoryOrder.map((cat) => [cat, { target: '' }]))
@@ -41,25 +46,38 @@ export default function CampaignEditPage() {
   const [addingAccount, setAddingAccount] = useState(false);
   const [savingGlobalKpis, setSavingGlobalKpis] = useState(false);
   const [campaignKpiEdits, setCampaignKpiEdits] = useState<Record<string, { id: string; target: string; actual: number }>>({});
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     if (!id) return;
     api(`/campaigns/${id}`, { token }).then(setCampaign);
     api('/accounts', { token }).then(setAccounts);
     api(`/campaigns/${id}/kpis`, { token }).then(setKpis);
+    api('/campaigns', { token }).then(setAllCampaigns).catch(() => setAllCampaigns([]));
   }, [id, token]);
 
   useEffect(() => {
     if (!campaign) return;
     setForm({
       name: campaign.name,
-      category: campaign.category,
+      categories: Array.isArray(campaign.categories) ? campaign.categories : [],
       status: campaign.status,
       startDate: campaign.startDate ? campaign.startDate.split('T')[0] : '',
       endDate: campaign.endDate ? campaign.endDate.split('T')[0] : '',
       accountIds: (campaign.accounts || []).map((a: any) => a.id),
     });
   }, [campaign]);
+
+  useEffect(() => {
+    // Extract unique categories from all campaigns
+    const allCategories = new Set<string>();
+    allCampaigns.forEach(c => {
+      if (Array.isArray(c.categories)) {
+        c.categories.forEach(cat => allCategories.add(cat));
+      }
+    });
+    setAvailableCategories(Array.from(allCategories).sort());
+  }, [allCampaigns]);
 
   useEffect(() => {
     const global = Object.fromEntries(
@@ -85,7 +103,7 @@ export default function CampaignEditPage() {
     try {
       const payload = {
         name: form.name,
-        category: form.category,
+        categories: form.categories,
         status: form.status,
         startDate: form.startDate || undefined,
         endDate: form.endDate || undefined,
@@ -181,7 +199,99 @@ export default function CampaignEditPage() {
         </div>
         <form className="space-y-3" onSubmit={handleSaveCampaign}>
           <Input label="Campaign name" value={form.name} onChange={(e) => handleFormChange('name', e.target.value)} />
-          <Input label="Category" value={form.category} onChange={(e) => handleFormChange('category', e.target.value)} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Categories</label>
+            <div className="space-y-2">
+              <div className="relative">
+                <Input
+                  value={newCategory}
+                  onChange={e => {
+                    setNewCategory(e.target.value);
+                    setShowSuggestions(e.target.value.trim().length > 0);
+                  }}
+                  onFocus={() => {
+                    if (newCategory.trim().length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    // Delay to allow clicking on suggestions
+                    setTimeout(() => setShowSuggestions(false), 200);
+                  }}
+                  placeholder="Type category name and press Enter"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const category = newCategory.trim();
+                      if (category) {
+                        if (form.categories.includes(category)) {
+                          setToast({ message: `Category "${category}" is already added`, type: 'error' });
+                        } else {
+                          handleFormChange('categories', [...form.categories, category]);
+                          setNewCategory('');
+                          setShowSuggestions(false);
+                        }
+                      }
+                    }
+                  }}
+                />
+                {showSuggestions && newCategory.trim().length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                    {availableCategories
+                      .filter(cat => 
+                        !form.categories.includes(cat) &&
+                        cat.toLowerCase().includes(newCategory.toLowerCase())
+                      )
+                      .map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700 text-sm"
+                          onClick={() => {
+                            if (form.categories.includes(cat)) {
+                              setToast({ message: `Category "${cat}" is already added`, type: 'error' });
+                            } else {
+                              handleFormChange('categories', [...form.categories, cat]);
+                              setNewCategory('');
+                              setShowSuggestions(false);
+                            }
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    {availableCategories.filter(cat => 
+                      !form.categories.includes(cat) &&
+                      cat.toLowerCase().includes(newCategory.toLowerCase())
+                    ).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-500">
+                        Press Enter to create "{newCategory.trim()}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {form.categories.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {form.categories.map(category => (
+                    <span
+                      key={category}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-sm"
+                    >
+                      {category}
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange('categories', form.categories.filter(c => c !== category))}
+                        className="hover:text-indigo-900"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label="Start date" type="date" value={form.startDate} onChange={(e) => handleFormChange('startDate', e.target.value)} />
             <Input label="End date" type="date" value={form.endDate} onChange={(e) => handleFormChange('endDate', e.target.value)} />
@@ -259,7 +369,13 @@ export default function CampaignEditPage() {
           </Button>
         </div>
       </Card>
-
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

@@ -59,7 +59,7 @@ async function main() {
       create: {
         id: 'camp1',
         name: 'Q4 Booster',
-        category: 'Electronics',
+        categories: ['Electronics', 'Tech'],
         startDate: today,
         endDate: nextMonth,
         status: CampaignStatus.ACTIVE,
@@ -73,7 +73,7 @@ async function main() {
       create: {
         id: 'camp2',
         name: 'New Year Promo',
-        category: 'Lifestyle',
+        categories: ['Lifestyle'],
         startDate: today,
         endDate: nextMonth,
         status: CampaignStatus.PLANNED,

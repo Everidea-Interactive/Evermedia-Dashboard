@@ -86,7 +86,17 @@ export default function CampaignDetailPage() {
 
   const headerMeta = (
     <>
-      <span>{campaign.category}</span>
+      <div className="flex flex-wrap gap-1">
+        {Array.isArray(campaign.categories) && campaign.categories.length > 0 ? (
+          campaign.categories.map((cat: string, idx: number) => (
+            <span key={idx} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded">
+              {cat}
+            </span>
+          ))
+        ) : (
+          <span className="text-gray-400">No categories</span>
+        )}
+      </div>
       <span className={`badge border ${statusPills[campaign.status] ?? ''}`}>{campaign.status}</span>
     </>
   );

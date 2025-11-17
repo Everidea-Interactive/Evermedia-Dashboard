@@ -9,7 +9,9 @@ router.get('/', async (req, res) => {
   const { status, category, dateFrom, dateTo } = req.query as any;
   const where: any = {};
   if (status) where.status = status;
-  if (category) where.category = { contains: String(category), mode: 'insensitive' };
+  if (category) {
+    where.categories = { has: String(category) };
+  }
   if (dateFrom || dateTo) {
     where.AND = [] as any[];
     if (dateFrom) where.AND.push({ startDate: { gte: new Date(String(dateFrom)) } });
@@ -20,12 +22,14 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, category, startDate, endDate, status, description, accountIds } = req.body as any;
-  if (!name || !category || !startDate || !endDate || !status) return res.status(400).json({ error: 'Missing fields' });
+  const { name, categories, startDate, endDate, status, description, accountIds } = req.body as any;
+  if (!name || !categories || !Array.isArray(categories) || categories.length === 0 || !startDate || !endDate || !status) {
+    return res.status(400).json({ error: 'Missing fields: name, categories (array), startDate, endDate, and status are required' });
+  }
   const campaign = await prisma.campaign.create({
     data: {
       name,
-      category,
+      categories: categories,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       status,
@@ -43,13 +47,13 @@ router.get('/:id', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { name, category, startDate, endDate, status, description, accountIds } = req.body as any;
+  const { name, categories, startDate, endDate, status, description, accountIds } = req.body as any;
   try {
     const campaign = await prisma.campaign.update({
       where: { id: req.params.id },
       data: {
         name,
-        category,
+        ...(categories !== undefined ? { categories: Array.isArray(categories) ? categories : [] } : {}),
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
         status,

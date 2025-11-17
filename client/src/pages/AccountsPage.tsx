@@ -12,7 +12,7 @@ import PageHeader from '../components/PageHeader';
 type Campaign = {
   id: string;
   name: string;
-  category: string;
+  categories: string[];
 };
 
 type Account = {
@@ -263,7 +263,7 @@ export default function AccountsPage() {
                   .filter(c => !form.campaignIds.includes(c.id))
                   .map(campaign => (
                     <option key={campaign.id} value={campaign.id}>
-                      {campaign.name} ({campaign.category})
+                      {campaign.name} ({Array.isArray(campaign.categories) ? campaign.categories.join(', ') : ''})
                     </option>
                   ))}
               </Select>

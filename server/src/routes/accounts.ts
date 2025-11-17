@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
   const accounts = await prisma.account.findMany({
     where,
     include: { 
-      campaigns: { select: { id: true, name: true, category: true } },
+      campaigns: { select: { id: true, name: true, categories: true } },
       _count: { select: { posts: true, kpis: true } }
     },
     orderBy: { createdAt: 'desc' },
