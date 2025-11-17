@@ -280,7 +280,6 @@ Authorization: Bearer <your-jwt-token>
 - **KPI Tracking**: Monitor key performance indicators with target vs actual metrics
 - **Post Analytics**: Track post performance with engagement metrics
 - **Dashboard Views**: Visualize campaign performance and engagement data
-- **File Uploads**: Upload and manage profile pictures and media
 
 ## 🔐 Security Notes
 

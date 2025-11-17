@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import PageHeader from '../components/PageHeader';
 
 const statusOptions = ['PLANNED', 'ACTIVE', 'PAUSED', 'COMPLETED'];
 const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR'];
@@ -155,10 +156,24 @@ export default function CampaignEditPage() {
     }
   };
 
-  if (!campaign) return <div>Loading…</div>;
+  const backPath = id ? `/campaigns/${id}` : '/campaigns';
+
+  if (!campaign) {
+    return (
+      <div>
+        <PageHeader backPath={backPath} backLabel="Back to campaign" title={<div className="page-title">Loading…</div>} />
+        <div className="mt-3">Loading…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        backPath={backPath}
+        backLabel="Back to campaign"
+        title={<h1 className="page-title">Edit campaign</h1>}
+      />
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Edit campaign metadata</h2>

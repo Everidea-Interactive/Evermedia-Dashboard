@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import PageHeader from '../components/PageHeader';
 
 export default function CampaignAccountsPage() {
   const { id } = useParams();
@@ -20,9 +21,15 @@ export default function CampaignAccountsPage() {
     }).finally(() => setLoading(false));
   }, [id, token]);
 
+  const backPath = id ? `/campaigns/${id}` : '/campaigns';
+
   return (
     <div className="max-w-6xl mx-auto p-4">
-      <h2 className="text-xl font-semibold mb-3">Accounts</h2>
+      <PageHeader
+        backPath={backPath}
+        backLabel="Back to campaign"
+        title={<h2 className="text-xl font-semibold mb-0">Accounts</h2>}
+      />
       {loading ? <div>Loading…</div> : (
         <div className="grid md:grid-cols-2 gap-3">
           {items.map((a: any) => (
@@ -40,4 +47,3 @@ export default function CampaignAccountsPage() {
     </div>
   );
 }
-

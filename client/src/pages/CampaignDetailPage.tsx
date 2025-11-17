@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
+import PageHeader from '../components/PageHeader';
 
 const statusPills: Record<string, string> = {
   ACTIVE: 'bg-green-50 border-green-100 text-green-700',
@@ -72,25 +73,40 @@ export default function CampaignDetailPage() {
     return map;
   }, [kpis]);
 
-  if (!campaign) return <div>Loading…</div>;
+  const backPath = '/campaigns';
+
+  if (!campaign) {
+    return (
+      <div>
+        <PageHeader backPath={backPath} backLabel="Back to campaigns" title={<div className="page-title">Loading…</div>} />
+        <div className="mt-3">Loading…</div>
+      </div>
+    );
+  }
+
+  const headerMeta = (
+    <>
+      <span>{campaign.category}</span>
+      <span className={`badge border ${statusPills[campaign.status] ?? ''}`}>{campaign.status}</span>
+    </>
+  );
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="page-title">{campaign.name}</h1>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <span>{campaign.category}</span>
-            <span className={`badge border ${statusPills[campaign.status] ?? ''}`}>{campaign.status}</span>
-          </div>
-        </div>
-        <Link
-          to={`/campaigns/${campaign.id}/edit`}
-          className="btn btn-outline text-sm"
-        >
-          Edit campaign
-        </Link>
-      </div>
+      <PageHeader
+        backPath={backPath}
+        backLabel="Back to campaigns"
+        title={<h1 className="page-title">{campaign.name}</h1>}
+        meta={headerMeta}
+        action={
+          <Link
+            to={`/campaigns/${campaign.id}/edit`}
+            className="btn btn-outline text-sm whitespace-nowrap"
+          >
+            Edit campaign
+          </Link>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <Card>

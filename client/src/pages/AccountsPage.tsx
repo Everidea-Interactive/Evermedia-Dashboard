@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import PageHeader from '../components/PageHeader';
 
 type Account = {
   id: string;
@@ -35,7 +36,11 @@ export default function AccountsPage() {
 
   return (
     <div>
-      <div className="mb-3"><h2 className="page-title">Accounts</h2></div>
+      <PageHeader
+        backPath="/campaigns"
+        backLabel="Back to campaigns"
+        title={<h2 className="page-title">Accounts</h2>}
+      />
       <Card>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="sm:col-span-2"><Input label="Search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Name or handle" /></div>

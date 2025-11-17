@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
+import PageHeader from '../components/PageHeader';
 
 const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR'];
 const labels: Record<string, string> = {
@@ -80,10 +81,24 @@ export default function AccountKpiEditPage() {
     }
   };
 
-  if (loading) return <div>Loading…</div>;
+  const backPath = campaignId ? `/campaigns/${campaignId}/accounts` : '/campaigns';
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader backPath={backPath} backLabel="Back to accounts" title={<div className="page-title">Loading…</div>} />
+        <div className="mt-3">Loading…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        backPath={backPath}
+        backLabel="Back to accounts"
+        title={<h1 className="page-title">Account KPIs</h1>}
+      />
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Editing KPIs for {account?.name}</h2>

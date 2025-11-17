@@ -98,7 +98,6 @@ model PIC {
   contact      String?
   notes        String?
   active       Boolean       @default(true)
-  avatarUrl    String?
   roles        PICOnRoles[]
   talentPosts  Post[]        @relation("PicTalent")
   editorPosts  Post[]        @relation("PicEditor")

@@ -8,6 +8,7 @@ import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
+import PageHeader from '../components/PageHeader';
 
 type Post = {
   id: string;
@@ -111,6 +112,8 @@ export default function PostsPage() {
   const routeCampaignId = id;
   const campaignIdForPosts = routeCampaignId || form.campaignId;
   const showPostTable = Boolean(routeCampaignId);
+  const backPath = routeCampaignId ? `/campaigns/${routeCampaignId}` : '/campaigns';
+  const backLabel = routeCampaignId ? 'Back to campaign' : 'Back to campaigns';
 
   const fetchPostsForCampaign = useCallback(
     async (campaignId: string) => {
@@ -334,7 +337,11 @@ export default function PostsPage() {
 
   return (
     <div>
-      <div className="mb-3"><h2 className="page-title">Posts</h2></div>
+      <PageHeader
+        backPath={backPath}
+        backLabel={backLabel}
+        title={<h2 className="page-title">Posts</h2>}
+      />
 
       <Card className="space-y-4 mb-6">
         <div className="flex flex-col gap-1">

@@ -1,15 +1,8 @@
-import { Router, Request } from 'express';
-import multer from 'multer';
-import path from 'node:path';
-import fs from 'node:fs';
+import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 
-const uploadDir = path.join(process.cwd(), 'uploads');
-fs.mkdirSync(uploadDir, { recursive: true });
-const upload = multer({ dest: uploadDir });
 const router = Router();
-type PicUploadRequest = Request & { file?: Express.Multer.File };
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
@@ -32,7 +25,6 @@ router.get('/', async (req, res) => {
     notes: p.notes,
     active: p.active,
     roles: p.roles.map((r: any) => r.roleType.name),
-    avatarUrl: p.avatarUrl,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   })));
@@ -97,16 +89,6 @@ router.put('/:id', async (req, res) => {
   } catch (e) {
     res.status(404).json({ error: 'Not found' });
   }
-});
-
-router.post('/:id/avatar', requireAuth, upload.single('avatar'), async (req: PicUploadRequest, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Avatar required' });
-  const avatarUrl = `/uploads/${req.file.filename}`;
-  const pic = await prisma.pIC.update({
-    where: { id: req.params.id },
-    data: { avatarUrl },
-  });
-  res.json({ id: pic.id, avatarUrl: pic.avatarUrl });
 });
 
 router.delete('/:id', async (req, res) => {
