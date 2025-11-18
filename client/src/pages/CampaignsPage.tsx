@@ -182,7 +182,7 @@ export default function CampaignsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)}>
+          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)}>
             {showAddForm ? 'Cancel' : 'Add Campaign'}
           </Button>
         </div>
@@ -434,7 +434,7 @@ export default function CampaignsPage() {
               )}
             </div>
             <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1">
+              <Button type="submit" disabled={submitting} className="flex-1" color="green">
                 {submitting ? 'Adding...' : 'Add Campaign'}
               </Button>
               <Button type="button" variant="outline" onClick={() => {

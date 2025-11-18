@@ -691,7 +691,7 @@ export default function PostsPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting} color="green">
               {submitting ? 'Saving...' : 'Save post'}
             </Button>
           </div>
@@ -709,6 +709,7 @@ export default function PostsPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
+                        <TH>Actions</TH>
                         <TH>Campaign</TH>
                         <TH>Account</TH>
                         <TH>Hari Posting</TH>
@@ -729,7 +730,6 @@ export default function PostsPage() {
                         <TH>SHARE</TH>
                         <TH>SAVED</TH>
                         <TH>Engagement Rate</TH>
-                        <TH>Actions</TH>
                       </TR>
                     </THead>
                     <tbody>
@@ -742,6 +742,17 @@ export default function PostsPage() {
                         return (
                           <TR key={p.id}>
                             <TD>{i + 1}</TD>
+                            <TD>
+                            <Button
+                              onClick={() => handleEditPost(p)}
+                              variant="ghost"
+                              color="blue"
+                              className="text-xs px-2 py-1"
+                              type="button"
+                            >
+                              Edit
+                            </Button>
+                            </TD>
                             <TD>{campaignName}</TD>
                             <TD>{accountName}</TD>
                             <TD>{p.postDay}</TD>
@@ -770,15 +781,6 @@ export default function PostsPage() {
                             <TD>{p.totalShare}</TD>
                             <TD>{p.totalSaved}</TD>
                             <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
-                            <TD>
-                              <button
-                                onClick={() => handleEditPost(p)}
-                                className="btn btn-ghost text-xs px-2 py-1"
-                                type="button"
-                              >
-                                Edit
-                              </button>
-                            </TD>
                           </TR>
                         );
                       })}
@@ -808,7 +810,7 @@ export default function PostsPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleUpdatePost} disabled={submittingEdit}>
+            <Button onClick={handleUpdatePost} disabled={submittingEdit} color="blue">
               {submittingEdit ? 'Saving...' : 'Save Changes'}
             </Button>
           </>

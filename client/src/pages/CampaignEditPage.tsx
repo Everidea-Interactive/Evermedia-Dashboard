@@ -305,7 +305,7 @@ export default function CampaignEditPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Linked accounts</label>
             <div className="text-xs text-gray-500">{form.accountIds.length} accounts</div>
           </div>
-          <Button disabled={savingCampaign} className="w-full" type="submit">
+          <Button disabled={savingCampaign} className="w-full" type="submit" color="blue">
             {savingCampaign ? 'Saving…' : 'Save campaign'}
           </Button>
         </form>
@@ -314,7 +314,7 @@ export default function CampaignEditPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Edit campaign KPIs</h2>
-          <Button variant="outline" onClick={handleGlobalKpiSave} disabled={savingGlobalKpis}>
+          <Button variant="outline" color="blue" onClick={handleGlobalKpiSave} disabled={savingGlobalKpis}>
             {savingGlobalKpis ? 'Saving…' : 'Save KPI targets'}
           </Button>
         </div>
@@ -364,7 +364,7 @@ export default function CampaignEditPage() {
               </div>
             ))}
           </div>
-          <Button variant="primary" disabled={addingAccount || !pendingAccount} onClick={handleAddAccount} className="w-full">
+          <Button variant="primary" color="green" disabled={addingAccount || !pendingAccount} onClick={handleAddAccount} className="w-full">
             {addingAccount ? 'Adding account…' : 'Add account with KPIs'}
           </Button>
         </div>

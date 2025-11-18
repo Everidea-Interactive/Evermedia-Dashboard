@@ -182,7 +182,7 @@ export default function PicsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Filters</h2>
-          <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
+          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
             {showAddForm ? 'Cancel' : 'Add PIC System'}
           </Button>
         </div>
@@ -248,7 +248,7 @@ export default function PicsPage() {
               </label>
             </div>
             <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1">
+              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
                 {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update PIC System' : 'Add PIC System')}
               </Button>
               <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
@@ -277,10 +277,10 @@ export default function PicsPage() {
                 {p.contact && <div className="text-sm text-gray-600 mt-2">{p.contact}</div>}
                 {p.notes && <div className="text-xs text-gray-500 mt-1">{p.notes}</div>}
                 <div className="flex gap-2 mt-3">
-                  <Button variant="outline" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
+                  <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
                     Edit
                   </Button>
-                  <Button variant="outline" onClick={() => handleDeleteClick(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5 text-red-600 hover:text-red-700">
+                  <Button variant="outline" color="red" onClick={() => handleDeleteClick(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5">
                     {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
                   </Button>
                 </div>
@@ -298,7 +298,7 @@ export default function PicsPage() {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+            <Button variant="primary" color="red" onClick={handleDeleteConfirm}>
               Delete
             </Button>
           </>

@@ -123,10 +123,10 @@ export default function AccountKpiEditPage() {
           })}
         </div>
         <div className="flex items-center gap-3 mt-4">
-          <Button variant="primary" onClick={handleSave} disabled={saving}>
+          <Button variant="primary" color="blue" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save targets'}
           </Button>
-          <Button variant="ghost" onClick={handleRemove} disabled={removing}>
+          <Button variant="ghost" color="red" onClick={handleRemove} disabled={removing}>
             {removing ? 'Removing…' : 'Remove account'}
           </Button>
         </div>

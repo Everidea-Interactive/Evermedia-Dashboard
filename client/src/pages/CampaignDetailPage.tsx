@@ -94,20 +94,17 @@ export default function CampaignDetailPage() {
   }
 
   const headerMeta = (
-    <>
-      <div className="flex flex-wrap gap-1">
-        {Array.isArray(campaign.categories) && campaign.categories.length > 0 ? (
-          campaign.categories.map((cat: string, idx: number) => (
-            <span key={idx} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded">
-              {cat}
-            </span>
-          ))
-        ) : (
-          <span className="text-gray-400">No categories</span>
-        )}
-      </div>
-      <span className={`badge border ${statusPills[campaign.status] ?? ''}`}>{campaign.status}</span>
-    </>
+    <div className="flex flex-wrap gap-1">
+      {Array.isArray(campaign.categories) && campaign.categories.length > 0 ? (
+        campaign.categories.map((cat: string, idx: number) => (
+          <span key={idx} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded">
+            {cat}
+          </span>
+        ))
+      ) : (
+        <span className="text-gray-400">No categories</span>
+      )}
+    </div>
   );
 
   return (
@@ -115,12 +112,17 @@ export default function CampaignDetailPage() {
       <PageHeader
         backPath={backPath}
         backLabel="Back to campaigns"
-        title={<h1 className="page-title">{campaign.name}</h1>}
+        title={
+          <div className="flex items-center gap-3 flex-wrap justify-center md:justify-start">
+            <h1 className="page-title">{campaign.name}</h1>
+            <span className={`badge border ${statusPills[campaign.status] ?? ''}`}>{campaign.status}</span>
+          </div>
+        }
         meta={headerMeta}
         action={
           <Link
             to={`/campaigns/${campaign.id}/edit`}
-            className="btn btn-outline text-sm whitespace-nowrap"
+            className="btn btn-outline-blue text-sm whitespace-nowrap"
           >
             Edit campaign
           </Link>
@@ -191,10 +193,10 @@ export default function CampaignDetailPage() {
                   })}
                 </div>
                 <div className="flex items-center gap-2 whitespace-nowrap">
-                  <Link to={`/campaigns/${campaign.id}/accounts/${account.id}/edit`} className="btn btn-outline text-xs px-3 py-1">
+                  <Link to={`/campaigns/${campaign.id}/accounts/${account.id}/edit`} className="btn btn-outline-blue text-xs px-3 py-1">
                     Edit KPIs
                   </Link>
-                  <Button variant="ghost" className="text-xs px-3 py-1" onClick={() => handleAccountRemove(account.id)} disabled={accountRemoving[account.id]}>
+                  <Button variant="ghost" color="red" className="text-xs px-3 py-1" onClick={() => handleAccountRemove(account.id)} disabled={accountRemoving[account.id]}>
                     {accountRemoving[account.id] ? 'Removing…' : 'Remove'}
                   </Button>
                 </div>
@@ -225,6 +227,7 @@ export default function CampaignDetailPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
+                        <TH>Actions</TH>
                         <TH>Account</TH>
                         <TH>Tanggal Posting</TH>
                         <TH>Judul</TH>
@@ -249,6 +252,37 @@ export default function CampaignDetailPage() {
                       {posts.map((p: any, index) => (
                         <TR key={p.id}>
                           <TD>{index + 1}</TD>
+                          <TD>
+                            <Button
+                              onClick={() => {
+                                setEditingPostId(p.id);
+                                setEditForm({
+                                  postTitle: p.postTitle || '',
+                                  postDate: p.postDate ? new Date(p.postDate).toISOString().split('T')[0] : '',
+                                  contentType: p.contentType || '',
+                                  contentCategory: p.contentCategory || '',
+                                  status: p.status || '',
+                                  picTalentId: p.picTalentId || '',
+                                  picEditorId: p.picEditorId || '',
+                                  picPostingId: p.picPostingId || '',
+                                  contentLink: p.contentLink || '',
+                                  adsOnMusic: p.adsOnMusic ? 'true' : 'false',
+                                  yellowCart: p.yellowCart ? 'true' : 'false',
+                                  totalView: p.totalView?.toString() ?? '',
+                                  totalLike: p.totalLike?.toString() ?? '',
+                                  totalComment: p.totalComment?.toString() ?? '',
+                                  totalShare: p.totalShare?.toString() ?? '',
+                                  totalSaved: p.totalSaved?.toString() ?? '',
+                                });
+                              }}
+                              variant="ghost"
+                              color="blue"
+                              className="text-xs px-2 py-1"
+                              type="button"
+                            >
+                              Edit
+                            </Button>
+                          </TD>
                           <TD>{p.account?.name || '—'}</TD>
                           <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
                           <TD>{p.postTitle}</TD>
@@ -275,35 +309,6 @@ export default function CampaignDetailPage() {
                           <TD>{p.totalShare}</TD>
                           <TD>{p.totalSaved}</TD>
                           <TD>{((p.engagementRate ?? 0) * 100).toFixed(2)}%</TD>
-                          <TD>
-                            <button
-                              onClick={() => {
-                                setEditingPostId(p.id);
-                                setEditForm({
-                                  postTitle: p.postTitle || '',
-                                  postDate: p.postDate ? new Date(p.postDate).toISOString().split('T')[0] : '',
-                                  contentType: p.contentType || '',
-                                  contentCategory: p.contentCategory || '',
-                                  status: p.status || '',
-                                  picTalentId: p.picTalentId || '',
-                                  picEditorId: p.picEditorId || '',
-                                  picPostingId: p.picPostingId || '',
-                                  contentLink: p.contentLink || '',
-                                  adsOnMusic: p.adsOnMusic ? 'true' : 'false',
-                                  yellowCart: p.yellowCart ? 'true' : 'false',
-                                  totalView: p.totalView?.toString() ?? '',
-                                  totalLike: p.totalLike?.toString() ?? '',
-                                  totalComment: p.totalComment?.toString() ?? '',
-                                  totalShare: p.totalShare?.toString() ?? '',
-                                  totalSaved: p.totalSaved?.toString() ?? '',
-                                });
-                              }}
-                              className="btn btn-ghost text-xs px-2 py-1"
-                              type="button"
-                            >
-                              Edit
-                            </button>
-                          </TD>
                         </TR>
                       ))}
                     </tbody>
@@ -405,6 +410,7 @@ export default function CampaignDetailPage() {
                 }
               }}
               disabled={submittingEdit}
+              color="blue"
             >
               {submittingEdit ? 'Saving...' : 'Save Changes'}
             </Button>

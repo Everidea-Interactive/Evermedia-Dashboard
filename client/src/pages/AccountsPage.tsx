@@ -202,7 +202,7 @@ export default function AccountsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
+          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
             {showAddForm ? 'Cancel' : 'Add Account'}
           </Button>
         </div>
@@ -300,7 +300,7 @@ export default function AccountsPage() {
               onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
             />
             <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1">
+              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
                 {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update Account' : 'Add Account')}
               </Button>
               <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
@@ -336,17 +336,15 @@ export default function AccountsPage() {
                 {a.notes && <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
                 <div className="mt-3">
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
+                    <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
                       Edit
                     </Button>
                     <Button 
                       variant="outline" 
+                      color="red"
                       onClick={() => handleDeleteClick(a.id, a.name)} 
                       disabled={deletingIds.has(a.id) || (a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0} 
                       className="flex-1 text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ color: '#dc2626' }}
-                      onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.color = '#b91c1c'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = '#dc2626'; }}
                     >
                       {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
                     </Button>
@@ -373,7 +371,7 @@ export default function AccountsPage() {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+            <Button variant="primary" color="red" onClick={handleDeleteConfirm}>
               Delete
             </Button>
           </>

@@ -103,6 +103,87 @@ html.dark .btn-primary {
   background-color: var(--bg-tertiary);
 }
 
+/* Blue buttons (Edit) */
+.btn-primary-blue {
+  background-color: #2563eb;
+  color: white;
+  @apply hover:bg-blue-700 focus:ring-blue-500 shadow-sm hover:shadow;
+}
+html.dark .btn-primary-blue {
+  background-color: #3b82f6;
+  @apply hover:bg-blue-600;
+}
+.btn-outline-blue {
+  border-color: #2563eb;
+  background-color: var(--bg-secondary);
+  color: #2563eb;
+  @apply border focus:ring-blue-500;
+}
+.btn-outline-blue:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+.btn-ghost-blue {
+  color: #2563eb;
+  @apply focus:ring-blue-500;
+}
+.btn-ghost-blue:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+/* Red buttons (Delete) */
+.btn-primary-red {
+  background-color: #dc2626;
+  color: white;
+  @apply hover:bg-red-700 focus:ring-red-500 shadow-sm hover:shadow;
+}
+html.dark .btn-primary-red {
+  background-color: #ef4444;
+  @apply hover:bg-red-600;
+}
+.btn-outline-red {
+  border-color: #dc2626;
+  background-color: var(--bg-secondary);
+  color: #dc2626;
+  @apply border focus:ring-red-500;
+}
+.btn-outline-red:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+}
+.btn-ghost-red {
+  color: #dc2626;
+  @apply focus:ring-red-500;
+}
+.btn-ghost-red:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* Green buttons (Add) */
+.btn-primary-green {
+  background-color: #16a34a;
+  color: white;
+  @apply hover:bg-green-700 focus:ring-green-500 shadow-sm hover:shadow;
+}
+html.dark .btn-primary-green {
+  background-color: #22c55e;
+  @apply hover:bg-green-600;
+}
+.btn-outline-green {
+  border-color: #16a34a;
+  background-color: var(--bg-secondary);
+  color: #16a34a;
+  @apply border focus:ring-green-500;
+}
+.btn-outline-green:hover {
+  background-color: rgba(22, 163, 74, 0.1);
+}
+.btn-ghost-green {
+  color: #16a34a;
+  @apply focus:ring-green-500;
+}
+.btn-ghost-green:hover {
+  background-color: rgba(22, 163, 74, 0.1);
+}
+
 .input {
   background-color: var(--bg-secondary);
   border-color: var(--border-color-dark);
