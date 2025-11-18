@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { api, setUnauthorizedHandler } from '../lib/api';
 
 type User = { id: string; name: string; email: string; role: 'ADMIN'|'CAMPAIGN_MANAGER'|'OPERATOR'|'VIEWER' };
 
@@ -19,6 +19,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return str ? JSON.parse(str) : null;
   });
 
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  };
+
+  // Set up global 401 handler
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+      // Redirect will happen via ProtectedRoute detecting no token
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
   // Verify token on mount
   useEffect(() => {
     if (token) {
@@ -33,13 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
     localStorage.setItem('token', res.token);
     localStorage.setItem('user', JSON.stringify(res.user));
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
   };
 
   const value = useMemo(() => ({ user, token, login, logout }), [user, token]);
