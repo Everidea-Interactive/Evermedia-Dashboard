@@ -391,6 +391,17 @@ export default function AllPostsPage() {
 
       {loading ? (
         <div className="skeleton h-10 w-full" />
+      ) : posts.length === 0 ? (
+        <Card>
+          <div className="py-12 text-center">
+            <p className="text-gray-500 text-lg">No posts found</p>
+            <p className="text-gray-400 text-sm mt-2">
+              {Object.values(filters).some(f => f !== '') 
+                ? 'Try adjusting your filters to see more results.'
+                : 'There are no posts available. Create a new post to get started.'}
+            </p>
+          </div>
+        </Card>
       ) : (
         <Card>
           <div className="card-inner-table">
