@@ -7,11 +7,14 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import Dialog from '../components/ui/Dialog';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 
 type Post = {
   id: string;
+  campaignId: string;
+  accountId: string;
   postDate: string;
   postDay: string;
   picTalentId?: string;
@@ -20,6 +23,8 @@ type Post = {
   picTalent?: { id: string; name: string } | null;
   picEditor?: { id: string; name: string } | null;
   picPosting?: { id: string; name: string } | null;
+  account?: { id: string; name: string } | null;
+  campaign?: { id: string; name: string } | null;
   contentCategory: string;
   adsOnMusic: boolean;
   yellowCart: boolean;
@@ -111,6 +116,9 @@ export default function PostsPage() {
   const [showAccountSuggestions, setShowAccountSuggestions] = useState(false);
   const [accountInputFocused, setAccountInputFocused] = useState(false);
   const suggestionBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<FormState>>({});
+  const [submittingEdit, setSubmittingEdit] = useState(false);
 
   const routeCampaignId = id;
   const campaignIdForPosts = routeCampaignId || form.campaignId;
@@ -352,6 +360,98 @@ export default function PostsPage() {
       if (suggestionBlurTimer.current) clearTimeout(suggestionBlurTimer.current);
     };
   }, []);
+
+  const handleEditPost = (post: Post) => {
+    setEditingPostId(post.id);
+    setEditForm({
+      campaignId: post.campaignId,
+      campaignCategory: '',
+      picContentId: post.picTalentId || '',
+      picEditorId: post.picEditorId || '',
+      picPostingId: post.picPostingId || '',
+      accountName: post.account?.name || '',
+      accountType: '',
+      contentCategory: post.contentCategory || '',
+      contentType: post.contentType || '',
+      status: post.status || '',
+      contentLink: post.contentLink || '',
+      postTitle: post.postTitle || '',
+      postDate: post.postDate ? new Date(post.postDate).toISOString().split('T')[0] : '',
+      adsOnMusic: post.adsOnMusic ? 'true' : 'false',
+      yellowCart: post.yellowCart ? 'true' : 'false',
+      totalView: post.totalView?.toString() ?? '',
+      totalLike: post.totalLike?.toString() ?? '',
+      totalComment: post.totalComment?.toString() ?? '',
+      totalShare: post.totalShare?.toString() ?? '',
+      totalSaved: post.totalSaved?.toString() ?? '',
+    });
+  };
+
+  const handleUpdatePost = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingPostId) return;
+    
+    const post = posts.find(p => p.id === editingPostId);
+    if (!post) return;
+
+    setSubmittingEdit(true);
+    try {
+      const updatedPost = await api(`/posts/${editingPostId}`, {
+        method: 'PUT',
+        token,
+        body: {
+          postDate: editForm.postDate || post.postDate,
+          picTalentId: editForm.picContentId || undefined,
+          picEditorId: editForm.picEditorId || undefined,
+          picPostingId: editForm.picPostingId || undefined,
+          contentCategory: editForm.contentCategory || undefined,
+          adsOnMusic: editForm.adsOnMusic === 'true',
+          yellowCart: editForm.yellowCart === 'true',
+          postTitle: editForm.postTitle || post.postTitle,
+          contentType: editForm.contentType || undefined,
+          status: editForm.status || undefined,
+          contentLink: editForm.contentLink || undefined,
+          totalView: parseInt(editForm.totalView || '0', 10) || 0,
+          totalLike: parseInt(editForm.totalLike || '0', 10) || 0,
+          totalComment: parseInt(editForm.totalComment || '0', 10) || 0,
+          totalShare: parseInt(editForm.totalShare || '0', 10) || 0,
+          totalSaved: parseInt(editForm.totalSaved || '0', 10) || 0,
+        },
+      }) as Post;
+      
+      // Update the post in the list without reloading, preserving account/campaign/PIC objects
+      setPosts(prevPosts => prevPosts.map(p => {
+        if (p.id === editingPostId) {
+          // Helper to get PIC object or null
+          const getPicObject = (picId: string | undefined) => {
+            if (!picId) return null;
+            const pic = pics.find(p => p.id === picId);
+            return pic ? { id: pic.id, name: pic.name } : null;
+          };
+          
+          // Preserve account, campaign, and update PIC objects from form
+          return {
+            ...updatedPost,
+            account: post.account,
+            campaign: post.campaign,
+            picTalent: getPicObject(editForm.picContentId),
+            picEditor: getPicObject(editForm.picEditorId),
+            picPosting: getPicObject(editForm.picPostingId),
+            postDay: updatedPost.postDate ? new Date(updatedPost.postDate).toLocaleDateString('en-US', { weekday: 'long' }) : post.postDay,
+          };
+        }
+        return p;
+      }));
+      
+      setEditingPostId(null);
+      setEditForm({});
+      setToast({ type: 'success', text: 'Post updated successfully' });
+    } catch (error) {
+      setToast({ type: 'error', text: (error as Error).message });
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
 
   return (
     <div>
@@ -609,11 +709,14 @@ export default function PostsPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
+                        <TH>Campaign</TH>
+                        <TH>Account</TH>
                         <TH>Hari Posting</TH>
                         <TH>Tanggal Posting</TH>
                         <TH>Judul</TH>
                         <TH>Jenis</TH>
                         <TH>Kategori Konten</TH>
+                        <TH>Status</TH>
                         <TH>PIC Talent</TH>
                         <TH>PIC Editor</TH>
                         <TH>PIC Posting</TH>
@@ -626,6 +729,7 @@ export default function PostsPage() {
                         <TH>SHARE</TH>
                         <TH>SAVED</TH>
                         <TH>Engagement Rate</TH>
+                        <TH>Actions</TH>
                       </TR>
                     </THead>
                     <tbody>
@@ -633,20 +737,27 @@ export default function PostsPage() {
                         const picTalentName = p.picTalent?.name || (p.picTalentId ? pics.find(pic => pic.id === p.picTalentId)?.name : null) || '—';
                         const picEditorName = p.picEditor?.name || (p.picEditorId ? pics.find(pic => pic.id === p.picEditorId)?.name : null) || '—';
                         const picPostingName = p.picPosting?.name || (p.picPostingId ? pics.find(pic => pic.id === p.picPostingId)?.name : null) || '—';
+                        const accountName = p.account?.name || (p.accountId ? accounts.find(acc => acc.id === p.accountId)?.name : null) || '—';
+                        const campaignName = p.campaign?.name || (p.campaignId ? campaigns.find(c => c.id === p.campaignId)?.name : null) || '—';
                         return (
                           <TR key={p.id}>
                             <TD>{i + 1}</TD>
+                            <TD>{campaignName}</TD>
+                            <TD>{accountName}</TD>
                             <TD>{p.postDay}</TD>
                             <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
                             <TD>{p.postTitle}</TD>
                             <TD>{p.contentType}</TD>
                             <TD>{p.contentCategory}</TD>
+                            <TD>
+                              <span className="badge">{p.status}</span>
+                            </TD>
                             <TD>{picTalentName}</TD>
                             <TD>{picEditorName}</TD>
                             <TD>{picPostingName}</TD>
                             <TD>
                               {p.contentLink ? (
-                                <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" style={{ color: '#2563eb' }}>
+                                <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#2563eb' }}>
                                   Link
                                 </a>
                               ) : '—'}
@@ -659,6 +770,15 @@ export default function PostsPage() {
                             <TD>{p.totalShare}</TD>
                             <TD>{p.totalSaved}</TD>
                             <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
+                            <TD>
+                              <button
+                                onClick={() => handleEditPost(p)}
+                                className="btn btn-ghost text-xs px-2 py-1"
+                                type="button"
+                              >
+                                Edit
+                              </button>
+                            </TD>
                           </TR>
                         );
                       })}
@@ -669,6 +789,208 @@ export default function PostsPage() {
           </Card>
         )
       )}
+      <Dialog
+        open={!!editingPostId}
+        onClose={() => {
+          setEditingPostId(null);
+          setEditForm({});
+        }}
+        title="Edit Post"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingPostId(null);
+                setEditForm({});
+              }}
+              disabled={submittingEdit}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleUpdatePost} disabled={submittingEdit}>
+              {submittingEdit ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleUpdatePost} className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <Input
+                label="Post Title"
+                value={editForm.postTitle || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, postTitle: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Input
+                label="Post Date"
+                type="date"
+                value={editForm.postDate || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, postDate: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <Select
+                label="Content Type"
+                value={editForm.contentType || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, contentType: e.target.value }))}
+              >
+                <option value="">Select type</option>
+                {CONTENT_TYPE_OPTIONS.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="Content Category"
+                value={editForm.contentCategory || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, contentCategory: e.target.value }))}
+              >
+                <option value="">Select content category</option>
+                {CONTENT_CATEGORY_OPTIONS.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div>
+              <Select
+                label="PIC Content"
+                value={editForm.picContentId || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, picContentId: e.target.value }))}
+              >
+                <option value="">Select PIC</option>
+                {talentPics.map((pic) => (
+                  <option key={pic.id} value={pic.id}>
+                    {pic.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="PIC Editor"
+                value={editForm.picEditorId || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, picEditorId: e.target.value }))}
+              >
+                <option value="">Select Editor</option>
+                {editorPics.map((pic) => (
+                  <option key={pic.id} value={pic.id}>
+                    {pic.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="PIC Posting"
+                value={editForm.picPostingId || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, picPostingId: e.target.value }))}
+              >
+                <option value="">Select Posting</option>
+                {postingPics.map((pic) => (
+                  <option key={pic.id} value={pic.id}>
+                    {pic.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div>
+              <Select
+                label="Status"
+                value={editForm.status || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value }))}
+              >
+                <option value="">Select status</option>
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="Ads On Music"
+                value={editForm.adsOnMusic || 'false'}
+                onChange={(e) => setEditForm(prev => ({ ...prev, adsOnMusic: e.target.value }))}
+              >
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="Yellow Cart"
+                value={editForm.yellowCart || 'false'}
+                onChange={(e) => setEditForm(prev => ({ ...prev, yellowCart: e.target.value }))}
+              >
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Input
+              label="Content Link"
+              placeholder="https://..."
+              value={editForm.contentLink || ''}
+              onChange={(e) => setEditForm(prev => ({ ...prev, contentLink: e.target.value }))}
+            />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-5">
+            <div>
+              <Input
+                label="Views"
+                value={editForm.totalView ?? ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalView: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Input
+                label="Likes"
+                value={editForm.totalLike ?? ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Input
+                label="Comments"
+                value={editForm.totalComment ?? ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Input
+                label="Shares"
+                value={editForm.totalShare ?? ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Input
+                label="Saved"
+                value={editForm.totalSaved ?? ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: e.target.value }))}
+              />
+            </div>
+          </div>
+        </form>
+      </Dialog>
       {toast && (
         <div className="fixed inset-x-0 bottom-4 flex justify-center px-4 pointer-events-none z-50">
           <div
