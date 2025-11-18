@@ -15,6 +15,7 @@ html, body, #root {
   --text-tertiary: #6b7280;
   --border-color: #e5e7eb;
   --border-color-dark: #d1d5db;
+  --table-row-hover: #eff6ff; /* blue-50 - distinct from header */
   --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
@@ -29,6 +30,7 @@ html.dark {
   --text-tertiary: #d1d5db;
   --border-color: #374151;
   --border-color-dark: #4b5563;
+  --table-row-hover: #1e3a5f; /* darker blue-gray - distinct from header */
   --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
 }
@@ -288,8 +290,11 @@ html.dark .btn-primary-green {
 .tr { 
   transition: background-color 0.15s ease;
 }
-.tr:hover {
-  background-color: var(--bg-tertiary);
+tbody .tr:hover {
+  background-color: var(--table-row-hover);
+}
+.thead .tr:hover {
+  background-color: var(--bg-tertiary); /* Keep header color unchanged on hover */
 }
 
 .skeleton {

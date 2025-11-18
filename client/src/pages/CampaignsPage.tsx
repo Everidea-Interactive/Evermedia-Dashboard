@@ -79,6 +79,8 @@ export default function CampaignsPage() {
     Object.fromEntries(accountCategoryOrder.map((cat) => [cat, '']))
   );
   const [accountKpis, setAccountKpis] = useState<Record<string, Record<string, string>>>({});
+  const [hoveredCampaignId, setHoveredCampaignId] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
 
   const fetchCampaigns = () => {
     setLoading(true);
@@ -583,54 +585,95 @@ export default function CampaignsPage() {
                 </TR>
               </THead>
               <tbody>
-                {items.map((c) => (
-                  <TR key={c.id}>
-                    <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
-                    <TD>
-                      {Array.isArray(c.categories) && c.categories.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {c.categories.map((cat, idx) => (
-                            <span key={idx} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                              {cat}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-tertiary)' }}>-</span>
-                      )}
-                    </TD>
-                    <TD>{new Date(c.startDate).toLocaleDateString()}</TD>
-                    <TD>{new Date(c.endDate).toLocaleDateString()}</TD>
-                    <TD>
-                      <span 
-                        className="badge border" 
-                        style={statusPills[c.status] ? {
-                          backgroundColor: statusPills[c.status].bg,
-                          borderColor: statusPills[c.status].border,
-                          color: statusPills[c.status].text
-                        } : {}}
-                      >
-                        {c.status}
-                      </span>
-                    </TD>
-                    <TD>
-                      <div className="flex gap-1.5 justify-center">
-                        <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
-                          View
-                        </Link>
-                        <Button
-                          variant="outline"
-                          color="red"
-                          onClick={() => handleDeleteClick(c.id, c.name)}
-                          disabled={deletingIds.has(c.id)}
-                          className="text-xs px-1.5 py-0.5"
+                {items.map((c) => {
+                  const categories = Array.isArray(c.categories) ? c.categories : [];
+                  const maxVisible = 2;
+                  const visibleCategories = categories.slice(0, maxVisible);
+                  const remainingCount = categories.length - maxVisible;
+                  
+                  return (
+                    <TR key={c.id}>
+                      <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
+                      <TD>
+                        {categories.length > 0 ? (
+                          <div 
+                            className="relative inline-block"
+                            onMouseEnter={(e) => {
+                              if (categories.length > maxVisible) {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setHoveredCampaignId(c.id);
+                                // Calculate position, ensuring tooltip doesn't go off-screen
+                                const tooltipWidth = 320; // max-w-xs is 320px
+                                const viewportWidth = window.innerWidth;
+                                let x = rect.left;
+                                // If tooltip would go off right edge, align to right edge of element
+                                if (x + tooltipWidth > viewportWidth - 10) {
+                                  x = Math.max(10, viewportWidth - tooltipWidth - 10);
+                                }
+                                setTooltipPosition({
+                                  x,
+                                  y: rect.bottom + 4
+                                });
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredCampaignId(null);
+                              setTooltipPosition(null);
+                            }}
+                          >
+                            <div className="flex items-center gap-1 flex-nowrap">
+                              {visibleCategories.map((cat, idx) => (
+                                <span key={idx} className="text-xs px-2 py-0.5 rounded border whitespace-nowrap" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                  {cat}
+                                </span>
+                              ))}
+                              {remainingCount > 0 && (
+                                <span 
+                                  className="text-xs px-2 py-0.5 rounded border cursor-help whitespace-nowrap" 
+                                  style={{ color: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderColor: '#a5b4fc' }}
+                                >
+                                  +{remainingCount} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-tertiary)' }}>-</span>
+                        )}
+                      </TD>
+                      <TD>{new Date(c.startDate).toLocaleDateString()}</TD>
+                      <TD>{new Date(c.endDate).toLocaleDateString()}</TD>
+                      <TD>
+                        <span 
+                          className="badge border" 
+                          style={statusPills[c.status] ? {
+                            backgroundColor: statusPills[c.status].bg,
+                            borderColor: statusPills[c.status].border,
+                            color: statusPills[c.status].text
+                          } : {}}
                         >
-                          {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
-                        </Button>
-                      </div>
-                    </TD>
-                  </TR>
-                ))}
+                          {c.status}
+                        </span>
+                      </TD>
+                      <TD>
+                        <div className="flex gap-1.5 justify-center">
+                          <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
+                            View
+                          </Link>
+                          <Button
+                            variant="outline"
+                            color="red"
+                            onClick={() => handleDeleteClick(c.id, c.name)}
+                            disabled={deletingIds.has(c.id)}
+                            className="text-xs px-1.5 py-0.5"
+                          >
+                            {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        </div>
+                      </TD>
+                    </TR>
+                  );
+                })}
               </tbody>
             </Table>
           </TableWrap>
@@ -665,6 +708,43 @@ export default function CampaignsPage() {
           onClose={() => setToast(null)}
         />
       )}
+      {hoveredCampaignId && tooltipPosition && (() => {
+        const campaign = items.find(c => c.id === hoveredCampaignId);
+        const categories = campaign && Array.isArray(campaign.categories) ? campaign.categories : [];
+        return (
+          <div
+            className="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPosition.x}px`,
+              top: `${tooltipPosition.y}px`,
+            }}
+          >
+            <div 
+              className="px-3 py-2 rounded-md border shadow-lg max-w-xs"
+              style={{ 
+                backgroundColor: 'var(--bg-secondary)', 
+                borderColor: 'var(--border-color)',
+                boxShadow: 'var(--shadow-lg)'
+              }}
+            >
+              <div className="text-xs font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                All Categories:
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {categories.map((cat, idx) => (
+                  <span 
+                    key={idx} 
+                    className="text-xs px-2 py-0.5 rounded border" 
+                    style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
+                  >
+                    {cat}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
