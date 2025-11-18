@@ -35,7 +35,7 @@ type Post = {
 type CampaignOption = {
   id: string;
   name: string;
-  category: string;
+  categories: string[];
 };
 
 type PicOption = {
@@ -156,10 +156,15 @@ export default function PostsPage() {
     setForm((prev) => {
       if (prev.campaignId === routeCampaignId) return prev;
       const selected = campaigns.find((c) => c.id === routeCampaignId);
+      const newCategories = Array.isArray(selected?.categories) ? selected.categories : [];
+      // If the current category is not in the new campaign's categories, reset it
+      const shouldResetCategory = prev.campaignCategory && !newCategories.includes(prev.campaignCategory);
       return {
         ...prev,
         campaignId: routeCampaignId,
-        campaignCategory: selected?.category ?? prev.campaignCategory,
+        campaignCategory: shouldResetCategory 
+          ? (newCategories.length > 0 ? newCategories[0] : '')
+          : (newCategories.length > 0 && !prev.campaignCategory ? newCategories[0] : prev.campaignCategory),
       };
     });
   }, [routeCampaignId, campaigns]);
@@ -169,11 +174,19 @@ export default function PostsPage() {
   const postingPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'POSTING')), [pics]);
 
   const handleCampaignChange = (value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      campaignId: value,
-      campaignCategory: campaigns.find((c) => c.id === value)?.category ?? prev.campaignCategory,
-    }));
+    const selected = campaigns.find((c) => c.id === value);
+    setForm((prev) => {
+      const newCategories = Array.isArray(selected?.categories) ? selected.categories : [];
+      // If the current category is not in the new campaign's categories, reset it
+      const shouldResetCategory = prev.campaignCategory && !newCategories.includes(prev.campaignCategory);
+      return {
+        ...prev,
+        campaignId: value,
+        campaignCategory: shouldResetCategory 
+          ? (newCategories.length > 0 ? newCategories[0] : '')
+          : prev.campaignCategory,
+      };
+    });
     setToast(null);
     if (value && id && value !== id) {
       navigate(`/campaigns/${value}/posts`);
@@ -238,9 +251,11 @@ export default function PostsPage() {
   };
 
   const campaignCategoryOptions = useMemo(() => {
-    const unique = Array.from(new Set(campaigns.map((c) => c.category).filter(Boolean)));
-    return unique.sort();
-  }, [campaigns]);
+    if (!form.campaignId) return [];
+    const selectedCampaign = campaigns.find((c) => c.id === form.campaignId);
+    if (!selectedCampaign || !Array.isArray(selectedCampaign.categories)) return [];
+    return selectedCampaign.categories.filter((cat) => cat).sort();
+  }, [campaigns, form.campaignId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -387,7 +402,7 @@ export default function PostsPage() {
                 <option value="">Select PIC</option>
                 {talentPics.map((pic) => (
                   <option key={pic.id} value={pic.id}>
-                    {pic.name} {pic.roles.length ? '(' + pic.roles.join(', ') + ')' : ''}
+                    {pic.name}
                   </option>
                 ))}
               </Select>
