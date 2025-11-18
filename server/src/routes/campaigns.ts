@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { recalculateKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -48,6 +49,11 @@ router.post('/', async (req, res) => {
       B: accountId,
     }));
     await supabase.from('_CampaignToAccount').insert(links);
+    
+    // Recalculate KPIs for newly linked accounts
+    for (const accountId of accountIds) {
+      await recalculateKPIs(campaign.id, accountId);
+    }
   }
   
   res.status(201).json(campaign);
@@ -100,6 +106,14 @@ router.put('/:id', async (req, res) => {
   
   // Update account links if provided
   if (accountIds !== undefined) {
+    // Get old account links before deletion to recalculate KPIs for removed accounts
+    const { data: oldLinks } = await supabase
+      .from('_CampaignToAccount')
+      .select('B')
+      .eq('A', req.params.id);
+    
+    const oldAccountIds = oldLinks?.map((link: any) => link.B) || [];
+    
     await supabase.from('_CampaignToAccount').delete().eq('A', req.params.id);
     if (accountIds.length > 0) {
       const links = accountIds.map((accountId: string) => ({
@@ -107,6 +121,12 @@ router.put('/:id', async (req, res) => {
         B: accountId,
       }));
       await supabase.from('_CampaignToAccount').insert(links);
+    }
+    
+    // Recalculate KPIs for all affected accounts (both newly linked and unlinked)
+    const allAffectedAccountIds = [...new Set([...oldAccountIds, ...accountIds])];
+    for (const accountId of allAffectedAccountIds) {
+      await recalculateKPIs(req.params.id, accountId);
     }
   }
   
@@ -126,7 +146,11 @@ router.get('/:id/kpis', async (req, res) => {
     .eq('campaignId', req.params.id);
   
   if (error) return res.status(500).json({ error: error.message });
-  res.json((kpis || []).map((k: any) => ({ ...k, remaining: k.target - k.actual })));
+  res.json((kpis || []).map((k: any) => {
+    const target = k.target ?? 0;
+    const actual = k.actual ?? 0;
+    return { ...k, target, actual, remaining: target - actual };
+  }));
 });
 
 // Convenience: /api/campaigns/:id/posts with filters
@@ -183,6 +207,10 @@ router.delete('/:id/accounts/:accountId', async (req, res) => {
     .eq('B', accountId);
   
   if (error) return res.status(404).json({ error: 'Not found' });
+  
+  // Recalculate KPIs for the unlinked account
+  await recalculateKPIs(id, accountId);
+  
   res.json({ ok: true });
 });
 

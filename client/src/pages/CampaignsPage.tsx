@@ -18,6 +18,13 @@ const categoryLabels: Record<string, string> = {
   GMV_IDR: 'GMV (IDR)',
 };
 
+const statusPills: Record<string, { bg: string; border: string; text: string }> = {
+  ACTIVE: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' },
+  PLANNED: { bg: 'rgba(234, 179, 8, 0.1)', border: 'rgba(234, 179, 8, 0.3)', text: '#eab308' },
+  PAUSED: { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.3)', text: '#f97316' },
+  COMPLETED: { bg: 'var(--bg-tertiary)', border: 'var(--border-color)', text: 'var(--text-secondary)' },
+};
+
 type Campaign = {
   id: string;
   name: string;
@@ -516,7 +523,18 @@ export default function CampaignsPage() {
                     </TD>
                     <TD>{new Date(c.startDate).toLocaleDateString()}</TD>
                     <TD>{new Date(c.endDate).toLocaleDateString()}</TD>
-                    <TD><span className="badge">{c.status}</span></TD>
+                    <TD>
+                      <span 
+                        className="badge border" 
+                        style={statusPills[c.status] ? {
+                          backgroundColor: statusPills[c.status].bg,
+                          borderColor: statusPills[c.status].border,
+                          color: statusPills[c.status].text
+                        } : {}}
+                      >
+                        {c.status}
+                      </span>
+                    </TD>
                   </TR>
                 ))}
               </tbody>

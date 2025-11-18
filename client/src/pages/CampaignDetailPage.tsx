@@ -10,6 +10,7 @@ import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
+import EngagementVisualizer from '../components/EngagementVisualizer';
 
 const statusPills: Record<string, { bg: string; border: string; text: string }> = {
   ACTIVE: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' },
@@ -78,10 +79,17 @@ export default function CampaignDetailPage() {
     kpis.forEach((k) => {
       if (!k.accountId) return;
       if (!map.has(k.accountId)) map.set(k.accountId, {});
-      map.get(k.accountId)![k.category] = { target: k.target, actual: k.actual };
+      
+      // For QTY_POST, calculate actual from posts for current campaign only
+      if (k.category === 'QTY_POST') {
+        const postCount = posts.filter((p: any) => p.accountId === k.accountId).length;
+        map.get(k.accountId)![k.category] = { target: k.target ?? 0, actual: postCount };
+      } else {
+        map.get(k.accountId)![k.category] = { target: k.target ?? 0, actual: k.actual ?? 0 };
+      }
     });
     return map;
-  }, [kpis]);
+  }, [kpis, posts]);
 
   const backPath = '/campaigns';
 
@@ -114,10 +122,10 @@ export default function CampaignDetailPage() {
         backPath={backPath}
         backLabel="Back to campaigns"
         title={
-          <div className="flex items-center gap-3 flex-wrap justify-center md:justify-start">
-            <h1 className="page-title">{campaign.name}</h1>
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-start">
+            <h1 className="page-title text-xl sm:text-2xl">{campaign.name}</h1>
             <span 
-              className="badge border" 
+              className="badge border text-xs sm:text-sm" 
               style={statusPills[campaign.status] ? {
                 backgroundColor: statusPills[campaign.status].bg,
                 borderColor: statusPills[campaign.status].border,
@@ -132,81 +140,123 @@ export default function CampaignDetailPage() {
         action={
           <Link
             to={`/campaigns/${campaign.id}/edit`}
-            className="btn btn-outline-blue text-sm whitespace-nowrap"
+            className="btn btn-outline-blue text-xs sm:text-sm whitespace-nowrap w-full sm:w-auto"
           >
             Edit campaign
           </Link>
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
         <Card>
-          <div className="section-title">Views</div>
-          <div className="mt-1 text-2xl font-semibold">{engagement?.views ?? '-'}</div>
+          <div className="section-title text-xs sm:text-sm">Views</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.views?.toLocaleString() ?? '-'}</div>
         </Card>
         <Card>
-          <div className="section-title">Likes</div>
-          <div className="mt-1 text-2xl font-semibold">{engagement?.likes ?? '-'}</div>
+          <div className="section-title text-xs sm:text-sm">Likes</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.likes?.toLocaleString() ?? '-'}</div>
         </Card>
         <Card>
-          <div className="section-title">Comments</div>
-          <div className="mt-1 text-2xl font-semibold">{engagement?.comments ?? '-'}</div>
+          <div className="section-title text-xs sm:text-sm">Comments</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.comments?.toLocaleString() ?? '-'}</div>
         </Card>
         <Card>
-          <div className="section-title">Engagement Rate</div>
-          <div className="mt-1 text-2xl font-semibold">{engagement?.engagementRate ?? '-'}</div>
+          <div className="section-title text-xs sm:text-sm">Shares</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.shares?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Saved</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.saves?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Engagement Rate</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.engagementRate ? (engagement.engagementRate * 100).toFixed(2) + '%' : '-'}</div>
         </Card>
       </div>
 
-      <section className="grid gap-4 mb-6">
+      <section className="mb-4 sm:mb-6">
         <Card>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Campaign KPIs</h2>
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpis.length} tracked</span>
+          <div className="flex items-center justify-between mb-3 px-2 sm:px-0">
+            <h2 className="text-base sm:text-lg font-semibold">Campaign KPIs</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
             {accountCategoryOrder.map((cat) => {
               const kpi = campaignKpiSummary.get(cat);
               const target = kpi?.target ?? 0;
               const actual = kpi?.actual ?? 0;
+              const isAchieved = target > 0 && actual >= target;
               return (
-                <div key={cat} className="rounded-lg border p-3 text-center" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                  <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
-                  <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{actual}/{target || '—'}</div>
+                <div 
+                  key={cat} 
+                  className="rounded-lg border p-2 sm:p-3 text-center" 
+                  style={{ 
+                    borderColor: isAchieved ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)', 
+                    backgroundColor: isAchieved ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)' 
+                  }}
+                >
+                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
+                  <div className="text-xs sm:text-sm font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{actual.toLocaleString()}/{target.toLocaleString()}</div>
                 </div>
               );
             })}
           </div>
         </Card>
+      </section>
+
+      <section className="mb-4 sm:mb-6">
         <Card>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Accounts</h2>
+          <div className="mb-3 sm:mb-4 px-2 sm:px-0">
+            <h2 className="text-base sm:text-lg font-semibold">Engagement Analytics</h2>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+              Visual breakdown of campaign engagement metrics
+            </p>
+          </div>
+          <div className="px-2 sm:px-0 pb-2 sm:pb-0">
+            <EngagementVisualizer engagement={engagement} posts={posts} />
+          </div>
+        </Card>
+      </section>
+
+      <section className="mb-4 sm:mb-6">
+        <Card>
+          <div className="flex items-center justify-between mb-3 px-2 sm:px-0">
+            <h2 className="text-base sm:text-lg font-semibold">Accounts</h2>
             <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{(campaign.accounts || []).length}</span>
           </div>
-          <div className="grid gap-3 max-h-[420px] overflow-y-auto pr-1">
+          <div className="grid gap-3 max-h-[420px] overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0">
             {(campaign.accounts || []).map((account: any) => (
-              <div key={account.id} className="flex flex-wrap items-center justify-between gap-4 border border-dashed rounded-lg px-4 py-3" style={{ borderColor: 'var(--border-color)' }}>
-                <div>
-                  <div className="font-medium">{account.name}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{account.tiktokHandle ?? '—'}</div>
+              <div key={account.id} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 border border-dashed rounded-lg px-3 sm:px-4 py-3" style={{ borderColor: 'var(--border-color)' }}>
+                <div className="flex-1 min-w-0 sm:min-w-[150px]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-medium text-sm sm:text-base truncate">{account.name}</div>
+                    <span className="text-[10px] sm:text-[11px] uppercase tracking-wide whitespace-nowrap flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>{account.accountType}</span>
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{account.tiktokHandle ?? '—'}</div>
                 </div>
-                <span className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{account.accountType}</span>
-                <div className="flex flex-1 flex-wrap items-center justify-end gap-2 text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>
+                <div className="grid grid-cols-2 sm:flex sm:flex-nowrap items-center sm:justify-end gap-2 text-[10px] uppercase tracking-wide sm:flex-1 sm:min-w-0" style={{ color: 'var(--text-tertiary)' }}>
                   {accountCategoryOrder.map((cat) => {
                     const entry = accountKpiMap.get(account.id)?.[cat];
+                    const isAchieved = entry && entry.target > 0 && entry.actual >= entry.target;
                     return (
-                      <div key={cat} className="flex min-w-[80px] flex-col items-center rounded-lg border px-2 py-1 text-center" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                        <div className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
-                        <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{entry ? `${entry.actual}/${entry.target}` : '— / —'}</div>
+                      <div 
+                        key={cat} 
+                        className="flex min-w-[70px] sm:min-w-[80px] flex-col items-center rounded-lg border px-1.5 sm:px-2 py-1 text-center" 
+                        style={{ 
+                          borderColor: isAchieved ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)', 
+                          backgroundColor: isAchieved ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)' 
+                        }}
+                      >
+                        <div className="text-[8px] sm:text-[9px] whitespace-nowrap" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
+                        <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{entry ? `${entry.actual}/${entry.target}` : '0 / 0'}</div>
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <Link to={`/campaigns/${campaign.id}/accounts/${account.id}/edit`} className="btn btn-outline-blue text-xs px-3 py-1">
+                <div className="flex items-stretch sm:items-center gap-2 sm:whitespace-nowrap sm:flex-shrink-0">
+                  <Link to={`/campaigns/${campaign.id}/accounts/${account.id}/edit`} className="btn btn-outline-blue text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none text-center">
                     Edit KPIs
                   </Link>
-                  <Button variant="ghost" color="red" className="text-xs px-3 py-1" onClick={() => handleAccountRemove(account.id)} disabled={accountRemoving[account.id]}>
+                  <Button variant="ghost" color="red" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => handleAccountRemove(account.id)} disabled={accountRemoving[account.id]}>
                     {accountRemoving[account.id] ? 'Removing…' : 'Remove'}
                   </Button>
                 </div>
@@ -217,13 +267,13 @@ export default function CampaignDetailPage() {
         </Card>
       </section>
 
-      <section className="mt-6">
-        <div className="flex items-center justify-between mb-3">
+      <section className="mt-4 sm:mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">
           <div>
-            <h2 className="text-lg font-semibold">Posts overview</h2>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{posts.length} posts · {totalViews} views · {totalLikes} likes</p>
+            <h2 className="text-base sm:text-lg font-semibold">Posts overview</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{posts.length} posts · {totalViews.toLocaleString()} views · {totalLikes.toLocaleString()} likes</p>
           </div>
-          <Link to={`/campaigns/${campaign.id}/posts`} className="text-sm hover:underline transition-colors" style={{ color: '#6366f1' }}>
+          <Link to={`/campaigns/${campaign.id}/posts`} className="text-xs sm:text-sm hover:underline transition-colors self-start sm:self-auto" style={{ color: '#6366f1' }}>
             View all posts
           </Link>
         </div>

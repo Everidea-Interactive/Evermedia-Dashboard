@@ -66,15 +66,19 @@ router.get('/campaigns/:id/dashboard/kpi', async (req, res) => {
     });
   }
 
-  const data = filteredKpis.map((k: any) => ({
-    id: k.id,
-    campaignId: k.campaignId,
-    accountId: k.accountId,
-    category: k.category,
-    target: k.target,
-    actual: k.actual,
-    remaining: k.target - k.actual,
-  }));
+  const data = filteredKpis.map((k: any) => {
+    const target = k.target ?? 0;
+    const actual = k.actual ?? 0;
+    return {
+      id: k.id,
+      campaignId: k.campaignId,
+      accountId: k.accountId,
+      category: k.category,
+      target,
+      actual,
+      remaining: target - actual,
+    };
+  });
   res.json(data);
 });
 

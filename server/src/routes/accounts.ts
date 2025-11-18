@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { recalculateKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
 
@@ -118,6 +119,11 @@ router.post('/', async (req, res) => {
       B: account.id,
     }));
     await supabase.from('_CampaignToAccount').insert(links);
+    
+    // Recalculate KPIs for newly linked campaigns
+    for (const campaignId of campaignIds) {
+      await recalculateKPIs(campaignId, account.id);
+    }
   }
   
   // Get campaigns for response
@@ -181,6 +187,14 @@ router.put('/:id', async (req, res) => {
   
   // Update campaign links if provided
   if (campaignIds !== undefined) {
+    // Get old campaign links before deletion to recalculate KPIs for removed campaigns
+    const { data: oldLinks } = await supabase
+      .from('_CampaignToAccount')
+      .select('A')
+      .eq('B', req.params.id);
+    
+    const oldCampaignIds = oldLinks?.map((link: any) => link.A) || [];
+    
     await supabase.from('_CampaignToAccount').delete().eq('B', req.params.id);
     if (campaignIds.length > 0) {
       const links = campaignIds.map((campaignId: string) => ({
@@ -188,6 +202,12 @@ router.put('/:id', async (req, res) => {
         B: req.params.id,
       }));
       await supabase.from('_CampaignToAccount').insert(links);
+    }
+    
+    // Recalculate KPIs for all affected campaigns (both newly linked and unlinked)
+    const allAffectedCampaignIds = [...new Set([...oldCampaignIds, ...campaignIds])];
+    for (const campaignId of allAffectedCampaignIds) {
+      await recalculateKPIs(campaignId, req.params.id);
     }
   }
   

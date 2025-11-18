@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -106,6 +107,17 @@ router.post('/', async (req, res) => {
     .single();
   
   if (error) return res.status(500).json({ error: error.message });
+  
+  // Recalculate KPIs after post creation
+  if (post.campaignId) {
+    // Recalculate for the account
+    if (post.accountId) {
+      await recalculateKPIs(post.campaignId, post.accountId);
+    }
+    // Always recalculate campaign-level KPIs (where accountId is null)
+    await recalculateCampaignKPIs(post.campaignId);
+  }
+  
   res.status(201).json(computeEngagement(post));
 });
 
@@ -152,126 +164,28 @@ router.put('/:id', async (req, res) => {
   res.json(computeEngagement(post));
 });
 
-async function recalculateKPIs(campaignId: string, accountId: string) {
-  // Get all posts for this campaign and account
-  const { data: posts } = await supabase
-    .from('Post')
-    .select('totalView, contentType')
-    .eq('campaignId', campaignId)
-    .eq('accountId', accountId);
-  
-  // Get campaign to check targetViewsForFYP
-  const { data: campaign } = await supabase
-    .from('Campaign')
-    .select('targetViewsForFYP')
-    .eq('id', campaignId)
-    .single();
-  
-  // Get all KPIs for this campaign and account
-  const { data: kpis } = await supabase
-    .from('KPI')
-    .select('*')
-    .eq('campaignId', campaignId)
-    .eq('accountId', accountId);
-  
-  if (!kpis || kpis.length === 0) return;
-  
-  const targetViewsForFYP = campaign?.targetViewsForFYP;
-  
-  // Calculate totals from posts
-  const totals: Record<string, number> = {
-    VIEWS: 0,
-    QTY_POST: posts?.length || 0,
-    FYP_COUNT: 0,
-    VIDEO_COUNT: 0,
-    GMV_IDR: 0,
-  };
-  
-  (posts || []).forEach((p: any) => {
-    totals.VIEWS += p.totalView || 0;
-    if (p.contentType === 'Video') {
-      totals.VIDEO_COUNT += 1;
-    }
-    // Count as FYP if views meet or exceed the threshold
-    if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
-      totals.FYP_COUNT += 1;
-    }
-  });
-  
-  // Update each KPI's actual value
-  for (const kpi of kpis) {
-    const category = kpi.category;
-    if (category in totals) {
-      const newActual = totals[category];
-      await supabase
-        .from('KPI')
-        .update({ actual: newActual })
-        .eq('id', kpi.id);
-    }
-  }
-}
-
-async function recalculateCampaignKPIs(campaignId: string) {
-  // Get all posts for this campaign
-  const { data: posts } = await supabase
-    .from('Post')
-    .select('totalView, contentType')
-    .eq('campaignId', campaignId);
-  
-  // Get campaign to check targetViewsForFYP
-  const { data: campaign } = await supabase
-    .from('Campaign')
-    .select('targetViewsForFYP')
-    .eq('id', campaignId)
-    .single();
-  
-  // Get campaign-level KPIs (where accountId is null)
-  const { data: kpis } = await supabase
-    .from('KPI')
-    .select('*')
-    .eq('campaignId', campaignId)
-    .is('accountId', null);
-  
-  if (!kpis || kpis.length === 0) return;
-  
-  const targetViewsForFYP = campaign?.targetViewsForFYP;
-  
-  // Calculate totals from all posts in the campaign
-  const totals: Record<string, number> = {
-    VIEWS: 0,
-    QTY_POST: posts?.length || 0,
-    FYP_COUNT: 0,
-    VIDEO_COUNT: 0,
-    GMV_IDR: 0,
-  };
-  
-  (posts || []).forEach((p: any) => {
-    totals.VIEWS += p.totalView || 0;
-    if (p.contentType === 'Video') {
-      totals.VIDEO_COUNT += 1;
-    }
-    // Count as FYP if views meet or exceed the threshold
-    if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
-      totals.FYP_COUNT += 1;
-    }
-  });
-  
-  // Update each KPI's actual value
-  for (const kpi of kpis) {
-    const category = kpi.category;
-    if (category in totals) {
-      const newActual = totals[category];
-      await supabase
-        .from('KPI')
-        .update({ actual: newActual })
-        .eq('id', kpi.id);
-    }
-  }
-}
 
 router.delete('/:id', async (req, res) => {
+  // Get the post before deletion to know which campaign/account to update KPIs for
+  const { data: post } = await supabase
+    .from('Post')
+    .select('campaignId, accountId')
+    .eq('id', req.params.id)
+    .single();
+  
   const { error } = await supabase.from('Post').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
+  
+  // Recalculate KPIs after post deletion
+  if (post?.campaignId) {
+    // Recalculate for the account
+    if (post.accountId) {
+      await recalculateKPIs(post.campaignId, post.accountId);
+    }
+    // Always recalculate campaign-level KPIs (where accountId is null)
+    await recalculateCampaignKPIs(post.campaignId);
+  }
+  
   res.json({ ok: true });
 });
 
