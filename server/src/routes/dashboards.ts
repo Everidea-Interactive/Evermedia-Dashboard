@@ -33,6 +33,27 @@ router.get('/campaigns/:id/dashboard/engagement', async (req, res) => {
   res.json({ ...sum, engagementRate: engagementRate(sum) });
 });
 
+router.get('/campaigns/all/engagement', async (req, res) => {
+  const { data: posts, error } = await supabase
+    .from('Post')
+    .select('totalView, totalLike, totalComment, totalShare, totalSaved');
+  
+  if (error) return res.status(500).json({ error: error.message });
+  
+  const sum = (posts || []).reduce(
+    (acc: any, p: any) => {
+      acc.views += p.totalView || 0;
+      acc.likes += p.totalLike || 0;
+      acc.comments += p.totalComment || 0;
+      acc.shares += p.totalShare || 0;
+      acc.saves += p.totalSaved || 0;
+      return acc;
+    },
+    { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 }
+  );
+  res.json({ ...sum, engagementRate: engagementRate(sum) });
+});
+
 router.get('/campaigns/:id/dashboard/kpi', async (req, res) => {
   const campaignId = req.params.id;
   const { kpiCategory, accountId, crossbrandOnly } = req.query as any;

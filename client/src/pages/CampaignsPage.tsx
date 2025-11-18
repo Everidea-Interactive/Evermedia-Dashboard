@@ -53,6 +53,14 @@ export default function CampaignsPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [engagement, setEngagement] = useState<{
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    saves: number;
+    engagementRate: number;
+  } | null>(null);
   const [form, setForm] = useState({
     name: '',
     categories: [] as string[],
@@ -85,6 +93,12 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
+  }, [token]);
+
+  useEffect(() => {
+    api('/campaigns/all/engagement', { token })
+      .then(setEngagement)
+      .catch(() => setEngagement(null));
   }, [token]);
 
   useEffect(() => {
@@ -200,6 +214,9 @@ export default function CampaignsPage() {
       resetForm();
       setShowAddForm(false);
       fetchCampaigns();
+      api('/campaigns/all/engagement', { token })
+        .then(setEngagement)
+        .catch(() => setEngagement(null));
       setToast({ message: 'Campaign and KPIs added successfully', type: 'success' });
     } catch (error: any) {
       setToast({ message: error?.error || 'Failed to add campaign', type: 'error' });
@@ -220,6 +237,9 @@ export default function CampaignsPage() {
     try {
       await api(`/campaigns/${id}`, { method: 'DELETE', token });
       fetchCampaigns();
+      api('/campaigns/all/engagement', { token })
+        .then(setEngagement)
+        .catch(() => setEngagement(null));
       setToast({ message: 'Campaign deleted successfully', type: 'success' });
     } catch (error: any) {
       const errorMessage = error?.error || error?.message || 'Failed to delete campaign';
@@ -238,6 +258,35 @@ export default function CampaignsPage() {
       <div className="mb-4">
         <h1 className="page-title">Campaigns</h1>
       </div>
+      
+      {/* Engagement Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Views</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.views?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Likes</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.likes?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Comments</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.comments?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Shares</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.shares?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Saved</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.saves?.toLocaleString() ?? '-'}</div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Engagement Rate</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.engagementRate ? (engagement.engagementRate * 100).toFixed(2) + '%' : '-'}</div>
+        </Card>
+      </div>
+
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
@@ -530,7 +579,7 @@ export default function CampaignsPage() {
                   <TH>Start</TH>
                   <TH>End</TH>
                   <TH>Status</TH>
-                  <TH>Actions</TH>
+                  <TH className="!text-center">Actions</TH>
                 </TR>
               </THead>
               <tbody>
@@ -565,8 +614,8 @@ export default function CampaignsPage() {
                       </span>
                     </TD>
                     <TD>
-                      <div className="flex gap-2">
-                        <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-2 py-1">
+                      <div className="flex gap-1.5 justify-center">
+                        <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
                           View
                         </Link>
                         <Button
@@ -574,7 +623,7 @@ export default function CampaignsPage() {
                           color="red"
                           onClick={() => handleDeleteClick(c.id, c.name)}
                           disabled={deletingIds.has(c.id)}
-                          className="text-xs px-2 py-1"
+                          className="text-xs px-1.5 py-0.5"
                         >
                           {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
                         </Button>
