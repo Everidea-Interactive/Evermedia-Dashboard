@@ -134,8 +134,32 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const { error } = await supabase.from('Campaign').delete().eq('id', req.params.id);
-  if (error) return res.status(404).json({ error: 'Not found' });
+  const campaignId = req.params.id;
+  
+  // First, check if campaign exists
+  const { data: campaign } = await supabase
+    .from('Campaign')
+    .select('id')
+    .eq('id', campaignId)
+    .single();
+  
+  if (!campaign) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+  
+  // Delete related data: posts
+  await supabase.from('Post').delete().eq('campaignId', campaignId);
+  
+  // Sever campaign-to-account links (accounts themselves are not deleted)
+  await supabase.from('_CampaignToAccount').delete().eq('A', campaignId);
+  
+  // Delete related KPIs
+  await supabase.from('KPI').delete().eq('campaignId', campaignId);
+  
+  // Delete the campaign
+  const { error } = await supabase.from('Campaign').delete().eq('id', campaignId);
+  if (error) return res.status(500).json({ error: error.message });
+  
   res.json({ ok: true });
 });
 

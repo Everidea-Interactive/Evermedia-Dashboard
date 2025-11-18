@@ -6,6 +6,7 @@ import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 
@@ -49,6 +50,8 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -202,6 +205,31 @@ export default function CampaignsPage() {
       setToast({ message: error?.error || 'Failed to add campaign', type: 'error' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = (id: string, name: string) => {
+    setDeleteConfirm({ id, name });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
+    setDeletingIds(prev => new Set(prev).add(id));
+    setDeleteConfirm(null);
+    try {
+      await api(`/campaigns/${id}`, { method: 'DELETE', token });
+      fetchCampaigns();
+      setToast({ message: 'Campaign deleted successfully', type: 'success' });
+    } catch (error: any) {
+      const errorMessage = error?.error || error?.message || 'Failed to delete campaign';
+      setToast({ message: errorMessage, type: 'error' });
+    } finally {
+      setDeletingIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -502,6 +530,7 @@ export default function CampaignsPage() {
                   <TH>Start</TH>
                   <TH>End</TH>
                   <TH>Status</TH>
+                  <TH>Actions</TH>
                 </TR>
               </THead>
               <tbody>
@@ -535,6 +564,22 @@ export default function CampaignsPage() {
                         {c.status}
                       </span>
                     </TD>
+                    <TD>
+                      <div className="flex gap-2">
+                        <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-2 py-1">
+                          View
+                        </Link>
+                        <Button
+                          variant="outline"
+                          color="red"
+                          onClick={() => handleDeleteClick(c.id, c.name)}
+                          disabled={deletingIds.has(c.id)}
+                          className="text-xs px-2 py-1"
+                        >
+                          {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      </div>
+                    </TD>
                   </TR>
                 ))}
               </tbody>
@@ -542,6 +587,28 @@ export default function CampaignsPage() {
           </TableWrap>
         )}
       </div>
+      <Dialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete Campaign"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" color="red" onClick={handleDeleteConfirm}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete <strong>"{deleteConfirm?.name}"</strong>?
+        </p>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          This action cannot be undone. All associated posts, KPIs, and account links will also be deleted.
+        </p>
+      </Dialog>
       {toast && (
         <Toast
           message={toast.message}

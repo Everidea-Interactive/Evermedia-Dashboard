@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import Card from '../components/ui/Card';
@@ -30,6 +30,7 @@ const categoryLabels: Record<string, string> = {
 
 export default function CampaignDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { token } = useAuth();
   const [campaign, setCampaign] = useState<any>(null);
   const [engagement, setEngagement] = useState<any>(null);
@@ -40,6 +41,8 @@ export default function CampaignDetailPage() {
   const [editForm, setEditForm] = useState<any>({});
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [pics, setPics] = useState<any[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -59,6 +62,20 @@ export default function CampaignDetailPage() {
       setCampaign(refreshed);
     } finally {
       setAccountRemoving((prev) => ({ ...prev, [accountId]: false }));
+    }
+  };
+
+  const handleDeleteCampaign = async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      await api(`/campaigns/${id}`, { method: 'DELETE', token });
+      navigate('/campaigns');
+    } catch (error: any) {
+      alert(error?.error || 'Failed to delete campaign');
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(false);
     }
   };
 
@@ -138,12 +155,23 @@ export default function CampaignDetailPage() {
         }
         meta={headerMeta}
         action={
-          <Link
-            to={`/campaigns/${campaign.id}/edit`}
-            className="btn btn-outline-blue text-xs sm:text-sm whitespace-nowrap w-full sm:w-auto"
-          >
-            Edit campaign
-          </Link>
+          <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+            <Link
+              to={`/campaigns/${campaign.id}/edit`}
+              className="btn btn-outline-blue text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
+            >
+              Edit campaign
+            </Link>
+            <Button
+              variant="outline"
+              color="red"
+              onClick={() => setDeleteConfirm(true)}
+              disabled={deleting}
+              className="text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
         }
       />
 
@@ -654,6 +682,29 @@ export default function CampaignDetailPage() {
             </div>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog
+        open={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        title="Delete Campaign"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="primary" color="red" onClick={handleDeleteCampaign} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete <strong>"{campaign?.name}"</strong>?
+        </p>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          This action cannot be undone. All associated posts, KPIs, and account links will also be deleted.
+        </p>
       </Dialog>
     </div>
   );
