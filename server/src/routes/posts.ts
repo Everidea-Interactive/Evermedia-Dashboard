@@ -35,6 +35,51 @@ router.get('/', async (req, res) => {
   res.json((posts || []).map(computeEngagement));
 });
 
+router.get('/all', async (req, res) => {
+  const { campaignId, dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
+  
+  let query = supabase.from('Post').select('*').order('postDate', { ascending: false });
+  if (campaignId) query = query.eq('campaignId', campaignId);
+  if (accountId) query = query.eq('accountId', accountId);
+  if (status) query = query.ilike('status', `%${String(status)}%`);
+  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
+  if (dateFrom) query = query.gte('postDate', String(dateFrom));
+  if (dateTo) query = query.lte('postDate', String(dateTo));
+  if (picTalentId) query = query.eq('picTalentId', picTalentId);
+  if (picEditorId) query = query.eq('picEditorId', picEditorId);
+  if (picPostingId) query = query.eq('picPostingId', picPostingId);
+  
+  const { data: posts, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  
+  // Fetch related data
+  const accountIds = [...new Set((posts || []).map((p: any) => p.accountId))];
+  const picIds = [...new Set((posts || []).flatMap((p: any) => [p.picTalentId, p.picEditorId, p.picPostingId]).filter(Boolean))];
+  const campaignIds = [...new Set((posts || []).map((p: any) => p.campaignId))];
+  
+  const { data: accounts } = await supabase.from('Account').select('id, name').in('id', accountIds);
+  const { data: pics } = await supabase.from('PIC').select('id, name').in('id', picIds);
+  const { data: campaigns } = await supabase.from('Campaign').select('id, name').in('id', campaignIds);
+  
+  const accountMap = new Map((accounts || []).map((a: any) => [a.id, a]));
+  const picMap = new Map((pics || []).map((p: any) => [p.id, p]));
+  const campaignMap = new Map((campaigns || []).map((c: any) => [c.id, c]));
+  
+  const mapped = (posts || []).map((p: any) => {
+    const views = p.totalView || 0, likes = p.totalLike || 0, comments = p.totalComment || 0, shares = p.totalShare || 0, saves = p.totalSaved || 0;
+    const er = views === 0 ? 0 : (likes + comments + shares + saves) / views;
+    return {
+      ...computeEngagement(p),
+      account: accountMap.get(p.accountId) || null,
+      campaign: campaignMap.get(p.campaignId) || null,
+      picTalent: p.picTalentId ? picMap.get(p.picTalentId) || null : null,
+      picEditor: p.picEditorId ? picMap.get(p.picEditorId) || null : null,
+      picPosting: p.picPostingId ? picMap.get(p.picPostingId) || null : null,
+    };
+  });
+  res.json(mapped);
+});
+
 router.get('/campaign/:id', async (req, res) => {
   const id = req.params.id;
   const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;

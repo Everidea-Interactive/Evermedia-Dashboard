@@ -18,6 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="p-3 space-y-1">
           <SideLink to="/campaigns" label="Campaigns" />
+          <SideLink to="/posts/all" label="All Posts" />
           <SideLink to="/accounts" label="Accounts" />
           <SideLink to="/pics" label="PICs" />
         </nav>
