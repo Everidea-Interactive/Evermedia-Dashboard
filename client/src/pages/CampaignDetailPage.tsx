@@ -11,11 +11,11 @@ import Select from '../components/ui/Select';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 
-const statusPills: Record<string, string> = {
-  ACTIVE: 'bg-green-50 border-green-100 text-green-700',
-  PLANNED: 'bg-yellow-50 border-yellow-100 text-yellow-700',
-  PAUSED: 'bg-orange-50 border-orange-100 text-orange-700',
-  COMPLETED: 'bg-gray-50 border-gray-100 text-gray-600',
+const statusPills: Record<string, { bg: string; border: string; text: string }> = {
+  ACTIVE: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' },
+  PLANNED: { bg: 'rgba(234, 179, 8, 0.1)', border: 'rgba(234, 179, 8, 0.3)', text: '#eab308' },
+  PAUSED: { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.3)', text: '#f97316' },
+  COMPLETED: { bg: 'var(--bg-tertiary)', border: 'var(--border-color)', text: 'var(--text-secondary)' },
 };
 
 const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR'];
@@ -65,7 +65,8 @@ export default function CampaignDetailPage() {
   const totalLikes = useMemo(() => posts.reduce((acc, p) => acc + (p.totalLike ?? 0), 0), [posts]);
   const campaignKpiSummary = useMemo(() => {
     const map = new Map<string, { target: number; actual: number }>();
-    kpis.forEach((k) => {
+    // Only include campaign-level KPIs (where accountId is null)
+    kpis.filter((k) => !k.accountId).forEach((k) => {
       const existing = map.get(k.category) ?? { target: 0, actual: 0 };
       map.set(k.category, { target: existing.target + (k.target ?? 0), actual: existing.actual + (k.actual ?? 0) });
     });
@@ -97,12 +98,12 @@ export default function CampaignDetailPage() {
     <div className="flex flex-wrap gap-1">
       {Array.isArray(campaign.categories) && campaign.categories.length > 0 ? (
         campaign.categories.map((cat: string, idx: number) => (
-          <span key={idx} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded">
+          <span key={idx} className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)', color: '#6366f1' }}>
             {cat}
           </span>
         ))
       ) : (
-        <span className="text-gray-400">No categories</span>
+        <span style={{ color: 'var(--text-tertiary)' }}>No categories</span>
       )}
     </div>
   );
@@ -115,7 +116,16 @@ export default function CampaignDetailPage() {
         title={
           <div className="flex items-center gap-3 flex-wrap justify-center md:justify-start">
             <h1 className="page-title">{campaign.name}</h1>
-            <span className={`badge border ${statusPills[campaign.status] ?? ''}`}>{campaign.status}</span>
+            <span 
+              className="badge border" 
+              style={statusPills[campaign.status] ? {
+                backgroundColor: statusPills[campaign.status].bg,
+                borderColor: statusPills[campaign.status].border,
+                color: statusPills[campaign.status].text
+              } : {}}
+            >
+              {campaign.status}
+            </span>
           </div>
         }
         meta={headerMeta}
@@ -152,7 +162,7 @@ export default function CampaignDetailPage() {
         <Card>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold">Campaign KPIs</h2>
-            <span className="text-xs text-gray-500">{kpis.length} tracked</span>
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpis.length} tracked</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {accountCategoryOrder.map((cat) => {
@@ -160,9 +170,9 @@ export default function CampaignDetailPage() {
               const target = kpi?.target ?? 0;
               const actual = kpi?.actual ?? 0;
               return (
-                <div key={cat} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-center">
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500">{categoryLabels[cat]}</div>
-                  <div className="text-sm font-semibold text-gray-800 mt-1">{actual}/{target || '—'}</div>
+                <div key={cat} className="rounded-lg border p-3 text-center" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                  <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
+                  <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{actual}/{target || '—'}</div>
                 </div>
               );
             })}
@@ -171,23 +181,23 @@ export default function CampaignDetailPage() {
         <Card>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold">Accounts</h2>
-            <span className="text-xs text-gray-500">{(campaign.accounts || []).length}</span>
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{(campaign.accounts || []).length}</span>
           </div>
           <div className="grid gap-3 max-h-[420px] overflow-y-auto pr-1">
             {(campaign.accounts || []).map((account: any) => (
-              <div key={account.id} className="flex flex-wrap items-center justify-between gap-4 border border-dashed border-gray-200 rounded-lg px-4 py-3">
+              <div key={account.id} className="flex flex-wrap items-center justify-between gap-4 border border-dashed rounded-lg px-4 py-3" style={{ borderColor: 'var(--border-color)' }}>
                 <div>
                   <div className="font-medium">{account.name}</div>
-                  <div className="text-xs text-gray-500">{account.tiktokHandle ?? '—'}</div>
+                  <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{account.tiktokHandle ?? '—'}</div>
                 </div>
-                <span className="text-[11px] uppercase tracking-wide text-gray-500">{account.accountType}</span>
-                <div className="flex flex-1 flex-wrap items-center justify-end gap-2 text-[10px] uppercase tracking-wide text-gray-500">
+                <span className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{account.accountType}</span>
+                <div className="flex flex-1 flex-wrap items-center justify-end gap-2 text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>
                   {accountCategoryOrder.map((cat) => {
                     const entry = accountKpiMap.get(account.id)?.[cat];
                     return (
-                      <div key={cat} className="flex min-w-[80px] flex-col items-center rounded-lg border border-gray-100 bg-gray-50 px-2 py-1 text-center">
-                        <div className="text-[9px] text-gray-500">{categoryLabels[cat]}</div>
-                        <div className="text-sm font-semibold text-gray-800">{entry ? `${entry.actual}/${entry.target}` : '— / —'}</div>
+                      <div key={cat} className="flex min-w-[80px] flex-col items-center rounded-lg border px-2 py-1 text-center" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                        <div className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{entry ? `${entry.actual}/${entry.target}` : '— / —'}</div>
                       </div>
                     );
                   })}
@@ -202,7 +212,7 @@ export default function CampaignDetailPage() {
                 </div>
               </div>
             ))}
-            {(campaign.accounts || []).length === 0 && <div className="text-sm text-gray-500">No linked accounts.</div>}
+            {(campaign.accounts || []).length === 0 && <div className="text-sm" style={{ color: 'var(--text-tertiary)' }}>No linked accounts.</div>}
           </div>
         </Card>
       </section>
@@ -211,9 +221,9 @@ export default function CampaignDetailPage() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-semibold">Posts overview</h2>
-            <p className="text-xs text-gray-500">{posts.length} posts · {totalViews} views · {totalLikes} likes</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{posts.length} posts · {totalViews} views · {totalLikes} likes</p>
           </div>
-          <Link to={`/campaigns/${campaign.id}/posts`} className="text-indigo-600 text-sm hover:underline">
+          <Link to={`/campaigns/${campaign.id}/posts`} className="text-sm hover:underline transition-colors" style={{ color: '#6366f1' }}>
             View all posts
           </Link>
         </div>
@@ -293,7 +303,7 @@ export default function CampaignDetailPage() {
                           <TD>{p.picPosting?.name || '—'}</TD>
                           <TD>
                             {p.contentLink ? (
-                              <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#2563eb' }}>
+                              <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline transition-colors" style={{ color: '#6366f1' }}>
                                 Link
                               </a>
                             ) : '—'}

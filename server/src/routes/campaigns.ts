@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, categories, startDate, endDate, status, description, accountIds } = req.body as any;
+  const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
   if (!name || !categories || !Array.isArray(categories) || categories.length === 0 || !startDate || !endDate || !status) {
     return res.status(400).json({ error: 'Missing fields: name, categories (array), startDate, endDate, and status are required' });
   }
@@ -34,6 +34,7 @@ router.post('/', async (req, res) => {
       endDate: new Date(endDate).toISOString(),
       status,
       description,
+      targetViewsForFYP: targetViewsForFYP !== undefined ? Number(targetViewsForFYP) : null,
     })
     .select()
     .single();
@@ -77,7 +78,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { name, categories, startDate, endDate, status, description, accountIds } = req.body as any;
+  const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
   
   const updateData: any = {};
   if (name !== undefined) updateData.name = name;
@@ -86,6 +87,7 @@ router.put('/:id', async (req, res) => {
   if (endDate) updateData.endDate = new Date(endDate).toISOString();
   if (status !== undefined) updateData.status = status;
   if (description !== undefined) updateData.description = description;
+  if (targetViewsForFYP !== undefined) updateData.targetViewsForFYP = targetViewsForFYP !== null && targetViewsForFYP !== '' ? Number(targetViewsForFYP) : null;
   
   const { data: campaign, error } = await supabase
     .from('Campaign')

@@ -160,6 +160,13 @@ async function recalculateKPIs(campaignId: string, accountId: string) {
     .eq('campaignId', campaignId)
     .eq('accountId', accountId);
   
+  // Get campaign to check targetViewsForFYP
+  const { data: campaign } = await supabase
+    .from('Campaign')
+    .select('targetViewsForFYP')
+    .eq('id', campaignId)
+    .single();
+  
   // Get all KPIs for this campaign and account
   const { data: kpis } = await supabase
     .from('KPI')
@@ -168,6 +175,8 @@ async function recalculateKPIs(campaignId: string, accountId: string) {
     .eq('accountId', accountId);
   
   if (!kpis || kpis.length === 0) return;
+  
+  const targetViewsForFYP = campaign?.targetViewsForFYP;
   
   // Calculate totals from posts
   const totals: Record<string, number> = {
@@ -183,8 +192,10 @@ async function recalculateKPIs(campaignId: string, accountId: string) {
     if (p.contentType === 'Video') {
       totals.VIDEO_COUNT += 1;
     }
-    // FYP_COUNT and GMV_IDR would need additional logic if they're calculated from posts
-    // For now, they remain at 0
+    // Count as FYP if views meet or exceed the threshold
+    if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
+      totals.FYP_COUNT += 1;
+    }
   });
   
   // Update each KPI's actual value
@@ -207,6 +218,13 @@ async function recalculateCampaignKPIs(campaignId: string) {
     .select('totalView, contentType')
     .eq('campaignId', campaignId);
   
+  // Get campaign to check targetViewsForFYP
+  const { data: campaign } = await supabase
+    .from('Campaign')
+    .select('targetViewsForFYP')
+    .eq('id', campaignId)
+    .single();
+  
   // Get campaign-level KPIs (where accountId is null)
   const { data: kpis } = await supabase
     .from('KPI')
@@ -215,6 +233,8 @@ async function recalculateCampaignKPIs(campaignId: string) {
     .is('accountId', null);
   
   if (!kpis || kpis.length === 0) return;
+  
+  const targetViewsForFYP = campaign?.targetViewsForFYP;
   
   // Calculate totals from all posts in the campaign
   const totals: Record<string, number> = {
@@ -229,6 +249,10 @@ async function recalculateCampaignKPIs(campaignId: string) {
     totals.VIEWS += p.totalView || 0;
     if (p.contentType === 'Video') {
       totals.VIDEO_COUNT += 1;
+    }
+    // Count as FYP if views meet or exceed the threshold
+    if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
+      totals.FYP_COUNT += 1;
     }
   });
   

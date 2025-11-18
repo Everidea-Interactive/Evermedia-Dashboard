@@ -51,6 +51,7 @@ export default function CampaignsPage() {
     status: 'PLANNED',
     description: '',
     accountIds: [] as string[],
+    targetViewsForFYP: '',
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -96,6 +97,7 @@ export default function CampaignsPage() {
       status: 'PLANNED',
       description: '',
       accountIds: [],
+      targetViewsForFYP: '',
     });
     setSelectedAccount('');
     setNewCategory('');
@@ -105,9 +107,32 @@ export default function CampaignsPage() {
 
   const handleAddCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || form.categories.length === 0 || !form.startDate || !form.endDate) {
-      setToast({ message: 'Name, at least one category, start date, and end date are required', type: 'error' });
+    if (!form.name.trim()) {
+      setToast({ message: 'Campaign name is required', type: 'error' });
       return;
+    }
+    if (form.categories.length === 0) {
+      setToast({ message: 'At least one category is required', type: 'error' });
+      return;
+    }
+    if (!form.startDate) {
+      setToast({ message: 'Start date is required', type: 'error' });
+      return;
+    }
+    if (!form.endDate) {
+      setToast({ message: 'End date is required', type: 'error' });
+      return;
+    }
+    if (!form.targetViewsForFYP || Number(form.targetViewsForFYP) <= 0) {
+      setToast({ message: 'Target Views for FYP is required and must be greater than 0', type: 'error' });
+      return;
+    }
+    // Validate all campaign KPIs are filled
+    for (const cat of accountCategoryOrder) {
+      if (!campaignKpis[cat] || Number(campaignKpis[cat]) <= 0) {
+        setToast({ message: `Target for ${categoryLabels[cat]} is required and must be greater than 0`, type: 'error' });
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -116,30 +141,29 @@ export default function CampaignsPage() {
         method: 'POST',
         token,
         body: {
-          name: form.name,
+          name: form.name.trim(),
           categories: form.categories,
           startDate: form.startDate,
           endDate: form.endDate,
           status: form.status,
           description: form.description || undefined,
           accountIds: form.accountIds.length > 0 ? form.accountIds : undefined,
+          targetViewsForFYP: Number(form.targetViewsForFYP),
         },
       });
 
-      // Create campaign-level KPIs (no accountId)
-      const campaignKpiPromises = accountCategoryOrder
-        .filter(cat => campaignKpis[cat] && campaignKpis[cat].trim() !== '')
-        .map(cat =>
-          api('/kpis', {
-            method: 'POST',
-            token,
-            body: {
-              campaignId: campaign.id,
-              category: cat,
-              target: Number(campaignKpis[cat]) || 0,
-            },
-          })
-        );
+      // Create campaign-level KPIs (no accountId) - all are required
+      const campaignKpiPromises = accountCategoryOrder.map(cat =>
+        api('/kpis', {
+          method: 'POST',
+          token,
+          body: {
+            campaignId: campaign.id,
+            category: cat,
+            target: Number(campaignKpis[cat]),
+          },
+        })
+      );
 
       // Create account-level KPIs
       const accountKpiPromises = form.accountIds.flatMap(accountId => {
@@ -210,7 +234,9 @@ export default function CampaignsPage() {
               required
             />
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Categories</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                Categories <span style={{ color: '#dc2626' }}>*</span>
+              </label>
               <div className="space-y-2">
                 <div className="relative">
                   <Input
@@ -337,12 +363,18 @@ export default function CampaignsPage() {
               <option value="COMPLETED">COMPLETED</option>
             </Select>
             <Input
-              label="Description"
-              value={form.description}
-              onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+              label="Target Views for FYP"
+              type="number"
+              value={form.targetViewsForFYP}
+              onChange={e => setForm(prev => ({ ...prev, targetViewsForFYP: e.target.value }))}
+              placeholder="Enter minimum views to mark post as FYP"
+              required
+              min="1"
             />
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Campaign-Level KPIs</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                Campaign-Level KPIs <span style={{ color: '#dc2626' }}>*</span>
+              </label>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {accountCategoryOrder.map((cat) => (
                   <Input
@@ -352,6 +384,8 @@ export default function CampaignsPage() {
                     value={campaignKpis[cat]}
                     onChange={e => setCampaignKpis(prev => ({ ...prev, [cat]: e.target.value }))}
                     placeholder="Target"
+                    required
+                    min="1"
                   />
                 ))}
               </div>

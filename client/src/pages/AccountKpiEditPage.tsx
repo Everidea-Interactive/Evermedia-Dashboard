@@ -102,22 +102,22 @@ export default function AccountKpiEditPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Editing KPIs for {account?.name}</h2>
-          <span className="text-xs text-gray-500">{account?.tiktokHandle}</span>
+          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{account?.tiktokHandle}</span>
         </div>
-        <p className="text-sm text-gray-600">Update target values; actuals are system-calculated.</p>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Update target values; actuals are system-calculated.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
           {categories.map((cat) => {
             const kpi = kpis.find((k) => k.category === cat);
             return (
-              <div key={cat} className="rounded-lg border border-gray-100 bg-gray-50 p-3 space-y-2">
-                <div className="text-xs uppercase tracking-wide text-gray-500">{labels[cat]}</div>
+              <div key={cat} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{labels[cat]}</div>
                 <Input
                   type="number"
                   value={targets[cat]}
                   placeholder="Target"
                   onChange={(e) => handleTargetChange(cat, e.target.value)}
                 />
-                <div className="text-xs text-gray-500">Actual: {kpi?.actual ?? 0}</div>
+                <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Actual: {kpi?.actual ?? 0}</div>
               </div>
             );
           })}
