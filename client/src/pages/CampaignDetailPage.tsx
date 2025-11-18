@@ -19,13 +19,14 @@ const statusPills: Record<string, { bg: string; border: string; text: string }> 
   COMPLETED: { bg: 'var(--bg-tertiary)', border: 'var(--border-color)', text: 'var(--text-secondary)' },
 };
 
-const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR'];
+const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
 const categoryLabels: Record<string, string> = {
   VIEWS: 'Views',
   QTY_POST: 'Qty Post',
   FYP_COUNT: 'FYP Count',
   VIDEO_COUNT: 'Video Count',
   GMV_IDR: 'GMV (IDR)',
+  YELLOW_CART: 'Yellow Cart',
 };
 
 export default function CampaignDetailPage() {
@@ -207,7 +208,7 @@ export default function CampaignDetailPage() {
           <div className="flex items-center justify-between mb-3 px-2 sm:px-0">
             <h2 className="text-base sm:text-lg font-semibold">Campaign KPIs</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
             {accountCategoryOrder.map((cat) => {
               const kpi = campaignKpiSummary.get(cat);
               const target = kpi?.target ?? 0;
@@ -216,7 +217,7 @@ export default function CampaignDetailPage() {
               return (
                 <div 
                   key={cat} 
-                  className="rounded-lg border p-2 sm:p-3 text-center" 
+                  className="rounded-lg border p-2 text-center" 
                   style={{ 
                     borderColor: isAchieved ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)', 
                     backgroundColor: isAchieved ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)' 

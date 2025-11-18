@@ -7,13 +7,14 @@ import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import PageHeader from '../components/PageHeader';
 
-const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR'];
+const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
 const labels: Record<string, string> = {
   VIEWS: 'Views',
   QTY_POST: 'Qty Post',
   FYP_COUNT: 'FYP Count',
   VIDEO_COUNT: 'Video Count',
   GMV_IDR: 'GMV (IDR)',
+  YELLOW_CART: 'Yellow Cart',
 };
 
 export default function AccountKpiEditPage() {

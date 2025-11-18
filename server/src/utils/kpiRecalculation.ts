@@ -4,7 +4,7 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
   // Get all posts for this campaign and account
   const { data: posts } = await supabase
     .from('Post')
-    .select('totalView, contentType')
+    .select('totalView, contentType, yellowCart')
     .eq('campaignId', campaignId)
     .eq('accountId', accountId);
   
@@ -33,6 +33,7 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
     FYP_COUNT: 0,
     VIDEO_COUNT: 0,
     GMV_IDR: 0,
+    YELLOW_CART: 0,
   };
   
   (posts || []).forEach((p: any) => {
@@ -43,6 +44,10 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
     // Count as FYP if views meet or exceed the threshold
     if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
       totals.FYP_COUNT += 1;
+    }
+    // Count posts with yellow cart enabled
+    if (p.yellowCart === true) {
+      totals.YELLOW_CART += 1;
     }
   });
   
@@ -63,7 +68,7 @@ export async function recalculateCampaignKPIs(campaignId: string) {
   // Get all posts for this campaign
   const { data: posts } = await supabase
     .from('Post')
-    .select('totalView, contentType')
+    .select('totalView, contentType, yellowCart')
     .eq('campaignId', campaignId);
   
   // Get campaign to check targetViewsForFYP
@@ -91,6 +96,7 @@ export async function recalculateCampaignKPIs(campaignId: string) {
     FYP_COUNT: 0,
     VIDEO_COUNT: 0,
     GMV_IDR: 0,
+    YELLOW_CART: 0,
   };
   
   (posts || []).forEach((p: any) => {
@@ -101,6 +107,10 @@ export async function recalculateCampaignKPIs(campaignId: string) {
     // Count as FYP if views meet or exceed the threshold
     if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
       totals.FYP_COUNT += 1;
+    }
+    // Count posts with yellow cart enabled
+    if (p.yellowCart === true) {
+      totals.YELLOW_CART += 1;
     }
   });
   

@@ -1,0 +1,3 @@
+-- Add YELLOW_CART to KPICategory enum
+ALTER TYPE "KPICategory" ADD VALUE 'YELLOW_CART';
+

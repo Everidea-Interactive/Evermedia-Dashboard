@@ -10,13 +10,14 @@ import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 
-const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR'];
+const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
 const categoryLabels: Record<string, string> = {
   VIEWS: 'Views',
   QTY_POST: 'Qty Post',
   FYP_COUNT: 'FYP Count',
   VIDEO_COUNT: 'Video Count',
   GMV_IDR: 'GMV (IDR)',
+  YELLOW_CART: 'Yellow Cart',
 };
 
 const statusPills: Record<string, { bg: string; border: string; text: string }> = {
