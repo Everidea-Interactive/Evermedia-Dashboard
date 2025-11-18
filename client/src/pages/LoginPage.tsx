@@ -27,14 +27,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center bg-gradient-to-br from-indigo-50 via-white to-indigo-100 p-4">
+    <div className="min-h-screen grid place-items-center p-4 transition-colors" style={{ background: 'linear-gradient(to bottom right, rgba(239, 246, 255, 0.5), var(--bg-primary), rgba(219, 234, 254, 0.5))' }}>
       <form onSubmit={onSubmit} className="w-full max-w-sm card">
         <div className="card-inner">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-lg bg-indigo-600/10 grid place-items-center text-indigo-700 font-semibold">TK</div>
-            <h1 className="text-xl font-semibold">Sign in</h1>
+            <div className="h-10 w-10 rounded-lg grid place-items-center font-semibold" style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' }}>TK</div>
+            <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Sign in</h1>
           </div>
-          {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
+          {error && <div className="mb-3 text-sm" style={{ color: '#dc2626' }}>{error}</div>}
           <div className="space-y-3">
             <Input label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
             <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />

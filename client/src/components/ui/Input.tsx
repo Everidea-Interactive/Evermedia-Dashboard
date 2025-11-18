@@ -8,9 +8,9 @@ type Props = React.InputHTMLAttributes<HTMLInputElement> & {
 export default function Input({ label, hint, className = '', ...rest }: Props) {
   return (
     <div>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{label}</label>}
       <input className={`input ${className}`} {...rest} />
-      {hint && <div className="mt-1 text-xs text-gray-500">{hint}</div>}
+      {hint && <div className="mt-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>{hint}</div>}
     </div>
   );
 }

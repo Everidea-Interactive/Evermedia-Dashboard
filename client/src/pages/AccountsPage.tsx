@@ -201,7 +201,7 @@ export default function AccountsPage() {
       />
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Filters</h2>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
           <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
             {showAddForm ? 'Cancel' : 'Add Account'}
           </Button>
@@ -222,7 +222,7 @@ export default function AccountsPage() {
       </Card>
       {(showAddForm || editingId) && (
         <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3">{editingId ? 'Edit Account' : 'Add Account'}</h2>
+          <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>{editingId ? 'Edit Account' : 'Add Account'}</h2>
           <form onSubmit={editingId ? handleUpdateAccount : handleAddAccount} className="space-y-3">
             <Input
               label="Name"
@@ -247,7 +247,7 @@ export default function AccountsPage() {
               <option value="CROSSBRAND">CROSSBRAND</option>
             </Select>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Campaigns</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Campaigns</label>
               <Select
                 value={selectedCampaign}
                 onChange={e => {
@@ -274,13 +274,17 @@ export default function AccountsPage() {
                     return campaign ? (
                       <span
                         key={campaignId}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-sm"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border"
+                        style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
                       >
                         {campaign.name}
                         <button
                           type="button"
                           onClick={() => setForm(prev => ({ ...prev, campaignIds: prev.campaignIds.filter(id => id !== campaignId) }))}
-                          className="hover:text-indigo-900"
+                          className="transition-colors"
+                          style={{ color: '#2563eb' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#1e40af'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = '#2563eb'; }}
                         >
                           ×
                         </button>
@@ -312,24 +316,24 @@ export default function AccountsPage() {
             {items.map(a => (
               <Card key={a.id}>
                 <div className="flex items-center justify-between">
-                  <div className="font-medium">{a.name}</div>
-                  {a.isCrossbrand && <span className="badge text-indigo-700 bg-indigo-50 border-indigo-100">Crossbrand</span>}
+                  <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
+                  {a.isCrossbrand && <span className="badge" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>Crossbrand</span>}
                 </div>
-                {a.tiktokHandle && <div className="text-sm text-gray-600 mt-2">{a.tiktokHandle}</div>}
-                <div className="text-xs text-gray-500 mt-1">Type: {a.accountType}</div>
+                {a.tiktokHandle && <div className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
+                <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Type: {a.accountType}</div>
                 {a.campaigns && a.campaigns.length > 0 && (
                   <div className="mt-2">
-                    <div className="text-xs text-gray-500 mb-1">Campaigns:</div>
+                    <div className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>Campaigns:</div>
                     <div className="flex flex-wrap gap-1">
                       {a.campaigns.map(campaign => (
-                        <span key={campaign.id} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded">
+                        <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
                           {campaign.name}
                         </span>
                       ))}
                     </div>
                   </div>
                 )}
-                {a.notes && <div className="text-xs text-gray-500 mt-1">{a.notes}</div>}
+                {a.notes && <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
                 <div className="mt-3">
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
@@ -339,16 +343,19 @@ export default function AccountsPage() {
                       variant="outline" 
                       onClick={() => handleDeleteClick(a.id, a.name)} 
                       disabled={deletingIds.has(a.id) || (a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0} 
-                      className="flex-1 text-sm py-1.5 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ color: '#dc2626' }}
+                      onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.color = '#b91c1c'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = '#dc2626'; }}
                     >
                       {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
                     </Button>
                   </div>
                   {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
-                    <div className="mt-2 text-xs text-red-600">
-                      {a.postCount > 0 && a.kpiCount > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
-                      {a.postCount > 0 && a.kpiCount === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
-                      {a.postCount === 0 && a.kpiCount > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
+                    <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>
+                      {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
+                      {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
+                      {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
                     </div>
                   )}
                 </div>
@@ -372,10 +379,10 @@ export default function AccountsPage() {
           </>
         }
       >
-        <p className="text-gray-700">
+        <p style={{ color: 'var(--text-secondary)' }}>
           Are you sure you want to delete <strong>"{deleteConfirm?.name}"</strong>?
         </p>
-        <p className="text-sm text-gray-500 mt-2">
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
           This action cannot be undone. If this account has posts or KPIs associated with it, the deletion will fail.
         </p>
       </Dialog>

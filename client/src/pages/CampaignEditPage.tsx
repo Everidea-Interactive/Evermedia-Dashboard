@@ -73,7 +73,7 @@ export default function CampaignEditPage() {
     const allCategories = new Set<string>();
     allCampaigns.forEach(c => {
       if (Array.isArray(c.categories)) {
-        c.categories.forEach(cat => allCategories.add(cat));
+        c.categories.forEach((cat: string) => allCategories.add(cat));
       }
     });
     setAvailableCategories(Array.from(allCategories).sort());

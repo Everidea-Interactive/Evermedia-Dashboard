@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.tsx';
+import { ThemeProvider } from './context/ThemeContext.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import CampaignsPage from './pages/CampaignsPage.tsx';
 import CampaignDetailPage from './pages/CampaignDetailPage.tsx';
@@ -41,8 +42,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>
 );

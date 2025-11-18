@@ -207,47 +207,66 @@ export default function CampaignDetailPage() {
           </Link>
         </div>
         <Card>
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR>
-                  <TH>NO</TH>
-              <TH>Tanggal Posting</TH>
-              <TH>Judul</TH>
-              <TH>Jenis</TH>
-              <TH>Yellow Cart</TH>
-              <TH>Status</TH>
-              <TH>Views</TH>
-              <TH>Likes</TH>
-              <TH>Comments</TH>
-              <TH>Shares</TH>
-              <TH>Saved</TH>
-              <TH>Engagement</TH>
-                </TR>
-              </THead>
-              <tbody>
-                {posts.map((p, index) => (
-                  <TR key={p.id}>
-                    <TD>{index + 1}</TD>
-                    <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
-                    <TD>{p.postTitle}</TD>
-                    <TD>{p.contentType}</TD>
-                    <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
-                    <TD>
-                      <span className="badge">{p.status}</span>
-                    </TD>
-                    <TD>{p.totalView}</TD>
-                    <TD>{p.totalLike}</TD>
-                    <TD>{p.totalComment}</TD>
-                    <TD>{p.totalShare}</TD>
-                    <TD>{p.totalSaved}</TD>
-                    <TD>{((p.engagementRate ?? 0) * 100).toFixed(2)}%</TD>
-                  </TR>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrap>
-          {posts.length === 0 && <div className="text-sm text-gray-500 p-3">No posts yet.</div>}
+          <div className="card-inner-table">
+            {posts.length === 0 ? (
+              <div className="text-sm p-4 sm:p-6" style={{ color: 'var(--text-tertiary)' }}>No posts yet.</div>
+            ) : (
+              <TableWrap>
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH>NO</TH>
+                        <TH>Tanggal Posting</TH>
+                        <TH>Judul</TH>
+                        <TH>Jenis</TH>
+                        <TH>PIC Talent</TH>
+                        <TH>PIC Editor</TH>
+                        <TH>PIC Posting</TH>
+                        <TH>Content Link</TH>
+                        <TH>Yellow Cart</TH>
+                        <TH>Status</TH>
+                        <TH>Views</TH>
+                        <TH>Likes</TH>
+                        <TH>Comments</TH>
+                        <TH>Shares</TH>
+                        <TH>Saved</TH>
+                        <TH>Engagement</TH>
+                      </TR>
+                    </THead>
+                    <tbody>
+                      {posts.map((p: any, index) => (
+                        <TR key={p.id}>
+                          <TD>{index + 1}</TD>
+                          <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
+                          <TD>{p.postTitle}</TD>
+                          <TD>{p.contentType}</TD>
+                          <TD>{p.picTalent?.name || '—'}</TD>
+                          <TD>{p.picEditor?.name || '—'}</TD>
+                          <TD>{p.picPosting?.name || '—'}</TD>
+                          <TD>
+                            {p.contentLink ? (
+                              <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#2563eb' }}>
+                                Link
+                              </a>
+                            ) : '—'}
+                          </TD>
+                          <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
+                          <TD>
+                            <span className="badge">{p.status}</span>
+                          </TD>
+                          <TD>{p.totalView}</TD>
+                          <TD>{p.totalLike}</TD>
+                          <TD>{p.totalComment}</TD>
+                          <TD>{p.totalShare}</TD>
+                          <TD>{p.totalSaved}</TD>
+                          <TD>{((p.engagementRate ?? 0) * 100).toFixed(2)}%</TD>
+                        </TR>
+                      ))}
+                    </tbody>
+                  </Table>
+                </TableWrap>
+            )}
+          </div>
         </Card>
       </section>
     </div>

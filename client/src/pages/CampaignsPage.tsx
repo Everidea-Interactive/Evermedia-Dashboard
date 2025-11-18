@@ -181,7 +181,7 @@ export default function CampaignsPage() {
       </div>
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Filters</h2>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
           <Button variant="primary" onClick={() => setShowAddForm(!showAddForm)}>
             {showAddForm ? 'Cancel' : 'Add Campaign'}
           </Button>
@@ -201,7 +201,7 @@ export default function CampaignsPage() {
       </Card>
       {showAddForm && (
         <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3">Add Campaign</h2>
+          <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Add Campaign</h2>
           <form onSubmit={handleAddCampaign} className="space-y-3">
             <Input
               label="Campaign Name"
@@ -210,7 +210,7 @@ export default function CampaignsPage() {
               required
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Categories</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Categories</label>
               <div className="space-y-2">
                 <div className="relative">
                   <Input
@@ -246,7 +246,7 @@ export default function CampaignsPage() {
                     }}
                   />
                   {showSuggestions && newCategory.trim().length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                    <div className="absolute z-10 w-full mt-1 border rounded-md max-h-48 overflow-auto" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', boxShadow: 'var(--shadow-lg)' }}>
                       {availableCategories
                         .filter(cat => 
                           !form.categories.includes(cat) &&
@@ -256,7 +256,10 @@ export default function CampaignsPage() {
                           <button
                             key={cat}
                             type="button"
-                            className="w-full text-left px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700 text-sm"
+                            className="w-full text-left px-3 py-2 text-sm transition-colors"
+                            style={{ color: 'var(--text-primary)' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; e.currentTarget.style.color = '#2563eb'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                             onClick={() => {
                               if (form.categories.includes(cat)) {
                                 setToast({ message: `Category "${cat}" is already added`, type: 'error' });
@@ -274,7 +277,7 @@ export default function CampaignsPage() {
                         !form.categories.includes(cat) &&
                         cat.toLowerCase().includes(newCategory.toLowerCase())
                       ).length === 0 && (
-                        <div className="px-3 py-2 text-sm text-gray-500">
+                        <div className="px-3 py-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
                           Press Enter to create "{newCategory.trim()}"
                         </div>
                       )}
@@ -286,13 +289,17 @@ export default function CampaignsPage() {
                     {form.categories.map(category => (
                       <span
                         key={category}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-sm"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border"
+                        style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
                       >
                         {category}
                         <button
                           type="button"
                           onClick={() => setForm(prev => ({ ...prev, categories: prev.categories.filter(c => c !== category) }))}
-                          className="hover:text-indigo-900"
+                          className="transition-colors"
+                          style={{ color: '#2563eb' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#1e40af'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = '#2563eb'; }}
                         >
                           ×
                         </button>
@@ -335,7 +342,7 @@ export default function CampaignsPage() {
               onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Campaign-Level KPIs</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Campaign-Level KPIs</label>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {accountCategoryOrder.map((cat) => (
                   <Input
@@ -350,7 +357,7 @@ export default function CampaignsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Accounts</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Accounts</label>
               <Select
                 value={selectedAccount}
                 onChange={e => {
@@ -381,9 +388,9 @@ export default function CampaignsPage() {
                     const account = accounts.find(a => a.id === accountId);
                     const accountKpiData = accountKpis[accountId] || {};
                     return account ? (
-                      <div key={accountId} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      <div key={accountId} className="border rounded-lg p-3" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{account.name}</span>
+                          <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{account.name}</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -394,7 +401,10 @@ export default function CampaignsPage() {
                                 return next;
                               });
                             }}
-                            className="text-red-600 hover:text-red-700 text-sm"
+                            className="text-sm transition-colors"
+                            style={{ color: '#dc2626' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = '#b91c1c'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = '#dc2626'; }}
                           >
                             Remove
                           </button>
@@ -456,18 +466,18 @@ export default function CampaignsPage() {
               <tbody>
                 {items.map((c) => (
                   <TR key={c.id}>
-                    <TD><Link to={`/campaigns/${c.id}`} className="text-indigo-700 hover:underline font-medium">{c.name}</Link></TD>
+                    <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
                     <TD>
                       {Array.isArray(c.categories) && c.categories.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {c.categories.map((cat, idx) => (
-                            <span key={idx} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded">
+                            <span key={idx} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
                               {cat}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span style={{ color: 'var(--text-tertiary)' }}>-</span>
                       )}
                     </TD>
                     <TD>{new Date(c.startDate).toLocaleDateString()}</TD>

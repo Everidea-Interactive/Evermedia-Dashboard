@@ -8,6 +8,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>TikTok Proxy Account Dashboard</title>
+    <script>
+      // Apply theme immediately to prevent flash
+      (function() {
+        const stored = localStorage.getItem('theme');
+        if (stored === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else if (stored === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (prefersDark) {
+            document.documentElement.classList.add('dark');
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -17,6 +17,9 @@ type Post = {
   picTalentId?: string;
   picEditorId?: string;
   picPostingId?: string;
+  picTalent?: { id: string; name: string } | null;
+  picEditor?: { id: string; name: string } | null;
+  picPosting?: { id: string; name: string } | null;
   contentCategory: string;
   adsOnMusic: boolean;
   yellowCart: boolean;
@@ -600,48 +603,69 @@ export default function PostsPage() {
           <div className="skeleton h-10 w-full" />
         ) : (
           <Card>
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>NO</TH>
-                    <TH>Hari Posting</TH>
-                    <TH>Tanggal Posting</TH>
-                    <TH>Judul</TH>
-                    <TH>Jenis</TH>
-                    <TH>Kategori Konten</TH>
-                    <TH>Ads on Music</TH>
-                    <TH>Keranjang Kuning</TH>
-                    <TH>TOTAL VIEW</TH>
-                    <TH>LIKE</TH>
-                    <TH>COMMENT</TH>
-                    <TH>SHARE</TH>
-                    <TH>SAVED</TH>
-                    <TH>Engagement Rate</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {posts.map((p, i) => (
-                    <TR key={p.id}>
-                      <TD>{i + 1}</TD>
-                      <TD>{p.postDay}</TD>
-                      <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
-                      <TD>{p.postTitle}</TD>
-                      <TD>{p.contentType}</TD>
-                      <TD>{p.contentCategory}</TD>
-                      <TD>{p.adsOnMusic ? 'Yes' : 'No'}</TD>
-                      <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
-                      <TD>{p.totalView}</TD>
-                      <TD>{p.totalLike}</TD>
-                      <TD>{p.totalComment}</TD>
-                      <TD>{p.totalShare}</TD>
-                      <TD>{p.totalSaved}</TD>
-                      <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
-                    </TR>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrap>
+            <div className="card-inner-table">
+              <TableWrap>
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH>NO</TH>
+                        <TH>Hari Posting</TH>
+                        <TH>Tanggal Posting</TH>
+                        <TH>Judul</TH>
+                        <TH>Jenis</TH>
+                        <TH>Kategori Konten</TH>
+                        <TH>PIC Talent</TH>
+                        <TH>PIC Editor</TH>
+                        <TH>PIC Posting</TH>
+                        <TH>Content Link</TH>
+                        <TH>Ads on Music</TH>
+                        <TH>Keranjang Kuning</TH>
+                        <TH>TOTAL VIEW</TH>
+                        <TH>LIKE</TH>
+                        <TH>COMMENT</TH>
+                        <TH>SHARE</TH>
+                        <TH>SAVED</TH>
+                        <TH>Engagement Rate</TH>
+                      </TR>
+                    </THead>
+                    <tbody>
+                      {posts.map((p, i) => {
+                        const picTalentName = p.picTalent?.name || (p.picTalentId ? pics.find(pic => pic.id === p.picTalentId)?.name : null) || '—';
+                        const picEditorName = p.picEditor?.name || (p.picEditorId ? pics.find(pic => pic.id === p.picEditorId)?.name : null) || '—';
+                        const picPostingName = p.picPosting?.name || (p.picPostingId ? pics.find(pic => pic.id === p.picPostingId)?.name : null) || '—';
+                        return (
+                          <TR key={p.id}>
+                            <TD>{i + 1}</TD>
+                            <TD>{p.postDay}</TD>
+                            <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
+                            <TD>{p.postTitle}</TD>
+                            <TD>{p.contentType}</TD>
+                            <TD>{p.contentCategory}</TD>
+                            <TD>{picTalentName}</TD>
+                            <TD>{picEditorName}</TD>
+                            <TD>{picPostingName}</TD>
+                            <TD>
+                              {p.contentLink ? (
+                                <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" style={{ color: '#2563eb' }}>
+                                  Link
+                                </a>
+                              ) : '—'}
+                            </TD>
+                            <TD>{p.adsOnMusic ? 'Yes' : 'No'}</TD>
+                            <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
+                            <TD>{p.totalView}</TD>
+                            <TD>{p.totalLike}</TD>
+                            <TD>{p.totalComment}</TD>
+                            <TD>{p.totalShare}</TD>
+                            <TD>{p.totalSaved}</TD>
+                            <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
+                          </TR>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </TableWrap>
+            </div>
           </Card>
         )
       )}

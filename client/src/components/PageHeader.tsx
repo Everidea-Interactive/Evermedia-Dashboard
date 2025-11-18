@@ -20,7 +20,7 @@ export default function PageHeader({ backPath, backLabel = 'Back', title, meta, 
       <div className="text-center md:text-left space-y-1">
         <div>{title}</div>
         {meta && (
-          <div className="flex flex-col items-center gap-2 text-sm text-gray-600 md:flex-row md:items-center md:justify-center">
+          <div className="flex flex-col items-center gap-2 text-sm md:flex-row md:items-center md:justify-center" style={{ color: 'var(--text-tertiary)' }}>
             {meta}
           </div>
         )}
