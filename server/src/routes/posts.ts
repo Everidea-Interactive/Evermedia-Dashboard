@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma } from '../prisma.js';
+import { supabase } from '../supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -17,34 +17,40 @@ function computeEngagement(p: any) {
 
 router.get('/', async (req, res) => {
   const { campaignId, accountId, status, category, dateFrom, dateTo, picTalentId, picEditorId, picPostingId } = req.query as any;
-  const where: any = {};
-  if (campaignId) where.campaignId = campaignId;
-  if (accountId) where.accountId = accountId;
-  if (status) where.status = { contains: String(status), mode: 'insensitive' };
-  if (category) where.contentCategory = { contains: String(category), mode: 'insensitive' };
-  if (dateFrom) where.postDate = { ...(where.postDate || {}), gte: new Date(String(dateFrom)) };
-  if (dateTo) where.postDate = { ...(where.postDate || {}), lte: new Date(String(dateTo)) };
-  if (picTalentId) where.picTalentId = picTalentId;
-  if (picEditorId) where.picEditorId = picEditorId;
-  if (picPostingId) where.picPostingId = picPostingId;
-  const posts = await prisma.post.findMany({ where, orderBy: { postDate: 'desc' } });
-  res.json(posts.map(computeEngagement));
+  let query = supabase.from('Post').select('*').order('postDate', { ascending: false });
+  
+  if (campaignId) query = query.eq('campaignId', campaignId);
+  if (accountId) query = query.eq('accountId', accountId);
+  if (status) query = query.ilike('status', `%${String(status)}%`);
+  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
+  if (dateFrom) query = query.gte('postDate', String(dateFrom));
+  if (dateTo) query = query.lte('postDate', String(dateTo));
+  if (picTalentId) query = query.eq('picTalentId', picTalentId);
+  if (picEditorId) query = query.eq('picEditorId', picEditorId);
+  if (picPostingId) query = query.eq('picPostingId', picPostingId);
+  
+  const { data: posts, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json((posts || []).map(computeEngagement));
 });
 
 router.get('/campaign/:id', async (req, res) => {
   const id = req.params.id;
   const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
-  const where: any = { campaignId: id };
-  if (accountId) where.accountId = accountId;
-  if (status) where.status = { contains: String(status), mode: 'insensitive' };
-  if (category) where.contentCategory = { contains: String(category), mode: 'insensitive' };
-  if (dateFrom) where.postDate = { ...(where.postDate || {}), gte: new Date(String(dateFrom)) };
-  if (dateTo) where.postDate = { ...(where.postDate || {}), lte: new Date(String(dateTo)) };
-  if (picTalentId) where.picTalentId = picTalentId;
-  if (picEditorId) where.picEditorId = picEditorId;
-  if (picPostingId) where.picPostingId = picPostingId;
-  const posts = await prisma.post.findMany({ where, orderBy: { postDate: 'desc' } });
-  res.json(posts.map(computeEngagement));
+  
+  let query = supabase.from('Post').select('*').eq('campaignId', id).order('postDate', { ascending: false });
+  if (accountId) query = query.eq('accountId', accountId);
+  if (status) query = query.ilike('status', `%${String(status)}%`);
+  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
+  if (dateFrom) query = query.gte('postDate', String(dateFrom));
+  if (dateTo) query = query.lte('postDate', String(dateTo));
+  if (picTalentId) query = query.eq('picTalentId', picTalentId);
+  if (picEditorId) query = query.eq('picEditorId', picEditorId);
+  if (picPostingId) query = query.eq('picPostingId', picPostingId);
+  
+  const { data: posts, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json((posts || []).map(computeEngagement));
 });
 
 router.post('/', async (req, res) => {
@@ -69,13 +75,16 @@ router.post('/', async (req, res) => {
     totalSaved,
   } = req.body as any;
   if (!campaignId || !accountId || !postDate || !postTitle) return res.status(400).json({ error: 'Missing fields' });
+  
   const d = new Date(postDate);
   const postDay = d.toLocaleDateString('en-US', { weekday: 'long' });
-  const post = await prisma.post.create({
-    data: {
+  
+  const { data: post, error } = await supabase
+    .from('Post')
+    .insert({
       campaignId,
       accountId,
-      postDate: d,
+      postDate: d.toISOString(),
       postDay,
       picTalentId,
       picEditorId,
@@ -92,8 +101,11 @@ router.post('/', async (req, res) => {
       totalComment: totalComment ?? 0,
       totalShare: totalShare ?? 0,
       totalSaved: totalSaved ?? 0,
-    },
-  });
+    })
+    .select()
+    .single();
+  
+  if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(computeEngagement(post));
 });
 
@@ -101,25 +113,25 @@ router.put('/:id', async (req, res) => {
   const data: any = { ...req.body };
   if (data.postDate) {
     const d = new Date(data.postDate);
-    data.postDate = d;
+    data.postDate = d.toISOString();
     data.postDay = d.toLocaleDateString('en-US', { weekday: 'long' });
   }
-  try {
-    const post = await prisma.post.update({ where: { id: req.params.id }, data });
-    res.json(computeEngagement(post));
-  } catch (e) {
-    res.status(404).json({ error: 'Not found' });
-  }
+  
+  const { data: post, error } = await supabase
+    .from('Post')
+    .update(data)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  
+  if (error || !post) return res.status(404).json({ error: 'Not found' });
+  res.json(computeEngagement(post));
 });
 
 router.delete('/:id', async (req, res) => {
-  try {
-    await prisma.post.delete({ where: { id: req.params.id } });
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(404).json({ error: 'Not found' });
-  }
+  const { error } = await supabase.from('Post').delete().eq('id', req.params.id);
+  if (error) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 export default router;
-

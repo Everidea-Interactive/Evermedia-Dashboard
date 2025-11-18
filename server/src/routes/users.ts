@@ -1,53 +1,104 @@
 import { Router } from 'express';
-import { prisma } from '../prisma.js';
+import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles } from '../middleware/auth.js';
-import { hashPassword } from '../utils/password.js';
 
 const router = Router();
 
 router.use(requireAuth, requireRoles('ADMIN'));
 
 router.get('/', async (_req, res) => {
-  const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
-  res.json(users.map((u: any) => ({ id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt })));
+  const { data: users, error } = await supabase
+    .from('User')
+    .select('id, name, email, role, createdAt')
+    .order('createdAt', { ascending: false });
+  
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(users || []);
 });
 
 router.post('/', async (req, res) => {
   const { name, email, password, role } = req.body as { name: string; email: string; password: string; role: any };
   if (!name || !email || !password || !role) return res.status(400).json({ error: 'Missing fields' });
-  const passwordHash = await hashPassword(password);
-  const user = await prisma.user.create({ data: { name, email, passwordHash, role } });
-  res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role });
+  
+  // Create user in Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  
+  if (authError || !authData.user) {
+    return res.status(500).json({ error: authError?.message || 'Failed to create user' });
+  }
+  
+  // Create user record in database
+  const { data: user, error: userError } = await supabase
+    .from('User')
+    .insert({ id: authData.user.id, name, email, role })
+    .select('id, name, email, role')
+    .single();
+  
+  if (userError) {
+    // Clean up auth user if database insert fails
+    await supabase.auth.admin.deleteUser(authData.user.id);
+    return res.status(500).json({ error: userError.message });
+  }
+  
+  res.status(201).json(user);
 });
 
 router.get('/:id', async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+  const { data: user, error } = await supabase
+    .from('User')
+    .select('id, name, email, role')
+    .eq('id', req.params.id)
+    .single();
+  
+  if (error || !user) return res.status(404).json({ error: 'Not found' });
+  res.json(user);
 });
 
 router.put('/:id', async (req, res) => {
   const { name, email, password, role } = req.body as { name?: string; email?: string; password?: string; role?: any };
-  const data: any = {};
-  if (name) data.name = name;
-  if (email) data.email = email;
-  if (password) data.passwordHash = await hashPassword(password);
-  if (role) data.role = role;
-  try {
-    const user = await prisma.user.update({ where: { id: req.params.id }, data });
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
-  } catch (e) {
-    res.status(404).json({ error: 'Not found' });
+  
+  const updateData: any = {};
+  if (name !== undefined) updateData.name = name;
+  if (email !== undefined) updateData.email = email;
+  if (role !== undefined) updateData.role = role;
+  
+  // Update password in Supabase Auth if provided
+  if (password) {
+    const { error: passwordError } = await supabase.auth.admin.updateUserById(req.params.id, {
+      password,
+    });
+    if (passwordError) {
+      return res.status(500).json({ error: passwordError.message });
+    }
   }
+  
+  // Update user record in database
+  const { data: user, error: userError } = await supabase
+    .from('User')
+    .update(updateData)
+    .eq('id', req.params.id)
+    .select('id, name, email, role')
+    .single();
+  
+  if (userError || !user) return res.status(404).json({ error: 'Not found' });
+  res.json(user);
 });
 
 router.delete('/:id', async (req, res) => {
-  try {
-    await prisma.user.delete({ where: { id: req.params.id } });
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(404).json({ error: 'Not found' });
+  // Delete from Supabase Auth
+  const { error: authError } = await supabase.auth.admin.deleteUser(req.params.id);
+  if (authError) {
+    return res.status(500).json({ error: authError.message });
   }
+  
+  // Delete from database
+  const { error } = await supabase.from('User').delete().eq('id', req.params.id);
+  if (error) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 export default router;

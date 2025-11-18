@@ -1,151 +1,216 @@
 import 'dotenv/config';
-import { PrismaClient, Role, AccountType, CampaignStatus, KPICategory } from '@prisma/client';
-import { hashPassword } from './utils/password.js';
-
-const prisma = new PrismaClient();
+import { supabase } from './supabase.js';
 
 async function main() {
   console.log('Seeding database...');
 
   // Create Roles for PICs
-  const roleTypes = await Promise.all(
-    ['TALENT', 'EDITOR', 'POSTING'].map((name) =>
-      prisma.pICRoleType.upsert({ where: { name }, update: {}, create: { name } })
-    )
-  );
+  const roleTypes = ['TALENT', 'EDITOR', 'POSTING'];
+  const roleTypeMap = new Map<string, string>();
+  
+  for (const name of roleTypes) {
+    const { data: existing } = await supabase
+      .from('PICRoleType')
+      .select('id')
+      .eq('name', name)
+      .single();
+    
+    if (existing) {
+      roleTypeMap.set(name, existing.id);
+    } else {
+      const { data: newRole } = await supabase
+        .from('PICRoleType')
+        .insert({ name })
+        .select()
+        .single();
+      if (newRole) {
+        roleTypeMap.set(name, newRole.id);
+      }
+    }
+  }
 
-  // Users
-  const password = await hashPassword('password123');
+  // Users - Create in Supabase Auth first, then in User table
+  const password = 'password123';
   const users = [
-    { name: 'Admin', email: 'admin@example.com', role: Role.ADMIN },
-    { name: 'Manager', email: 'manager@example.com', role: Role.CAMPAIGN_MANAGER },
-    { name: 'Operator', email: 'operator@example.com', role: Role.OPERATOR },
-    { name: 'Viewer', email: 'viewer@example.com', role: Role.VIEWER },
+    { name: 'Admin', email: 'admin@example.com', role: 'ADMIN' },
+    { name: 'Manager', email: 'manager@example.com', role: 'CAMPAIGN_MANAGER' },
+    { name: 'Operator', email: 'operator@example.com', role: 'OPERATOR' },
+    { name: 'Viewer', email: 'viewer@example.com', role: 'VIEWER' },
   ];
+  
   for (const u of users) {
-    await prisma.user.upsert({
-      where: { email: u.email },
-      update: {},
-      create: { name: u.name, email: u.email, role: u.role, passwordHash: password },
+    // Check if user exists
+    const { data: existingUser } = await supabase
+      .from('User')
+      .select('id')
+      .eq('email', u.email)
+      .single();
+    
+    if (existingUser) {
+      console.log(`User ${u.email} already exists, skipping...`);
+      continue;
+    }
+    
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: u.email,
+      password,
+      email_confirm: true,
     });
+    
+    if (authError) {
+      console.error(`Failed to create auth user ${u.email}:`, authError.message);
+      continue;
+    }
+    
+    // Create user record in database
+    await supabase
+      .from('User')
+      .upsert({
+        id: authData.user.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      });
   }
 
   // Accounts
-  const [acc1, acc2, acc3] = await Promise.all([
-    prisma.account.upsert({
-      where: { id: 'acc1' },
-      update: {},
-      create: { id: 'acc1', name: 'Brand Alpha', accountType: AccountType.BRAND_SPECIFIC, tiktokHandle: '@brandalpha' },
-    }),
-    prisma.account.upsert({
-      where: { id: 'acc2' },
-      update: {},
-      create: { id: 'acc2', name: 'Brand Beta', accountType: AccountType.CROSSBRAND, tiktokHandle: '@brandbeta' },
-    }),
-    prisma.account.upsert({
-      where: { id: 'acc3' },
-      update: {},
-      create: { id: 'acc3', name: 'General Channel', accountType: AccountType.CROSSBRAND, tiktokHandle: '@general' },
-    }),
-  ]);
+  const accounts = [
+    { id: 'acc1', name: 'Brand Alpha', accountType: 'BRAND_SPECIFIC', tiktokHandle: '@brandalpha' },
+    { id: 'acc2', name: 'Brand Beta', accountType: 'CROSSBRAND', tiktokHandle: '@brandbeta' },
+    { id: 'acc3', name: 'General Channel', accountType: 'CROSSBRAND', tiktokHandle: '@general' },
+  ];
+  
+  for (const acc of accounts) {
+    await supabase
+      .from('Account')
+      .upsert(acc, { onConflict: 'id' });
+  }
+  
+  const [acc1, acc2, acc3] = accounts;
 
   // Campaigns
   const today = new Date();
   const nextMonth = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-  const [camp1, camp2] = await Promise.all([
-    prisma.campaign.upsert({
-      where: { id: 'camp1' },
-      update: {},
-      create: {
-        id: 'camp1',
-        name: 'Q4 Booster',
-        categories: ['Electronics', 'Tech'],
-        startDate: today,
-        endDate: nextMonth,
-        status: CampaignStatus.ACTIVE,
-        description: 'Drive engagement and sales for Q4',
-        accounts: { connect: [{ id: acc1.id }, { id: acc3.id }] },
-      },
-    }),
-    prisma.campaign.upsert({
-      where: { id: 'camp2' },
-      update: {},
-      create: {
-        id: 'camp2',
-        name: 'New Year Promo',
-        categories: ['Lifestyle'],
-        startDate: today,
-        endDate: nextMonth,
-        status: CampaignStatus.PLANNED,
-        accounts: { connect: [{ id: acc2.id }, { id: acc3.id }] },
-      },
-    }),
-  ]);
+  const campaigns = [
+    {
+      id: 'camp1',
+      name: 'Q4 Booster',
+      categories: ['Electronics', 'Tech'],
+      startDate: today.toISOString(),
+      endDate: nextMonth.toISOString(),
+      status: 'ACTIVE',
+      description: 'Drive engagement and sales for Q4',
+    },
+    {
+      id: 'camp2',
+      name: 'New Year Promo',
+      categories: ['Lifestyle'],
+      startDate: today.toISOString(),
+      endDate: nextMonth.toISOString(),
+      status: 'PLANNED',
+    },
+  ];
+  
+  for (const camp of campaigns) {
+    await supabase
+      .from('Campaign')
+      .upsert(camp, { onConflict: 'id' });
+  }
+  
+  // Link campaigns to accounts
+  await supabase.from('_CampaignToAccount').upsert([
+    { A: 'camp1', B: 'acc1' },
+    { A: 'camp1', B: 'acc3' },
+    { A: 'camp2', B: 'acc2' },
+    { A: 'camp2', B: 'acc3' },
+  ], { onConflict: 'A,B' });
 
   // PICs with roles
-  const [talent, editor, poster, multi] = await Promise.all([
-    prisma.pIC.upsert({
-      where: { id: 'pic1' },
-      update: {},
-      create: {
-        id: 'pic1', name: 'Alice Talent', active: true,
-        roles: { create: [{ roleType: { connect: { name: 'TALENT' } } }] },
-      },
-    }),
-    prisma.pIC.upsert({
-      where: { id: 'pic2' },
-      update: {},
-      create: {
-        id: 'pic2', name: 'Bob Editor', active: true,
-        roles: { create: [{ roleType: { connect: { name: 'EDITOR' } } }] },
-      },
-    }),
-    prisma.pIC.upsert({
-      where: { id: 'pic3' },
-      update: {},
-      create: {
-        id: 'pic3', name: 'Charlie Poster', active: true,
-        roles: { create: [{ roleType: { connect: { name: 'POSTING' } } }] },
-      },
-    }),
-    prisma.pIC.upsert({
-      where: { id: 'pic4' },
-      update: {},
-      create: {
-        id: 'pic4', name: 'Dana Multi', active: true,
-        roles: { create: [
-          { roleType: { connect: { name: 'TALENT' } } },
-          { roleType: { connect: { name: 'EDITOR' } } },
-          { roleType: { connect: { name: 'POSTING' } } },
-        ] },
-      },
-    }),
-  ]);
+  const pics = [
+    { id: 'pic1', name: 'Alice Talent', active: true, roles: ['TALENT'] },
+    { id: 'pic2', name: 'Bob Editor', active: true, roles: ['EDITOR'] },
+    { id: 'pic3', name: 'Charlie Poster', active: true, roles: ['POSTING'] },
+    { id: 'pic4', name: 'Dana Multi', active: true, roles: ['TALENT', 'EDITOR', 'POSTING'] },
+  ];
+  
+  for (const pic of pics) {
+    const { id, roles, ...picData } = pic;
+    await supabase
+      .from('PIC')
+      .upsert({ id, ...picData }, { onConflict: 'id' });
+    
+    // Delete existing roles
+    await supabase.from('PICOnRoles').delete().eq('picId', id);
+    
+    // Add roles
+    if (roles.length > 0) {
+      const links = roles.map((roleName) => ({
+        picId: id,
+        roleTypeId: roleTypeMap.get(roleName)!,
+      }));
+      await supabase.from('PICOnRoles').insert(links);
+    }
+  }
+  
+  const [talent, editor, poster, multi] = pics;
 
   // KPIs
-  await Promise.all([
-    prisma.kPI.create({ data: { campaignId: camp1.id, accountId: acc1.id, category: KPICategory.VIEWS, target: 100000, actual: 25000 } }),
-    prisma.kPI.create({ data: { campaignId: camp1.id, accountId: acc3.id, category: KPICategory.QTY_POST, target: 20, actual: 5 } }),
-    prisma.kPI.create({ data: { campaignId: camp2.id, accountId: acc2.id, category: KPICategory.VIDEO_COUNT, target: 12, actual: 0 } }),
-  ]);
+  await supabase.from('KPI').upsert([
+    { campaignId: 'camp1', accountId: 'acc1', category: 'VIEWS', target: 100000, actual: 25000 },
+    { campaignId: 'camp1', accountId: 'acc3', category: 'QTY_POST', target: 20, actual: 5 },
+    { campaignId: 'camp2', accountId: 'acc2', category: 'VIDEO_COUNT', target: 12, actual: 0 },
+  ], { onConflict: 'id' });
 
   // Posts
   const samplePosts = [
     {
-      campaignId: camp1.id, accountId: acc1.id, postTitle: 'Launch Teaser', contentType: 'Video', contentCategory: 'Teaser', status: 'PUBLISHED',
-      postDate: new Date(), adsOnMusic: false, yellowCart: true, totalView: 12000, totalLike: 800, totalComment: 150, totalShare: 90, totalSaved: 60,
-      picTalentId: talent.id, picEditorId: editor.id, picPostingId: poster.id,
+      campaignId: 'camp1',
+      accountId: 'acc1',
+      postTitle: 'Launch Teaser',
+      contentType: 'Video',
+      contentCategory: 'Teaser',
+      status: 'PUBLISHED',
+      postDate: new Date().toISOString(),
+      adsOnMusic: false,
+      yellowCart: true,
+      totalView: 12000,
+      totalLike: 800,
+      totalComment: 150,
+      totalShare: 90,
+      totalSaved: 60,
+      picTalentId: 'pic1',
+      picEditorId: 'pic2',
+      picPostingId: 'pic3',
     },
     {
-      campaignId: camp1.id, accountId: acc3.id, postTitle: 'Behind the scenes', contentType: 'Video', contentCategory: 'BTS', status: 'PUBLISHED',
-      postDate: new Date(), adsOnMusic: true, yellowCart: false, totalView: 8000, totalLike: 500, totalComment: 80, totalShare: 40, totalSaved: 30,
-      picTalentId: multi.id, picEditorId: editor.id, picPostingId: poster.id,
+      campaignId: 'camp1',
+      accountId: 'acc3',
+      postTitle: 'Behind the scenes',
+      contentType: 'Video',
+      contentCategory: 'BTS',
+      status: 'PUBLISHED',
+      postDate: new Date().toISOString(),
+      adsOnMusic: true,
+      yellowCart: false,
+      totalView: 8000,
+      totalLike: 500,
+      totalComment: 80,
+      totalShare: 40,
+      totalSaved: 30,
+      picTalentId: 'pic4',
+      picEditorId: 'pic2',
+      picPostingId: 'pic3',
     },
   ];
+  
   for (const p of samplePosts) {
-    const d = p.postDate;
+    const d = new Date(p.postDate);
     const postDay = d.toLocaleDateString('en-US', { weekday: 'long' });
-    await prisma.post.create({ data: { ...p, postDay, postDate: d } });
+    await supabase.from('Post').insert({
+      ...p,
+      postDay,
+    });
   }
 
   console.log('Seed completed.');
@@ -154,7 +219,4 @@ async function main() {
 main().catch((e) => {
   console.error(e);
   process.exit(1);
-}).finally(async () => {
-  await prisma.$disconnect();
 });
-

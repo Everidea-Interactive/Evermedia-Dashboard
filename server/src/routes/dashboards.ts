@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma } from '../prisma.js';
+import { supabase } from '../supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -12,8 +12,14 @@ function engagementRate(sum: { views: number; likes: number; comments: number; s
 
 router.get('/campaigns/:id/dashboard/engagement', async (req, res) => {
   const campaignId = req.params.id;
-  const posts = await prisma.post.findMany({ where: { campaignId } });
-  const sum = posts.reduce(
+  const { data: posts, error } = await supabase
+    .from('Post')
+    .select('totalView, totalLike, totalComment, totalShare, totalSaved')
+    .eq('campaignId', campaignId);
+  
+  if (error) return res.status(500).json({ error: error.message });
+  
+  const sum = (posts || []).reduce(
     (acc: any, p: any) => {
       acc.views += p.totalView || 0;
       acc.likes += p.totalLike || 0;
@@ -31,16 +37,36 @@ router.get('/campaigns/:id/dashboard/kpi', async (req, res) => {
   const campaignId = req.params.id;
   const { kpiCategory, accountId, crossbrandOnly } = req.query as any;
 
-  const where: any = { campaignId };
-  if (kpiCategory) where.category = kpiCategory;
-  if (accountId) where.accountId = accountId;
-
-  let kpis = await prisma.kPI.findMany({ where, include: { account: { include: { campaigns: { select: { id: true } } } } } });
+  let query = supabase.from('KPI').select('*').eq('campaignId', campaignId);
+  if (kpiCategory) query = query.eq('category', kpiCategory);
+  if (accountId) query = query.eq('accountId', accountId);
+  
+  const { data: kpis, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  
+  // Filter by crossbrand if needed
+  let filteredKpis = kpis || [];
   if (crossbrandOnly === 'true') {
-    kpis = kpis.filter((k: any) => (k.account ? (k.account.campaigns.length >= 2) : false));
+    const accountIds = [...new Set((kpis || []).map((k: any) => k.accountId).filter(Boolean))];
+    
+    // Get campaign counts for each account
+    const { data: campaignLinks } = await supabase
+      .from('_CampaignToAccount')
+      .select('A, B')
+      .in('B', accountIds);
+    
+    const accountCampaignCounts = new Map<string, number>();
+    (campaignLinks || []).forEach((link: any) => {
+      accountCampaignCounts.set(link.B, (accountCampaignCounts.get(link.B) || 0) + 1);
+    });
+    
+    filteredKpis = (kpis || []).filter((k: any) => {
+      if (!k.accountId) return false;
+      return (accountCampaignCounts.get(k.accountId) || 0) >= 2;
+    });
   }
 
-  const data = kpis.map(k => ({
+  const data = filteredKpis.map((k: any) => ({
     id: k.id,
     campaignId: k.campaignId,
     accountId: k.accountId,

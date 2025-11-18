@@ -22,6 +22,8 @@ build/
 .env.test.local
 .env.production.local
 .env*.local
+# Keep .env.example files
+!.env.example
 
 # IDE and editors
 .vscode/
@@ -51,11 +53,6 @@ lerna-debug.log*
 coverage/
 .nyc_output/
 *.lcov
-
-# Prisma
-**/prisma/generated/
-**/prisma/migrations/*.sql
-!**/prisma/migrations/migration_lock.toml
 
 # Database
 *.db
@@ -89,6 +86,3 @@ Desktop.ini
 *.pem
 *.key
 *.cert
-
-
-

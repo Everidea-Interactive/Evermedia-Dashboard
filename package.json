@@ -9,7 +9,6 @@
     "server": "npm --prefix server run dev",
     "client": "npm --prefix client run dev",
     "build": "npm --prefix server run build && npm --prefix client run build",
-    "migrate-seed": "npm --prefix server run migrate-seed"
   },
   "keywords": [],
   "author": "",

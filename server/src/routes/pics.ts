@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma } from '../prisma.js';
+import { supabase } from '../supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -7,97 +7,195 @@ router.use(requireAuth);
 
 router.get('/', async (req, res) => {
   const { role, active } = req.query as any;
-  const where: any = {};
-  if (active === 'true') where.active = true;
-  if (active === 'false') where.active = false;
-  const pics = await prisma.pIC.findMany({
-    where,
-    include: { roles: { include: { roleType: true } } },
-    orderBy: { name: 'asc' },
+  let query = supabase.from('PIC').select('*').order('name', { ascending: true });
+  
+  if (active === 'true') query = query.eq('active', true);
+  if (active === 'false') query = query.eq('active', false);
+  
+  const { data: pics, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  
+  // Get roles for each PIC
+  const picIds = (pics || []).map((p: any) => p.id);
+  const { data: picRoles } = await supabase
+    .from('PICOnRoles')
+    .select('picId, roleTypeId')
+    .in('picId', picIds);
+  
+  const roleTypeIds = [...new Set((picRoles || []).map((pr: any) => pr.roleTypeId))];
+  const { data: roleTypes } = await supabase
+    .from('PICRoleType')
+    .select('id, name')
+    .in('id', roleTypeIds);
+  
+  const roleTypeMap = new Map((roleTypes || []).map((rt: any) => [rt.id, rt.name]));
+  const picRoleMap = new Map<string, string[]>();
+  (picRoles || []).forEach((pr: any) => {
+    if (!picRoleMap.has(pr.picId)) {
+      picRoleMap.set(pr.picId, []);
+    }
+    const roleName = roleTypeMap.get(pr.roleTypeId);
+    if (roleName) {
+      picRoleMap.get(pr.picId)!.push(roleName);
+    }
   });
-  const filtered = role
-    ? pics.filter((p: any) => p.roles.some((r: any) => r.roleType.name.toUpperCase() === String(role).toUpperCase()))
-    : pics;
-  res.json(filtered.map((p: any) => ({
+  
+  let filtered = (pics || []).map((p: any) => ({
     id: p.id,
     name: p.name,
     contact: p.contact,
     notes: p.notes,
     active: p.active,
-    roles: p.roles.map((r: any) => r.roleType.name),
+    roles: picRoleMap.get(p.id) || [],
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
-  })));
+  }));
+  
+  if (role) {
+    filtered = filtered.filter((p: any) => 
+      p.roles.some((r: string) => r.toUpperCase() === String(role).toUpperCase())
+    );
+  }
+  
+  res.json(filtered);
 });
 
 router.post('/', async (req, res) => {
   const { name, contact, notes, active, roles } = req.body as any;
   if (!name) return res.status(400).json({ error: 'Name required' });
+  
+  const { data: pic, error: picError } = await supabase
+    .from('PIC')
+    .insert({ name, contact, notes, active: active ?? true })
+    .select()
+    .single();
+  
+  if (picError) return res.status(500).json({ error: picError.message });
+  
+  // Create role types and links
   const roleTypes = (roles || []) as string[];
-  const pic = await prisma.pIC.create({
-    data: {
-      name,
-      contact,
-      notes,
-      active: active ?? true,
-      roles: roleTypes.length
-        ? {
-            create: roleTypes.map((roleName) => ({
-              roleType: {
-                connectOrCreate: {
-                  where: { name: String(roleName).toUpperCase() },
-                  create: { name: String(roleName).toUpperCase() },
-                },
-              },
-            })),
-          }
-        : undefined,
-    },
-    include: { roles: { include: { roleType: true } } },
-  });
-  res.status(201).json({ ...pic, roles: pic.roles.map(r => r.roleType.name) });
+  if (roleTypes.length > 0) {
+    // Get or create role types
+    const roleTypeMap = new Map<string, string>();
+    for (const roleName of roleTypes) {
+      const upperName = String(roleName).toUpperCase();
+      const { data: existing } = await supabase
+        .from('PICRoleType')
+        .select('id')
+        .eq('name', upperName)
+        .single();
+      
+      if (existing) {
+        roleTypeMap.set(upperName, existing.id);
+      } else {
+        const { data: newRoleType } = await supabase
+          .from('PICRoleType')
+          .insert({ name: upperName })
+          .select()
+          .single();
+        if (newRoleType) {
+          roleTypeMap.set(upperName, newRoleType.id);
+        }
+      }
+    }
+    
+    // Create PICOnRoles links
+    const links = Array.from(roleTypeMap.values()).map((roleTypeId) => ({
+      picId: pic.id,
+      roleTypeId,
+    }));
+    await supabase.from('PICOnRoles').insert(links);
+  }
+  
+  // Fetch PIC with roles for response
+  const { data: picRoles } = await supabase
+    .from('PICOnRoles')
+    .select('roleTypeId')
+    .eq('picId', pic.id);
+  
+  const roleTypeIds = (picRoles || []).map((pr: any) => pr.roleTypeId);
+  const { data: fetchedRoleTypes } = await supabase
+    .from('PICRoleType')
+    .select('name')
+    .in('id', roleTypeIds);
+  
+  res.status(201).json({ ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) });
 });
 
 router.put('/:id', async (req, res) => {
   const { name, contact, notes, active, roles } = req.body as any;
-  try {
+  
+  const updateData: any = {};
+  if (name !== undefined) updateData.name = name;
+  if (contact !== undefined) updateData.contact = contact;
+  if (notes !== undefined) updateData.notes = notes;
+  if (active !== undefined) updateData.active = active;
+  
+  const { data: pic, error: picError } = await supabase
+    .from('PIC')
+    .update(updateData)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  
+  if (picError || !pic) return res.status(404).json({ error: 'Not found' });
+  
+  // Update roles if provided
+  if (roles !== undefined) {
+    await supabase.from('PICOnRoles').delete().eq('picId', req.params.id);
+    
     const roleTypes = (roles || []) as string[];
-    const pic = await prisma.pIC.update({
-      where: { id: req.params.id },
-        data: {
-          name,
-          contact,
-          notes,
-          active,
-          ...(roles ? {
-          roles: {
-            deleteMany: {},
-            create: roleTypes.map((roleName) => ({
-              roleType: {
-                connectOrCreate: {
-                  where: { name: String(roleName).toUpperCase() },
-                  create: { name: String(roleName).toUpperCase() },
-                },
-              },
-            })),
-          },
-        } : {}),
-      },
-      include: { roles: { include: { roleType: true } } },
-    });
-    res.json({ ...pic, roles: pic.roles.map(r => r.roleType.name) });
-  } catch (e) {
-    res.status(404).json({ error: 'Not found' });
+    if (roleTypes.length > 0) {
+      const roleTypeMap = new Map<string, string>();
+      for (const roleName of roleTypes) {
+        const upperName = String(roleName).toUpperCase();
+        const { data: existing } = await supabase
+          .from('PICRoleType')
+          .select('id')
+          .eq('name', upperName)
+          .single();
+        
+        if (existing) {
+          roleTypeMap.set(upperName, existing.id);
+        } else {
+          const { data: newRoleType } = await supabase
+            .from('PICRoleType')
+            .insert({ name: upperName })
+            .select()
+            .single();
+          if (newRoleType) {
+            roleTypeMap.set(upperName, newRoleType.id);
+          }
+        }
+      }
+      
+      const links = Array.from(roleTypeMap.values()).map((roleTypeId) => ({
+        picId: req.params.id,
+        roleTypeId,
+      }));
+      await supabase.from('PICOnRoles').insert(links);
+    }
   }
+  
+  // Fetch PIC with roles for response
+  const { data: picRoles } = await supabase
+    .from('PICOnRoles')
+    .select('roleTypeId')
+    .eq('picId', req.params.id);
+  
+  const roleTypeIds = (picRoles || []).map((pr: any) => pr.roleTypeId);
+  const { data: fetchedRoleTypes } = await supabase
+    .from('PICRoleType')
+    .select('name')
+    .in('id', roleTypeIds);
+  
+  res.json({ ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) });
 });
 
 router.delete('/:id', async (req, res) => {
-  try {
-    await prisma.pIC.delete({ where: { id: req.params.id } });
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(404).json({ error: 'Not found' });
-  }
+  const { error } = await supabase.from('PIC').delete().eq('id', req.params.id);
+  if (error) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 export default router;

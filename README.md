@@ -8,10 +8,9 @@ A full-stack dashboard application for managing TikTok proxy accounts, campaigns
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js
 - **Language**: TypeScript
-- **Database**: PostgreSQL 16
-- **ORM**: Prisma
-- **Authentication**: JWT (JSON Web Tokens)
-- **File Upload**: Multer
+- **Database**: Supabase (PostgreSQL)
+- **Database Client**: Supabase JS
+- **Authentication**: Supabase Auth
 
 ### Frontend
 - **Framework**: React 19
@@ -21,8 +20,7 @@ A full-stack dashboard application for managing TikTok proxy accounts, campaigns
 - **Routing**: React Router DOM
 
 ### DevOps
-- **Containerization**: Docker Compose
-- **Database**: PostgreSQL container
+- **Database**: Supabase (Managed PostgreSQL)
 
 ## 📋 Prerequisites
 
@@ -30,8 +28,7 @@ Before you begin, ensure you have the following installed:
 
 - **Node.js** 18 or higher
 - **npm** or **yarn**
-- **Docker** and **Docker Compose** (for database)
-- **PostgreSQL** (if not using Docker)
+- **Supabase account** (free tier available at https://supabase.com)
 
 ## 🛠️ Installation
 
@@ -72,43 +69,42 @@ cd server
 cp .env.example .env  # If you have an example file
 ```
 
-Required environment variables:
+Required environment variables (copy from `server/.env.example`):
 
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/tiktok_dashboard"
-JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 PORT=4000
 ```
 
-#### Client Configuration (Optional)
+Get these values from your Supabase project dashboard → Settings → API
 
-Create a `.env` file in the `client/` directory if you need to override the default API URL:
+#### Client Configuration
+
+Create a `.env` file in the `client/` directory (copy from `client/.env.example`):
 
 ```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
 VITE_API_URL=http://localhost:4000
 ```
 
-### 4. Start the database
+### 4. Set up Supabase database
 
-Using Docker Compose (recommended):
+1. Create a Supabase project at https://supabase.com
+2. Go to SQL Editor in your Supabase dashboard
+3. Run the migration SQL from `server/supabase/migrations/20250120000000_init_schema.sql`
 
-```bash
-docker-compose up -d
-```
+### 5. Seed the database
 
-Or use your own PostgreSQL instance and update the `DATABASE_URL` in `server/.env`.
-
-### 5. Run database migrations and seed data
-
-From the repository root:
+From the server directory:
 
 ```bash
-npm run migrate-seed
+cd server
+npm run db:seed
 ```
 
-This will:
-- Run Prisma migrations to set up the database schema
-- Seed the database with initial users:
+This will seed the database with initial users:
   - `admin@example.com` / `password123` (ADMIN role)
   - `manager@example.com` / `password123` (CAMPAIGN_MANAGER role)
   - `operator@example.com` / `password123` (OPERATOR role)
@@ -174,16 +170,13 @@ Evermedia Dashboard/
 │   ├── src/
 │   │   ├── routes/        # API route handlers
 │   │   ├── middleware/    # Express middleware
-│   │   ├── utils/         # Utility functions
-│   │   ├── prisma.ts      # Prisma client instance
+│   │   ├── supabase.ts    # Supabase client instance
 │   │   └── index.ts       # Server entry point
-│   ├── prisma/
-│   │   ├── schema.prisma  # Database schema
-│   │   └── migrations/    # Database migrations
+│   ├── supabase/
+│   │   └── migrations/   # Supabase SQL migrations
 │   ├── uploads/           # File uploads directory
 │   └── dist/              # Build output (gitignored)
 │
-├── docker-compose.yml     # Docker Compose configuration
 ├── package.json           # Root package.json with scripts
 └── README.md              # This file
 ```
@@ -206,9 +199,9 @@ Content-Type: application/json
 Response:
 ```json
 {
-  "token": "jwt-token-here",
+  "token": "supabase-access-token-here",
   "user": {
-    "id": 1,
+    "id": "uuid-here",
     "email": "admin@example.com",
     "role": "ADMIN"
   }
@@ -217,10 +210,10 @@ Response:
 
 ### Protected Routes
 
-All routes except `/api/auth/login` require authentication. Include the JWT token in the Authorization header:
+All routes except `/api/auth/login` require authentication. Include the Supabase access token in the Authorization header:
 
 ```http
-Authorization: Bearer <your-jwt-token>
+Authorization: Bearer <your-supabase-access-token>
 ```
 
 ### API Endpoints
@@ -283,28 +276,17 @@ Authorization: Bearer <your-jwt-token>
 
 ## 🔐 Security Notes
 
-- **JWT Secret**: Always use a strong, random JWT_SECRET in production
-- **Password Hashing**: Passwords are hashed using bcryptjs
+- **Service Role Key**: Keep your `SUPABASE_SERVICE_ROLE_KEY` secret - never expose it client-side
+- **Anon Key**: The `VITE_SUPABASE_ANON_KEY` is safe for client-side use
 - **Environment Variables**: Never commit `.env` files to version control
 - **CORS**: Configure CORS appropriately for production
+- **Row Level Security**: Consider enabling RLS policies in Supabase for additional security
 
 ## 🧪 Development
 
 ### Database Migrations
 
-Create a new migration:
-
-```bash
-cd server
-npm run prisma:migrate -- --name migration_name
-```
-
-Generate Prisma client after schema changes:
-
-```bash
-cd server
-npm run prisma:generate
-```
+Create a new migration SQL file in `server/supabase/migrations/` and run it in the Supabase SQL Editor.
 
 ### Linting
 
@@ -322,15 +304,12 @@ npm run lint
 - `npm run server` - Run server only
 - `npm run client` - Run client only
 - `npm run build` - Build both server and client for production
-- `npm run migrate-seed` - Run migrations and seed database
 
 ### Server
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Compile TypeScript to JavaScript
 - `npm start` - Start production server
-- `npm run prisma:generate` - Generate Prisma client
-- `npm run prisma:migrate` - Run database migrations
-- `npm run db:seed` - Seed the database
+- `npm run db:seed` - Seed the database with initial data
 
 ### Client
 - `npm run dev` - Start development server
@@ -354,9 +333,9 @@ ISC
 
 ### Database Connection Issues
 
-- Ensure PostgreSQL is running (check Docker container: `docker ps`)
-- Verify `DATABASE_URL` in `server/.env` is correct
-- Check database credentials match Docker Compose configuration
+- Verify `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `server/.env` are correct
+- Check that your Supabase project is active
+- Ensure you've run the SQL migration in Supabase SQL Editor
 
 ### Port Already in Use
 

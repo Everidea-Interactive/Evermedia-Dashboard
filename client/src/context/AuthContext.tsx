@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { api } from '../lib/api';
 
 type User = { id: string; name: string; email: string; role: 'ADMIN'|'CAMPAIGN_MANAGER'|'OPERATOR'|'VIEWER' };
@@ -18,6 +18,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const str = localStorage.getItem('user');
     return str ? JSON.parse(str) : null;
   });
+
+  // Verify token on mount
+  useEffect(() => {
+    if (token) {
+      // Token validation happens via API calls, so we keep it simple
+      // If token is invalid, API calls will fail and user will be logged out
+    }
+  }, [token]);
 
   const login = async (email: string, password: string) => {
     const res = await api('/auth/login', { method: 'POST', body: { email, password } });

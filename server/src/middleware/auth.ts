@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyJwt } from '../utils/jwt.js';
+import { supabase } from '../supabase.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -10,13 +10,35 @@ export interface AuthRequest extends Request {
   };
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : undefined;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  
   try {
-    const payload = verifyJwt(token);
-    req.user = payload;
+    // Verify token with Supabase
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authUser) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Get user role from database
+    const { data: user, error: userError } = await supabase
+      .from('User')
+      .select('id, email, name, role')
+      .eq('id', authUser.id)
+      .single();
+
+    if (userError || !user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    };
     next();
   } catch (e) {
     return res.status(401).json({ error: 'Invalid token' });
