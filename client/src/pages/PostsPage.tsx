@@ -96,7 +96,7 @@ export default function PostsPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { canAddPost } = usePermissions();
+  const { canAddPost, canDeletePost } = usePermissions();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -104,6 +104,8 @@ export default function PostsPage() {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<FormMessage | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState<FormState>({
     campaignId: id ?? '',
     campaignCategory: '',
@@ -479,6 +481,26 @@ export default function PostsPage() {
     }
   };
 
+  const handleDeleteClick = (post: Post) => {
+    setDeleteConfirm({ id: post.id, title: post.postTitle });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
+    setDeleting(true);
+    try {
+      await api(`/posts/${id}`, { method: 'DELETE', token });
+      await refreshPosts();
+      setToast({ type: 'success', text: 'Post deleted successfully' });
+    } catch (error) {
+      setToast({ type: 'error', text: (error as Error).message });
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -803,7 +825,7 @@ export default function PostsPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
-                        <TH>Actions</TH>
+                        <TH className="!text-center">Actions</TH>
                         <TH>Campaign</TH>
                         <TH>Account</TH>
                         <TH>Hari Posting</TH>
@@ -837,15 +859,28 @@ export default function PostsPage() {
                           <TR key={p.id}>
                             <TD>{i + 1}</TD>
                             <TD>
-                            <Button
-                              onClick={() => handleEditPost(p)}
-                              variant="ghost"
-                              color="blue"
-                              className="text-xs px-2 py-1"
-                              type="button"
-                            >
-                              Edit
-                            </Button>
+                            <div className="flex gap-1.5 justify-center">
+                              <Button
+                                onClick={() => handleEditPost(p)}
+                                variant="ghost"
+                                color="blue"
+                                className="text-xs px-2 py-1"
+                                type="button"
+                              >
+                                Edit
+                              </Button>
+                              <RequirePermission permission={canDeletePost}>
+                                <Button
+                                  onClick={() => handleDeleteClick(p)}
+                                  variant="ghost"
+                                  color="red"
+                                  className="text-xs px-2 py-1"
+                                  type="button"
+                                >
+                                  Delete
+                                </Button>
+                              </RequirePermission>
+                            </div>
                             </TD>
                             <TD>{campaignName}</TD>
                             <TD>{accountName}</TD>
@@ -1100,6 +1135,39 @@ export default function PostsPage() {
           </div>
         </form>
       </Dialog>
+
+      <Dialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete Post"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              color="red"
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete <strong>"{deleteConfirm?.title}"</strong>?
+        </p>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          This action cannot be undone. KPIs will be recalculated automatically after deletion.
+        </p>
+      </Dialog>
+
       {toast && (
         <div className="fixed inset-x-0 bottom-4 flex justify-center px-4 pointer-events-none z-50">
           <div

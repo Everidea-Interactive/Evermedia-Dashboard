@@ -230,7 +230,7 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
 });
 
 
-router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   // Get the post before deletion to know which campaign/account to update KPIs for
   const { data: post } = await supabase
     .from('Post')

@@ -84,6 +84,8 @@ export default function AllPostsPage() {
   const [editForm, setEditForm] = useState<Partial<FilterState & { postTitle: string; contentType: string; contentLink: string; adsOnMusic: string; yellowCart: string; totalView: string; totalLike: string; totalComment: string; totalShare: string; totalSaved: string }>>({});
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [filters, setFilters] = useState<FilterState>({
     campaignId: '',
@@ -226,6 +228,26 @@ export default function AllPostsPage() {
       setToast({ type: 'error', text: (error as Error).message });
     } finally {
       setSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteClick = (post: Post) => {
+    setDeleteConfirm({ id: post.id, title: post.postTitle });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
+    setDeleting(true);
+    try {
+      await api(`/posts/${id}`, { method: 'DELETE', token });
+      await fetchPosts();
+      setToast({ type: 'success', text: 'Post deleted successfully' });
+    } catch (error) {
+      setToast({ type: 'error', text: (error as Error).message });
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(null);
     }
   };
 
@@ -413,7 +435,7 @@ export default function AllPostsPage() {
                 <THead>
                   <TR>
                     <TH>NO</TH>
-                    <TH>Actions</TH>
+                    <TH className="!text-center">Actions</TH>
                     <TH>Campaign</TH>
                     <TH>Account</TH>
                     <TH>Hari Posting</TH>
@@ -447,17 +469,30 @@ export default function AllPostsPage() {
                       <TR key={p.id}>
                         <TD>{i + 1}</TD>
                         <TD>
-                          <RequirePermission permission={canEditPost}>
-                            <Button
-                              onClick={() => handleEditPost(p)}
-                              variant="ghost"
-                              color="blue"
-                              className="text-xs px-2 py-1"
-                              type="button"
-                            >
-                              Edit
-                            </Button>
-                          </RequirePermission>
+                          <div className="flex gap-1.5 justify-center">
+                            <RequirePermission permission={canEditPost}>
+                              <Button
+                                onClick={() => handleEditPost(p)}
+                                variant="ghost"
+                                color="blue"
+                                className="text-xs px-2 py-1"
+                                type="button"
+                              >
+                                Edit
+                              </Button>
+                            </RequirePermission>
+                            <RequirePermission permission={canDeletePost}>
+                              <Button
+                                onClick={() => handleDeleteClick(p)}
+                                variant="ghost"
+                                color="red"
+                                className="text-xs px-2 py-1"
+                                type="button"
+                              >
+                                Delete
+                              </Button>
+                            </RequirePermission>
+                          </div>
                         </TD>
                         <TD>
                           {campaignName !== '—' ? (
@@ -706,6 +741,38 @@ export default function AllPostsPage() {
             </div>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete Post"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              color="red"
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete <strong>"{deleteConfirm?.title}"</strong>?
+        </p>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          This action cannot be undone. KPIs will be recalculated automatically after deletion.
+        </p>
       </Dialog>
 
       {toast && (

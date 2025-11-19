@@ -56,8 +56,7 @@ export function usePermissions() {
     return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
   };
 
-  // Admin, Campaign Manager - Can manage posts (full CRUD)
-  // Editor - Can only add/edit posts (no delete)
+  // Admin, Campaign Manager, Editor - Can manage posts (full CRUD)
   const canAddPost = (): boolean => {
     return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
   };
@@ -67,7 +66,7 @@ export function usePermissions() {
   };
 
   const canDeletePost = (): boolean => {
-    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER']);
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
   };
 
   // Legacy method for backward compatibility - checks if can add/edit posts
