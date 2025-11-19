@@ -132,6 +132,29 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRe
     
     const oldAccountIds = oldLinks?.map((link: any) => link.B) || [];
     
+    // Find accounts that are being removed (in old but not in new)
+    const accountsToRemove = oldAccountIds.filter((id: string) => !accountIds.includes(id));
+    
+    // Check if any accounts being removed have posts in this campaign
+    if (accountsToRemove.length > 0) {
+      const { data: posts, error: postsError } = await supabase
+        .from('Post')
+        .select('accountId')
+        .eq('campaignId', req.params.id)
+        .in('accountId', accountsToRemove)
+        .limit(1);
+      
+      if (postsError) {
+        return res.status(500).json({ error: `Failed to check posts: ${postsError.message}` });
+      }
+      
+      if (posts && posts.length > 0) {
+        return res.status(400).json({ 
+          error: `Cannot remove account from campaign: There are existing posts using this account in this campaign` 
+        });
+      }
+    }
+    
     await supabase.from('_CampaignToAccount').delete().eq('A', req.params.id);
     if (accountIds.length > 0) {
       const links = accountIds.map((accountId: string) => ({
@@ -229,7 +252,7 @@ router.get('/:id/posts', async (req, res) => {
   if (picEditorId) query = query.eq('picEditorId', picEditorId);
   if (picPostingId) query = query.eq('picPostingId', picPostingId);
   
-  const { data: posts, error } = await query.order('postDate', { ascending: false });
+  const { data: posts, error } = await query.order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   
   // Fetch related data
@@ -261,6 +284,25 @@ router.get('/:id/posts', async (req, res) => {
 
 router.delete('/:id/accounts/:accountId', async (req, res) => {
   const { id, accountId } = req.params;
+  
+  // Check if there are any posts using this account in this campaign
+  const { data: posts, error: postsError } = await supabase
+    .from('Post')
+    .select('id')
+    .eq('campaignId', id)
+    .eq('accountId', accountId)
+    .limit(1);
+  
+  if (postsError) {
+    return res.status(500).json({ error: `Failed to check posts: ${postsError.message}` });
+  }
+  
+  if (posts && posts.length > 0) {
+    return res.status(400).json({ 
+      error: 'Cannot remove account from campaign: There are existing posts using this account in this campaign' 
+    });
+  }
+  
   const { error } = await supabase
     .from('_CampaignToAccount')
     .delete()

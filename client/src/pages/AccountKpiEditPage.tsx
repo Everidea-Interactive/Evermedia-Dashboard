@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
+import Toast from '../components/ui/Toast';
 import PageHeader from '../components/PageHeader';
 
 const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
@@ -29,6 +30,7 @@ export default function AccountKpiEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     if (!campaignId || !accountId) return;
@@ -106,6 +108,8 @@ export default function AccountKpiEditPage() {
     try {
       await api(`/campaigns/${campaignId}/accounts/${accountId}`, { method: 'DELETE', token });
       navigate(`/campaigns/${campaignId}`);
+    } catch (error: any) {
+      setToast({ message: error?.message || 'Failed to remove account', type: 'error' });
     } finally {
       setRemoving(false);
     }
@@ -161,6 +165,13 @@ export default function AccountKpiEditPage() {
           </Button>
         </div>
       </Card>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

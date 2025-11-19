@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import Toast from '../components/ui/Toast';
 import RequirePermission from '../components/RequirePermission';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
@@ -47,6 +48,7 @@ export default function CampaignDetailPage() {
   const [pics, setPics] = useState<any[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -64,6 +66,9 @@ export default function CampaignDetailPage() {
       await api(`/campaigns/${id}/accounts/${accountId}`, { method: 'DELETE', token });
       const refreshed = await api(`/campaigns/${id}`, { token });
       setCampaign(refreshed);
+      setToast({ message: 'Account removed successfully', type: 'success' });
+    } catch (error: any) {
+      setToast({ message: error?.message || 'Failed to remove account', type: 'error' });
     } finally {
       setAccountRemoving((prev) => ({ ...prev, [accountId]: false }));
     }
@@ -716,6 +721,13 @@ export default function CampaignDetailPage() {
           This action cannot be undone. All associated posts, KPIs, and account links will also be deleted.
         </p>
       </Dialog>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

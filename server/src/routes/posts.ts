@@ -19,7 +19,7 @@ function computeEngagement(p: any) {
 
 router.get('/', async (req, res) => {
   const { campaignId, accountId, status, category, dateFrom, dateTo, picTalentId, picEditorId, picPostingId } = req.query as any;
-  let query = supabase.from('Post').select('*').order('postDate', { ascending: false });
+  let query = supabase.from('Post').select('*').order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   
   if (campaignId) query = query.eq('campaignId', campaignId);
   if (accountId) query = query.eq('accountId', accountId);
@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
 router.get('/all', async (req, res) => {
   const { campaignId, dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
   
-  let query = supabase.from('Post').select('*').order('postDate', { ascending: false });
+  let query = supabase.from('Post').select('*').order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (campaignId) query = query.eq('campaignId', campaignId);
   if (accountId) query = query.eq('accountId', accountId);
   if (status) query = query.ilike('status', `%${String(status)}%`);
@@ -85,7 +85,7 @@ router.get('/campaign/:id', async (req, res) => {
   const id = req.params.id;
   const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
   
-  let query = supabase.from('Post').select('*').eq('campaignId', id).order('postDate', { ascending: false });
+  let query = supabase.from('Post').select('*').eq('campaignId', id).order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (accountId) query = query.eq('accountId', accountId);
   if (status) query = query.ilike('status', `%${String(status)}%`);
   if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
@@ -122,6 +122,31 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     totalSaved,
   } = req.body as any;
   if (!campaignId || !accountId || !postDate || !postTitle) return res.status(400).json({ error: 'Missing fields' });
+  
+  // Check if account is linked to campaign, and link it if not
+  const { data: existingLinks, error: checkError } = await supabase
+    .from('_CampaignToAccount')
+    .select('*')
+    .eq('A', campaignId)
+    .eq('B', accountId);
+  
+  // If no link exists, create it automatically
+  if (!existingLinks || existingLinks.length === 0) {
+    const { error: linkError } = await supabase
+      .from('_CampaignToAccount')
+      .insert({
+        A: campaignId,
+        B: accountId,
+      });
+    
+    if (linkError) {
+      // If link already exists (race condition), that's fine, continue
+      // Otherwise, return error
+      if (!linkError.message.includes('duplicate') && !linkError.message.includes('unique')) {
+        return res.status(500).json({ error: `Failed to link account to campaign: ${linkError.message}` });
+      }
+    }
+  }
   
   const d = new Date(postDate);
   const postDay = d.toLocaleDateString('en-US', { weekday: 'long' });
@@ -199,6 +224,33 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     .single();
   
   if (error || !post) return res.status(404).json({ error: 'Not found' });
+  
+  // Check if account is linked to campaign, and link it if not
+  if (post.campaignId && post.accountId) {
+    const { data: existingLinks } = await supabase
+      .from('_CampaignToAccount')
+      .select('*')
+      .eq('A', post.campaignId)
+      .eq('B', post.accountId);
+    
+    // If no link exists, create it automatically
+    if (!existingLinks || existingLinks.length === 0) {
+      const { error: linkError } = await supabase
+        .from('_CampaignToAccount')
+        .insert({
+          A: post.campaignId,
+          B: post.accountId,
+        });
+      
+      if (linkError) {
+        // If link already exists (race condition), that's fine, continue
+        // Otherwise, log error but don't fail the update
+        if (!linkError.message.includes('duplicate') && !linkError.message.includes('unique')) {
+          console.error(`Failed to link account to campaign: ${linkError.message}`);
+        }
+      }
+    }
+  }
   
   // Recalculate KPIs for the campaign and account after post update
   if (post.campaignId) {
