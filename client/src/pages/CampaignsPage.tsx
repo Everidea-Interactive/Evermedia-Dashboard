@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { Link } from 'react-router-dom';
 import Input from '../components/ui/Input';
@@ -8,6 +9,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
+import RequirePermission from '../components/RequirePermission';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 
 const accountCategoryOrder = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
@@ -44,6 +46,7 @@ type Account = {
 
 export default function CampaignsPage() {
   const { token } = useAuth();
+  const { canManageCampaigns, canDelete } = usePermissions();
   const [items, setItems] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState('');
@@ -293,9 +296,11 @@ export default function CampaignsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)}>
-            {showAddForm ? 'Cancel' : 'Add Campaign'}
-          </Button>
+          <RequirePermission permission={canManageCampaigns}>
+            <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)}>
+              {showAddForm ? 'Cancel' : 'Add Campaign'}
+            </Button>
+          </RequirePermission>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Select label="Status" value={status} onChange={e => setStatus(e.target.value)}>
@@ -310,7 +315,8 @@ export default function CampaignsPage() {
           </div>
         </div>
       </Card>
-      {showAddForm && (
+      <RequirePermission permission={canManageCampaigns}>
+        {showAddForm && (
         <Card className="mt-4">
           <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Add Campaign</h2>
           <form onSubmit={handleAddCampaign} className="space-y-3">
@@ -567,7 +573,8 @@ export default function CampaignsPage() {
             </div>
           </form>
         </Card>
-      )}
+        )}
+      </RequirePermission>
 
       <div className="mt-4">
         {loading ? (
@@ -661,15 +668,17 @@ export default function CampaignsPage() {
                           <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
                             View
                           </Link>
-                          <Button
-                            variant="outline"
-                            color="red"
-                            onClick={() => handleDeleteClick(c.id, c.name)}
-                            disabled={deletingIds.has(c.id)}
-                            className="text-xs px-1.5 py-0.5"
-                          >
-                            {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
-                          </Button>
+                          <RequirePermission permission={canDelete}>
+                            <Button
+                              variant="outline"
+                              color="red"
+                              onClick={() => handleDeleteClick(c.id, c.name)}
+                              disabled={deletingIds.has(c.id)}
+                              className="text-xs px-1.5 py-0.5"
+                            >
+                              {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
+                            </Button>
+                          </RequirePermission>
                         </div>
                       </TD>
                     </TR>

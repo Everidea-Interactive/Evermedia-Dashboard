@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
@@ -99,7 +99,7 @@ router.get('/campaign/:id', async (req, res) => {
   res.json((posts || []).map(computeEngagement));
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
   const {
     campaignId,
     accountId,
@@ -166,7 +166,7 @@ router.post('/', async (req, res) => {
   res.status(201).json(computeEngagement(post));
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
   const data: any = { ...req.body };
   if (data.postDate) {
     const d = new Date(data.postDate);
@@ -210,7 +210,7 @@ router.put('/:id', async (req, res) => {
 });
 
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
   // Get the post before deletion to know which campaign/account to update KPIs for
   const { data: post } = await supabase
     .from('Post')

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -60,7 +60,7 @@ router.get('/', async (req, res) => {
   res.json(filtered);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
   const { name, contact, notes, active, roles } = req.body as any;
   if (!name) return res.status(400).json({ error: 'Name required' });
   
@@ -122,7 +122,7 @@ router.post('/', async (req, res) => {
   res.status(201).json({ ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) });
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
   const { name, contact, notes, active, roles } = req.body as any;
   
   const updateData: any = {};

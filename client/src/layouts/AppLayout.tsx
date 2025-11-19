@@ -2,13 +2,14 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { usePermissions } from '../hooks/usePermissions';
+import RequirePermission from '../components/RequirePermission';
 import { useState } from 'react';
 import Dialog from '../components/ui/Dialog';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { canManageUsers } = usePermissions();
+  const { canManageUsers, canAddPost } = usePermissions();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
@@ -114,12 +115,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   Users
                 </NavLink>
               )}
-              <Link
-                to="/posts/new"
-                className="btn btn-primary text-sm ml-2"
-              >
-                Add new Post
-              </Link>
+              <RequirePermission permission={canAddPost}>
+                <Link
+                  to="/posts/new"
+                  className="btn btn-primary text-sm ml-2"
+                >
+                  Add new Post
+                </Link>
+              </RequirePermission>
             </nav>
 
             {/* Right side actions */}
@@ -231,13 +234,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     onClick={() => setMobileMenuOpen(false)}
                   />
                 )}
-                <Link
-                  to="/posts/new"
-                  className="btn btn-primary w-full text-center text-sm mt-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Add new Post
-                </Link>
+                <RequirePermission permission={canAddPost}>
+                  <Link
+                    to="/posts/new"
+                    className="btn btn-primary w-full text-center text-sm mt-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Add new Post
+                  </Link>
+                </RequirePermission>
               </nav>
             </div>
           )}

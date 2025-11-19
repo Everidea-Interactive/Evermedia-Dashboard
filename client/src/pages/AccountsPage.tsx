@@ -32,7 +32,7 @@ type Account = {
 
 export default function AccountsPage() {
   const { token } = useAuth();
-  const { canEdit, canDelete } = usePermissions();
+  const { canManageAccounts, canAddAccount, canEditAccount, canDelete } = usePermissions();
   const [items, setItems] = useState<Account[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [search, setSearch] = useState('');
@@ -205,7 +205,7 @@ export default function AccountsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <RequirePermission permission={canEdit}>
+          <RequirePermission permission={canAddAccount}>
             <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
               {showAddForm ? 'Cancel' : 'Add Account'}
             </Button>
@@ -225,11 +225,11 @@ export default function AccountsPage() {
           </Select>
         </div>
       </Card>
-      <RequirePermission permission={canEdit}>
-        {(showAddForm || editingId) && (
-        <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>{editingId ? 'Edit Account' : 'Add Account'}</h2>
-          <form onSubmit={editingId ? handleUpdateAccount : handleAddAccount} className="space-y-3">
+      {(showAddForm || editingId) && (
+        <RequirePermission permission={editingId ? canEditAccount : canAddAccount}>
+          <Card className="mt-4">
+            <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>{editingId ? 'Edit Account' : 'Add Account'}</h2>
+            <form onSubmit={editingId ? handleUpdateAccount : handleAddAccount} className="space-y-3">
             <Input
               label="Name"
               value={form.name}
@@ -314,37 +314,37 @@ export default function AccountsPage() {
               </Button>
             </div>
           </form>
-        </Card>
-        )}
-      </RequirePermission>
+          </Card>
+        </RequirePermission>
+      )}
       <div className="mt-4">
         {loading ? <div className="skeleton h-10 w-full" /> : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map(a => (
-              <Card key={a.id}>
-                <div className="flex items-center justify-between">
-                  <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
-                  {a.isCrossbrand && <span className="badge" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>Crossbrand</span>}
-                </div>
-                {a.tiktokHandle && <div className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
-                <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Type: {a.accountType}</div>
-                {a.campaigns && a.campaigns.length > 0 && (
-                  <div className="mt-2">
-                    <div className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>Campaigns:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {a.campaigns.map(campaign => (
-                        <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                          {campaign.name}
-                        </span>
-                      ))}
-                    </div>
+              <Card key={a.id} className="h-full">
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
+                    {a.isCrossbrand && <span className="badge" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>Crossbrand</span>}
                   </div>
-                )}
-                {a.notes && <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
-                <RequirePermission permission={canEdit}>
-                  <div className="mt-3">
+                  {a.tiktokHandle && <div className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Type: {a.accountType}</div>
+                  {a.campaigns && a.campaigns.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>Campaigns:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {a.campaigns.map(campaign => (
+                          <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                            {campaign.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {a.notes && <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
+                  <div className="mt-auto pt-3">
                     <div className="flex gap-2">
-                      <RequirePermission permission={canEdit}>
+                      <RequirePermission permission={canEditAccount}>
                         <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
                           Edit
                         </Button>
@@ -361,15 +361,17 @@ export default function AccountsPage() {
                         </Button>
                       </RequirePermission>
                     </div>
-                    {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
-                      <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>
-                        {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
-                        {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
-                        {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
-                      </div>
-                    )}
+                    <RequirePermission permission={canDelete}>
+                      {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
+                        <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>
+                          {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
+                          {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
+                          {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
+                        </div>
+                      )}
+                    </RequirePermission>
                   </div>
-                </RequirePermission>
+                </div>
               </Card>
             ))}
           </div>

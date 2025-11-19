@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import RequirePermission from '../components/RequirePermission';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 import EngagementVisualizer from '../components/EngagementVisualizer';
@@ -33,6 +35,7 @@ export default function CampaignDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { canManageCampaigns, canDelete, canEditPost } = usePermissions();
   const [campaign, setCampaign] = useState<any>(null);
   const [engagement, setEngagement] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
@@ -157,21 +160,25 @@ export default function CampaignDetailPage() {
         meta={headerMeta}
         action={
           <div className="flex gap-2 flex-wrap w-full sm:w-auto">
-            <Link
-              to={`/campaigns/${campaign.id}/edit`}
-              className="btn btn-outline-blue text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
-            >
-              Edit campaign
-            </Link>
-            <Button
-              variant="outline"
-              color="red"
-              onClick={() => setDeleteConfirm(true)}
-              disabled={deleting}
-              className="text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </Button>
+            <RequirePermission permission={canManageCampaigns}>
+              <Link
+                to={`/campaigns/${campaign.id}/edit`}
+                className="btn btn-outline-blue text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
+              >
+                Edit campaign
+              </Link>
+            </RequirePermission>
+            <RequirePermission permission={canDelete}>
+              <Button
+                variant="outline"
+                color="red"
+                onClick={() => setDeleteConfirm(true)}
+                disabled={deleting}
+                className="text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </RequirePermission>
           </div>
         }
       />
@@ -342,35 +349,37 @@ export default function CampaignDetailPage() {
                         <TR key={p.id}>
                           <TD>{index + 1}</TD>
                           <TD>
-                            <Button
-                              onClick={() => {
-                                setEditingPostId(p.id);
-                                setEditForm({
-                                  postTitle: p.postTitle || '',
-                                  postDate: p.postDate ? new Date(p.postDate).toISOString().split('T')[0] : '',
-                                  contentType: p.contentType || '',
-                                  contentCategory: p.contentCategory || '',
-                                  status: p.status || '',
-                                  picTalentId: p.picTalentId || '',
-                                  picEditorId: p.picEditorId || '',
-                                  picPostingId: p.picPostingId || '',
-                                  contentLink: p.contentLink || '',
-                                  adsOnMusic: p.adsOnMusic ? 'true' : 'false',
-                                  yellowCart: p.yellowCart ? 'true' : 'false',
-                                  totalView: p.totalView?.toString() ?? '',
-                                  totalLike: p.totalLike?.toString() ?? '',
-                                  totalComment: p.totalComment?.toString() ?? '',
-                                  totalShare: p.totalShare?.toString() ?? '',
-                                  totalSaved: p.totalSaved?.toString() ?? '',
-                                });
-                              }}
-                              variant="ghost"
-                              color="blue"
-                              className="text-xs px-2 py-1"
-                              type="button"
-                            >
-                              Edit
-                            </Button>
+                            <RequirePermission permission={canEditPost}>
+                              <Button
+                                onClick={() => {
+                                  setEditingPostId(p.id);
+                                  setEditForm({
+                                    postTitle: p.postTitle || '',
+                                    postDate: p.postDate ? new Date(p.postDate).toISOString().split('T')[0] : '',
+                                    contentType: p.contentType || '',
+                                    contentCategory: p.contentCategory || '',
+                                    status: p.status || '',
+                                    picTalentId: p.picTalentId || '',
+                                    picEditorId: p.picEditorId || '',
+                                    picPostingId: p.picPostingId || '',
+                                    contentLink: p.contentLink || '',
+                                    adsOnMusic: p.adsOnMusic ? 'true' : 'false',
+                                    yellowCart: p.yellowCart ? 'true' : 'false',
+                                    totalView: p.totalView?.toString() ?? '',
+                                    totalLike: p.totalLike?.toString() ?? '',
+                                    totalComment: p.totalComment?.toString() ?? '',
+                                    totalShare: p.totalShare?.toString() ?? '',
+                                    totalSaved: p.totalSaved?.toString() ?? '',
+                                  });
+                                }}
+                                variant="ghost"
+                                color="blue"
+                                className="text-xs px-2 py-1"
+                                type="button"
+                              >
+                                Edit
+                              </Button>
+                            </RequirePermission>
                           </TD>
                           <TD>{p.account?.name || '—'}</TD>
                           <TD>{new Date(p.postDate).toLocaleDateString()}</TD>

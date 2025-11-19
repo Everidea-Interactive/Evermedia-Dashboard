@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
@@ -7,6 +8,7 @@ import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
+import RequirePermission from '../components/RequirePermission';
 import PageHeader from '../components/PageHeader';
 
 type Pic = {
@@ -20,6 +22,7 @@ type Pic = {
 
 export default function PicsPage() {
   const { token } = useAuth();
+  const { canManagePics, canDelete } = usePermissions();
   const [items, setItems] = useState<Pic[]>([]);
   const [role, setRole] = useState('');
   const [active, setActive] = useState('true');
@@ -182,9 +185,11 @@ export default function PicsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Filters</h2>
-          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
-            {showAddForm ? 'Cancel' : 'Add PIC System'}
-          </Button>
+          <RequirePermission permission={canManagePics}>
+            <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
+              {showAddForm ? 'Cancel' : 'Add PIC System'}
+            </Button>
+          </RequirePermission>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Select label="Role" value={role} onChange={e => setRole(e.target.value)}>
@@ -200,9 +205,10 @@ export default function PicsPage() {
           </Select>
         </div>
       </Card>
-      {(showAddForm || editingId) && (
-        <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3">{editingId ? 'Edit PIC System' : 'Add PIC System'}</h2>
+      <RequirePermission permission={canManagePics}>
+        {(showAddForm || editingId) && (
+          <Card className="mt-4">
+            <h2 className="text-lg font-semibold mb-3">{editingId ? 'Edit PIC System' : 'Add PIC System'}</h2>
           <form onSubmit={editingId ? handleUpdatePic : handleAddPic} className="space-y-3">
             <Input
               label="Name"
@@ -256,8 +262,9 @@ export default function PicsPage() {
               </Button>
             </div>
           </form>
-        </Card>
-      )}
+          </Card>
+        )}
+      </RequirePermission>
       <div className="mt-4">
         {loading ? (
           <div className="skeleton h-10 w-full" />
@@ -276,14 +283,20 @@ export default function PicsPage() {
                 </div>
                 {p.contact && <div className="text-sm text-gray-600 mt-2">{p.contact}</div>}
                 {p.notes && <div className="text-xs text-gray-500 mt-1">{p.notes}</div>}
-                <div className="flex gap-2 mt-3">
-                  <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
-                    Edit
-                  </Button>
-                  <Button variant="outline" color="red" onClick={() => handleDeleteClick(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5">
-                    {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
-                  </Button>
-                </div>
+                <RequirePermission permission={canManagePics}>
+                  <div className="flex gap-2 mt-3">
+                    <RequirePermission permission={canManagePics}>
+                      <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
+                        Edit
+                      </Button>
+                    </RequirePermission>
+                    <RequirePermission permission={canDelete}>
+                      <Button variant="outline" color="red" onClick={() => handleDeleteClick(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5">
+                        {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
+                      </Button>
+                    </RequirePermission>
+                  </div>
+                </RequirePermission>
               </Card>
             ))}
           </div>

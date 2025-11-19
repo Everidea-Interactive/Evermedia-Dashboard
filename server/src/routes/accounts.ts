@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
@@ -100,7 +100,7 @@ router.get('/', async (req, res) => {
   res.json(result);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
   const { name, tiktokHandle, accountType, brand, notes, campaignIds } = req.body;
   if (!name || !accountType) return res.status(400).json({ error: 'Missing fields' });
   
@@ -166,7 +166,7 @@ router.get('/:id', async (req, res) => {
   res.json(a);
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
   const { name, tiktokHandle, accountType, brand, notes, campaignIds } = req.body;
   
   const updateData: any = {};
@@ -227,7 +227,7 @@ router.put('/:id', async (req, res) => {
   res.json(result);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
   try {
     // Check if account has posts
     const { count: postCount } = await supabase

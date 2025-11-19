@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
   res.json(campaigns || []);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
   const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
   if (!name || !categories || !Array.isArray(categories) || categories.length === 0 || !startDate || !endDate || !status) {
     return res.status(400).json({ error: 'Missing fields: name, categories (array), startDate, endDate, and status are required' });
@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
   res.json({ ...campaign, accounts: accounts || [] });
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
   const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
   
   const updateData: any = {};
@@ -133,7 +133,7 @@ router.put('/:id', async (req, res) => {
   res.json(campaign);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
   const campaignId = req.params.id;
   
   // First, check if campaign exists

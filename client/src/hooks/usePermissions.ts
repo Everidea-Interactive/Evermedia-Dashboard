@@ -26,32 +26,74 @@ export function usePermissions() {
     return user.role.toUpperCase() === 'ADMIN';
   };
 
+  // Admin - All permissions
   const canManageUsers = (): boolean => {
     return isAdmin();
   };
 
+  // Admin, Campaign Manager - Can manage campaigns
   const canManageCampaigns = (): boolean => {
     return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER']);
   };
 
+  // Admin, Campaign Manager - Can manage accounts (create, edit, delete)
+  // Editor - Can add/edit accounts (no delete)
   const canManageAccounts = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER']);
+  };
+
+  // Admin, Campaign Manager, Editor - Can add/edit accounts
+  const canAddAccount = (): boolean => {
     return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
   };
 
+  const canEditAccount = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
+  };
+
+  // Admin, Campaign Manager, Editor - Can add/edit PICs
+  const canManagePics = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
+  };
+
+  // Admin, Campaign Manager - Can manage posts (full CRUD)
+  // Editor - Can only add/edit posts (no delete)
+  const canAddPost = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
+  };
+
+  const canEditPost = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
+  };
+
+  const canDeletePost = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER']);
+  };
+
+  // Legacy method for backward compatibility - checks if can add/edit posts
   const canManagePosts = (): boolean => {
-    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
+    return canAddPost();
   };
 
+  // All roles can view reports
   const canViewReports = (): boolean => {
     return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR', 'VIEWER']);
   };
 
+  // Admin, Campaign Manager - Can edit (except posts which use canEditPost)
+  // Editor - Can only edit posts
   const canEdit = (): boolean => {
-    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER']);
   };
 
+  // Admin, Campaign Manager - Can delete (except posts which use canDeletePost)
   const canDelete = (): boolean => {
     return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER']);
+  };
+
+  // Check if user can perform any CRUD operation
+  const canPerformCRUD = (): boolean => {
+    return hasAnyRole(['ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR']);
   };
 
   return {
@@ -62,10 +104,18 @@ export function usePermissions() {
     canManageUsers,
     canManageCampaigns,
     canManageAccounts,
-    canManagePosts,
+    canAddAccount,
+    canEditAccount,
+    canManagePics,
+    canAddPost,
+    canEditPost,
+    canDeletePost,
+    canManagePosts, // Legacy - use canAddPost/canEditPost instead
     canViewReports,
     canEdit,
     canDelete,
+    canPerformCRUD,
   };
 }
+
 

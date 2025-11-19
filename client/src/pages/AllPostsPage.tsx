@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -72,6 +74,7 @@ const STATUS_OPTIONS = ['PLANNED', 'SCHEDULED', 'PUBLISHED', 'COMPLETED', 'CANCE
 
 export default function AllPostsPage() {
   const { token } = useAuth();
+  const { canEditPost, canDeletePost } = usePermissions();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -444,15 +447,17 @@ export default function AllPostsPage() {
                       <TR key={p.id}>
                         <TD>{i + 1}</TD>
                         <TD>
-                          <Button
-                            onClick={() => handleEditPost(p)}
-                            variant="ghost"
-                            color="blue"
-                            className="text-xs px-2 py-1"
-                            type="button"
-                          >
-                            Edit
-                          </Button>
+                          <RequirePermission permission={canEditPost}>
+                            <Button
+                              onClick={() => handleEditPost(p)}
+                              variant="ghost"
+                              color="blue"
+                              className="text-xs px-2 py-1"
+                              type="button"
+                            >
+                              Edit
+                            </Button>
+                          </RequirePermission>
                         </TD>
                         <TD>
                           {campaignName !== '—' ? (

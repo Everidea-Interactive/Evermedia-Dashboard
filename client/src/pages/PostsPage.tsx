@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -89,6 +91,7 @@ export default function PostsPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { canAddPost } = usePermissions();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -461,12 +464,13 @@ export default function PostsPage() {
         title={<h2 className="page-title">Posts</h2>}
       />
 
-      <Card className="space-y-4 mb-6">
-        <div className="flex flex-col gap-1">
-          <div className="text-lg font-semibold">Log a new post</div>
-          <p className="text-xs text-gray-500">Use the form below to capture post metadata before publishing.</p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <RequirePermission permission={canAddPost}>
+        <Card className="space-y-4 mb-6">
+          <div className="flex flex-col gap-1">
+            <div className="text-lg font-semibold">Log a new post</div>
+            <p className="text-xs text-gray-500">Use the form below to capture post metadata before publishing.</p>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
             <div>
               <Select
@@ -696,7 +700,8 @@ export default function PostsPage() {
             </Button>
           </div>
         </form>
-      </Card>
+        </Card>
+      </RequirePermission>
 
       {showPostTable && (
         loading ? (
