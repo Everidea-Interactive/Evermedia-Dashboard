@@ -8,11 +8,10 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const { status, category, dateFrom, dateTo } = req.query as any;
+  const { status, dateFrom, dateTo } = req.query as any;
   let query = supabase.from('Campaign').select('*').order('createdAt', { ascending: false });
   
   if (status) query = query.eq('status', status);
-  if (category) query = query.contains('categories', [String(category)]);
   if (dateFrom) query = query.gte('startDate', String(dateFrom));
   if (dateTo) query = query.lte('endDate', String(dateTo));
   

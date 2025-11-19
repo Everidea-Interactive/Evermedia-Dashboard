@@ -50,7 +50,6 @@ export default function CampaignsPage() {
   const [items, setItems] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState('');
-  const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -88,14 +87,14 @@ export default function CampaignsPage() {
 
   const fetchCampaigns = () => {
     setLoading(true);
-    api(`/campaigns?status=${encodeURIComponent(status)}&category=${encodeURIComponent(q)}`, { token })
+    api(`/campaigns?status=${encodeURIComponent(status)}`, { token })
       .then(setItems)
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchCampaigns();
-  }, [token, status, q]);
+  }, [token, status]);
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
@@ -310,9 +309,6 @@ export default function CampaignsPage() {
             <option>COMPLETED</option>
             <option>PAUSED</option>
           </Select>
-          <div className="sm:col-span-2">
-            <Input label="Category" value={q} onChange={e => setQ(e.target.value)} placeholder="Search category" />
-          </div>
         </div>
       </Card>
       <RequirePermission permission={canManageCampaigns}>
