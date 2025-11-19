@@ -76,6 +76,11 @@ type FormState = {
   postDate: string;
   adsOnMusic: 'true' | 'false';
   yellowCart: 'true' | 'false';
+  totalView: string;
+  totalLike: string;
+  totalComment: string;
+  totalShare: string;
+  totalSaved: string;
 };
 
 type FormMessage = {
@@ -115,6 +120,11 @@ export default function PostsPage() {
     postDate: '',
     adsOnMusic: 'false',
     yellowCart: 'false',
+    totalView: '',
+    totalLike: '',
+    totalComment: '',
+    totalShare: '',
+    totalSaved: '',
   });
   const [showAccountSuggestions, setShowAccountSuggestions] = useState(false);
   const [accountInputFocused, setAccountInputFocused] = useState(false);
@@ -273,8 +283,11 @@ export default function PostsPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.campaignId || !form.accountName.trim() || !form.postDate || !form.postTitle.trim()) {
-      setToast({ type: 'error', text: 'Campaign, account name, post date, and title are required.' });
+    if (!form.campaignId || !form.campaignCategory || !form.picContentId || !form.picEditorId || 
+        !form.picPostingId || !form.accountType || !form.contentType || !form.status || 
+        !form.contentCategory || !form.accountName.trim() || !form.postDate || !form.postTitle.trim() || 
+        !form.contentLink.trim()) {
+      setToast({ type: 'error', text: 'Please fill in all required fields.' });
       return;
     }
     setSubmitting(true);
@@ -310,6 +323,11 @@ export default function PostsPage() {
           contentType: form.contentType || undefined,
           status: form.status || undefined,
           contentLink: form.contentLink || undefined,
+          totalView: parseInt(form.totalView || '0', 10) || 0,
+          totalLike: parseInt(form.totalLike || '0', 10) || 0,
+          totalComment: parseInt(form.totalComment || '0', 10) || 0,
+          totalShare: parseInt(form.totalShare || '0', 10) || 0,
+          totalSaved: parseInt(form.totalSaved || '0', 10) || 0,
         },
       });
       setToast({
@@ -331,6 +349,11 @@ export default function PostsPage() {
         postDate: '',
         adsOnMusic: 'false',
         yellowCart: 'false',
+        totalView: '',
+        totalLike: '',
+        totalComment: '',
+        totalShare: '',
+        totalSaved: '',
       }));
       await refreshPosts();
     } catch (error) {
@@ -477,6 +500,7 @@ export default function PostsPage() {
                 label="Campaign"
                 value={form.campaignId}
                 onChange={(event) => handleCampaignChange(event.target.value)}
+                required
               >
                 <option value="">Select campaign</option>
                 {campaigns.map((campaign) => (
@@ -491,6 +515,7 @@ export default function PostsPage() {
                 label="Campaign Category"
                 value={form.campaignCategory}
                 onChange={(event) => handleFormChange('campaignCategory', event.target.value)}
+                required
               >
                 <option value="">Select category</option>
                 {campaignCategoryOptions.map((category) => (
@@ -505,6 +530,7 @@ export default function PostsPage() {
                 label="PIC Content"
                 value={form.picContentId}
                 onChange={(event) => handleFormChange('picContentId', event.target.value)}
+                required
               >
                 <option value="">Select PIC</option>
                 {talentPics.map((pic) => (
@@ -522,6 +548,7 @@ export default function PostsPage() {
                 label="PIC Editor"
                 value={form.picEditorId}
                 onChange={(event) => handleFormChange('picEditorId', event.target.value)}
+                required
               >
                 <option value="">Select Editor</option>
                 {editorPics.map((pic) => (
@@ -536,6 +563,7 @@ export default function PostsPage() {
                 label="PIC Posting"
                 value={form.picPostingId}
                 onChange={(event) => handleFormChange('picPostingId', event.target.value)}
+                required
               >
                 <option value="">Select Posting</option>
                 {postingPics.map((pic) => (
@@ -550,6 +578,7 @@ export default function PostsPage() {
                 label="Account Type"
                 value={form.accountType}
                 onChange={(event) => handleFormChange('accountType', event.target.value)}
+                required
               >
                 <option value="">Select type (auto detects match)</option>
                 <option value="BRAND_SPECIFIC">BRAND_SPECIFIC</option>
@@ -564,6 +593,7 @@ export default function PostsPage() {
                 label="Content Type"
                 value={form.contentType}
                 onChange={(event) => handleFormChange('contentType', event.target.value)}
+                required
               >
                 <option value="">Select type</option>
                 {CONTENT_TYPE_OPTIONS.map((type) => (
@@ -578,6 +608,7 @@ export default function PostsPage() {
                 label="Status"
                 value={form.status}
                 onChange={(event) => handleFormChange('status', event.target.value)}
+                required
               >
                 <option value="">Select status</option>
                 {STATUS_OPTIONS.map((status) => (
@@ -592,6 +623,7 @@ export default function PostsPage() {
                 label="Content Category"
                 value={form.contentCategory}
                 onChange={(event) => handleFormChange('contentCategory', event.target.value)}
+                required
               >
                 <option value="">Select content category</option>
                 {CONTENT_CATEGORY_OPTIONS.map((category) => (
@@ -630,6 +662,7 @@ export default function PostsPage() {
                 type="date"
                 value={form.postDate}
                 onChange={(event) => handleFormChange('postDate', event.target.value)}
+                required
               />
             </div>
           </div>
@@ -643,6 +676,7 @@ export default function PostsPage() {
                 onChange={(event) => handleFormChange('accountName', event.target.value)}
                 onFocus={handleAccountFocus}
                 onBlur={handleAccountBlur}
+                required
               />
               {showAccountSuggestions && filteredAccounts.length > 0 && (
                 <div className="absolute inset-x-0 top-full mt-2 z-30">
@@ -683,6 +717,7 @@ export default function PostsPage() {
                 placeholder="Enter title"
                 value={form.postTitle}
                 onChange={(event) => handleFormChange('postTitle', event.target.value)}
+                required
               />
             </div>
             <div>
@@ -691,8 +726,62 @@ export default function PostsPage() {
                 placeholder="https://..."
                 value={form.contentLink}
                 onChange={(event) => handleFormChange('contentLink', event.target.value)}
+                required
               />
             </div>
+          </div>
+          <div className="border-t pt-4 mt-4">
+            <div className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Engagement Metrics (Optional)</div>
+            <div className="grid gap-4 lg:grid-cols-5">
+              <div>
+                <Input
+                  label="Views"
+                  type="number"
+                  placeholder="0"
+                  value={form.totalView}
+                  onChange={(event) => handleFormChange('totalView', event.target.value)}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Likes"
+                  type="number"
+                  placeholder="0"
+                  value={form.totalLike}
+                  onChange={(event) => handleFormChange('totalLike', event.target.value)}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Comments"
+                  type="number"
+                  placeholder="0"
+                  value={form.totalComment}
+                  onChange={(event) => handleFormChange('totalComment', event.target.value)}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Shares"
+                  type="number"
+                  placeholder="0"
+                  value={form.totalShare}
+                  onChange={(event) => handleFormChange('totalShare', event.target.value)}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Saved"
+                  type="number"
+                  placeholder="0"
+                  value={form.totalSaved}
+                  onChange={(event) => handleFormChange('totalSaved', event.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-xs mt-2" style={{ color: 'var(--text-tertiary)' }}>
+              You can add engagement metrics now or update them later when the post is published.
+            </p>
           </div>
           <div className="flex justify-end">
             <Button type="submit" disabled={submitting} color="green">
@@ -959,41 +1048,54 @@ export default function PostsPage() {
               onChange={(e) => setEditForm(prev => ({ ...prev, contentLink: e.target.value }))}
             />
           </div>
-          <div className="grid gap-4 lg:grid-cols-5">
-            <div>
-              <Input
-                label="Views"
-                value={editForm.totalView ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalView: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Likes"
-                value={editForm.totalLike ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Comments"
-                value={editForm.totalComment ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Shares"
-                value={editForm.totalShare ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Saved"
-                value={editForm.totalSaved ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: e.target.value }))}
-              />
+          <div className="border-t pt-4 mt-4">
+            <div className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Engagement Metrics</div>
+            <div className="grid gap-4 lg:grid-cols-5">
+              <div>
+                <Input
+                  label="Views"
+                  type="number"
+                  placeholder="0"
+                  value={editForm.totalView ?? ''}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalView: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Likes"
+                  type="number"
+                  placeholder="0"
+                  value={editForm.totalLike ?? ''}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Comments"
+                  type="number"
+                  placeholder="0"
+                  value={editForm.totalComment ?? ''}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Shares"
+                  type="number"
+                  placeholder="0"
+                  value={editForm.totalShare ?? ''}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Input
+                  label="Saved"
+                  type="number"
+                  placeholder="0"
+                  value={editForm.totalSaved ?? ''}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: e.target.value }))}
+                />
+              </div>
             </div>
           </div>
         </form>
