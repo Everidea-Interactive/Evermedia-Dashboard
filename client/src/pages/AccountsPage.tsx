@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -8,6 +9,7 @@ import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
 import PageHeader from '../components/PageHeader';
+import RequirePermission from '../components/RequirePermission';
 
 type Campaign = {
   id: string;
@@ -30,6 +32,7 @@ type Account = {
 
 export default function AccountsPage() {
   const { token } = useAuth();
+  const { canEdit, canDelete } = usePermissions();
   const [items, setItems] = useState<Account[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [search, setSearch] = useState('');
@@ -202,9 +205,11 @@ export default function AccountsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
-            {showAddForm ? 'Cancel' : 'Add Account'}
-          </Button>
+          <RequirePermission permission={canEdit}>
+            <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
+              {showAddForm ? 'Cancel' : 'Add Account'}
+            </Button>
+          </RequirePermission>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="sm:col-span-2"><Input label="Search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Name or handle" /></div>
@@ -220,7 +225,8 @@ export default function AccountsPage() {
           </Select>
         </div>
       </Card>
-      {(showAddForm || editingId) && (
+      <RequirePermission permission={canEdit}>
+        {(showAddForm || editingId) && (
         <Card className="mt-4">
           <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>{editingId ? 'Edit Account' : 'Add Account'}</h2>
           <form onSubmit={editingId ? handleUpdateAccount : handleAddAccount} className="space-y-3">
@@ -309,7 +315,8 @@ export default function AccountsPage() {
             </div>
           </form>
         </Card>
-      )}
+        )}
+      </RequirePermission>
       <div className="mt-4">
         {loading ? <div className="skeleton h-10 w-full" /> : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -334,29 +341,35 @@ export default function AccountsPage() {
                   </div>
                 )}
                 {a.notes && <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
-                <div className="mt-3">
-                  <div className="flex gap-2">
-                    <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
-                      Edit
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      color="red"
-                      onClick={() => handleDeleteClick(a.id, a.name)} 
-                      disabled={deletingIds.has(a.id) || (a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0} 
-                      className="flex-1 text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
-                    </Button>
-                  </div>
-                  {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
-                    <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>
-                      {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
-                      {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
-                      {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
+                <RequirePermission permission={canEdit}>
+                  <div className="mt-3">
+                    <div className="flex gap-2">
+                      <RequirePermission permission={canEdit}>
+                        <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
+                          Edit
+                        </Button>
+                      </RequirePermission>
+                      <RequirePermission permission={canDelete}>
+                        <Button 
+                          variant="outline" 
+                          color="red"
+                          onClick={() => handleDeleteClick(a.id, a.name)} 
+                          disabled={deletingIds.has(a.id) || (a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0} 
+                          className="flex-1 text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      </RequirePermission>
                     </div>
-                  )}
-                </div>
+                    {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
+                      <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>
+                        {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
+                        {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
+                        {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
+                      </div>
+                    )}
+                  </div>
+                </RequirePermission>
               </Card>
             ))}
           </div>

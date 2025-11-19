@@ -34,7 +34,7 @@ async function main() {
   const users = [
     { name: 'Admin', email: 'admin@example.com', role: 'ADMIN' },
     { name: 'Manager', email: 'manager@example.com', role: 'CAMPAIGN_MANAGER' },
-    { name: 'Operator', email: 'operator@example.com', role: 'OPERATOR' },
+    { name: 'Editor', email: 'editor@example.com', role: 'EDITOR' },
     { name: 'Viewer', email: 'viewer@example.com', role: 'VIEWER' },
   ];
   

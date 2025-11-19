@@ -5,7 +5,7 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
-    role: 'ADMIN' | 'CAMPAIGN_MANAGER' | 'OPERATOR' | 'VIEWER';
+    role: 'ADMIN' | 'CAMPAIGN_MANAGER' | 'EDITOR' | 'VIEWER';
     name?: string;
   };
 }
@@ -45,7 +45,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   }
 }
 
-export function requireRoles(...roles: Array<'ADMIN' | 'CAMPAIGN_MANAGER' | 'OPERATOR' | 'VIEWER'>) {
+export function requireRoles(...roles: Array<'ADMIN' | 'CAMPAIGN_MANAGER' | 'EDITOR' | 'VIEWER'>) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     if (!roles.includes(req.user.role)) {

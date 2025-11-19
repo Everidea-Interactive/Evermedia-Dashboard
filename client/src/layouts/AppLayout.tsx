@@ -1,12 +1,14 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { useState } from 'react';
 import Dialog from '../components/ui/Dialog';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { canManageUsers } = usePermissions();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
@@ -95,6 +97,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 PICs
               </NavLink>
+              {canManageUsers() && (
+                <NavLink
+                  to="/users"
+                  className={({ isActive }) => {
+                    const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                    return isActive
+                      ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
+                      : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
+                  }}
+                  style={({ isActive }) => ({
+                    color: isActive ? '#2563eb' : 'var(--text-secondary)',
+                    backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                  } as React.CSSProperties)}
+                >
+                  Users
+                </NavLink>
+              )}
               <Link
                 to="/posts/new"
                 className="btn btn-primary text-sm ml-2"
@@ -205,6 +224,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   label="PICs"
                   onClick={() => setMobileMenuOpen(false)}
                 />
+                {canManageUsers() && (
+                  <MobileNavLink
+                    to="/users"
+                    label="Users"
+                    onClick={() => setMobileMenuOpen(false)}
+                  />
+                )}
                 <Link
                   to="/posts/new"
                   className="btn btn-primary w-full text-center text-sm mt-2"

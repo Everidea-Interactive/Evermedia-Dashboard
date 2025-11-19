@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { api, setUnauthorizedHandler } from '../lib/api';
 
-type User = { id: string; name: string; email: string; role: 'ADMIN'|'CAMPAIGN_MANAGER'|'OPERATOR'|'VIEWER' };
+type User = { id: string; name: string; email: string; role: 'ADMIN'|'CAMPAIGN_MANAGER'|'EDITOR'|'VIEWER' };
 
 type AuthContextType = {
   user: User | null;

@@ -15,7 +15,9 @@ import PostsPage from './pages/PostsPage.tsx';
 import AllPostsPage from './pages/AllPostsPage.tsx';
 import AccountsPage from './pages/AccountsPage.tsx';
 import PicsPage from './pages/PicsPage.tsx';
+import UsersPage from './pages/UsersPage.tsx';
 import ProtectedRoute from './components/ProtectedRoute.tsx';
+import RequireRole from './components/RequireRole.tsx';
 import AppLayout from './layouts/AppLayout.tsx';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -31,7 +33,16 @@ const router = createBrowserRouter([
   { path: '/', element: <ProtectedLayout><CampaignsPage /></ProtectedLayout> },
   { path: '/campaigns', element: <ProtectedLayout><CampaignsPage /></ProtectedLayout> },
   { path: '/campaigns/:id', element: <ProtectedLayout><CampaignDetailPage /></ProtectedLayout> },
-  { path: '/campaigns/:id/edit', element: <ProtectedLayout><CampaignEditPage /></ProtectedLayout> },
+  { 
+    path: '/campaigns/:id/edit', 
+    element: (
+      <ProtectedLayout>
+        <RequireRole roles={['ADMIN', 'CAMPAIGN_MANAGER']}>
+          <CampaignEditPage />
+        </RequireRole>
+      </ProtectedLayout>
+    )
+  },
   { path: '/campaigns/:id/kpi', element: <ProtectedLayout><CampaignKpiPage /></ProtectedLayout> },
   { path: '/campaigns/:id/posts', element: <ProtectedLayout><PostsPage /></ProtectedLayout> },
   { path: '/posts/new', element: <ProtectedLayout><PostsPage /></ProtectedLayout> },
@@ -40,6 +51,16 @@ const router = createBrowserRouter([
   { path: '/campaigns/:campaignId/accounts/:accountId/edit', element: <ProtectedLayout><AccountKpiEditPage /></ProtectedLayout> },
   { path: '/accounts', element: <ProtectedLayout><AccountsPage /></ProtectedLayout> },
   { path: '/pics', element: <ProtectedLayout><PicsPage /></ProtectedLayout> },
+  { 
+    path: '/users', 
+    element: (
+      <ProtectedLayout>
+        <RequireRole roles={['ADMIN']}>
+          <UsersPage />
+        </RequireRole>
+      </ProtectedLayout>
+    )
+  },
 ]);
 
 createRoot(document.getElementById('root')!).render(
