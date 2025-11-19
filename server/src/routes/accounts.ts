@@ -202,29 +202,30 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
   
   if (error || !account) return res.status(404).json({ error: 'Not found' });
   
-  // Update campaign links if provided
-  if (campaignIds !== undefined) {
-    // Get old campaign links before deletion to recalculate KPIs for removed campaigns
+  // Add new campaign links if provided (only add, don't remove existing ones)
+  if (campaignIds !== undefined && campaignIds.length > 0) {
+    // Get existing campaign links
     const { data: oldLinks } = await supabase
       .from('_CampaignToAccount')
       .select('A')
       .eq('B', req.params.id);
     
-    const oldCampaignIds = oldLinks?.map((link: any) => link.A) || [];
+    const existingCampaignIds = oldLinks?.map((link: any) => link.A) || [];
     
-    await supabase.from('_CampaignToAccount').delete().eq('B', req.params.id);
-    if (campaignIds.length > 0) {
-      const links = campaignIds.map((campaignId: string) => ({
+    // Only add campaigns that don't already exist
+    const newCampaignIds = campaignIds.filter((id: string) => !existingCampaignIds.includes(id));
+    
+    if (newCampaignIds.length > 0) {
+      const links = newCampaignIds.map((campaignId: string) => ({
         A: campaignId,
         B: req.params.id,
       }));
       await supabase.from('_CampaignToAccount').insert(links);
-    }
     
-    // Recalculate KPIs for all affected campaigns (both newly linked and unlinked)
-    const allAffectedCampaignIds = [...new Set([...oldCampaignIds, ...campaignIds])];
-    for (const campaignId of allAffectedCampaignIds) {
+      // Recalculate KPIs for newly linked campaigns only
+      for (const campaignId of newCampaignIds) {
       await recalculateKPIs(campaignId, req.params.id);
+      }
     }
   }
   

@@ -53,6 +53,7 @@ export default function AccountsPage() {
     campaignIds: [] as string[],
   });
   const [selectedCampaign, setSelectedCampaign] = useState('');
+  const [originalCampaignIds, setOriginalCampaignIds] = useState<string[]>([]);
 
   const fetchAccounts = () => {
     setLoading(true);
@@ -115,13 +116,15 @@ export default function AccountsPage() {
   };
 
   const handleEditAccount = (account: Account) => {
+    const existingCampaignIds = account.campaigns?.map(c => c.id) || [];
     setEditingId(account.id);
+    setOriginalCampaignIds(existingCampaignIds);
     setForm({
       name: account.name,
       tiktokHandle: account.tiktokHandle || '',
       accountType: account.accountType,
       notes: account.notes || '',
-      campaignIds: account.campaigns?.map(c => c.id) || [],
+      campaignIds: existingCampaignIds,
     });
     setShowAddForm(false);
   };
@@ -134,6 +137,8 @@ export default function AccountsPage() {
     }
     setSubmitting(true);
     try {
+      // Only send newly added campaigns (campaigns not in originalCampaignIds)
+      const newCampaignIds = form.campaignIds.filter(id => !originalCampaignIds.includes(id));
       await api(`/accounts/${editingId}`, {
         method: 'PUT',
         token,
@@ -142,11 +147,12 @@ export default function AccountsPage() {
           tiktokHandle: form.tiktokHandle || undefined,
           accountType: form.accountType,
           notes: form.notes || undefined,
-          campaignIds: form.campaignIds,
+          campaignIds: newCampaignIds.length > 0 ? newCampaignIds : undefined,
         },
       });
       resetForm();
       setEditingId(null);
+      setOriginalCampaignIds([]);
       fetchAccounts();
       setToast({ message: 'Account updated successfully', type: 'success' });
     } catch (error: any) {
@@ -193,6 +199,7 @@ export default function AccountsPage() {
   const handleCancelEdit = () => {
     resetForm();
     setEditingId(null);
+    setOriginalCampaignIds([]);
   };
 
   return (
@@ -277,6 +284,7 @@ export default function AccountsPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {form.campaignIds.map(campaignId => {
                     const campaign = campaigns.find(c => c.id === campaignId);
+                    const isOriginalCampaign = editingId ? originalCampaignIds.includes(campaignId) : false;
                     return campaign ? (
                       <span
                         key={campaignId}
@@ -284,6 +292,7 @@ export default function AccountsPage() {
                         style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
                       >
                         {campaign.name}
+                        {!isOriginalCampaign && (
                         <button
                           type="button"
                           onClick={() => setForm(prev => ({ ...prev, campaignIds: prev.campaignIds.filter(id => id !== campaignId) }))}
@@ -294,6 +303,7 @@ export default function AccountsPage() {
                         >
                           ×
                         </button>
+                        )}
                       </span>
                     ) : null;
                   })}
@@ -362,13 +372,15 @@ export default function AccountsPage() {
                       </RequirePermission>
                     </div>
                     <RequirePermission permission={canDelete}>
-                      {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
-                        <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>
-                          {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
-                          {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
-                          {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
-                        </div>
-                      )}
+                      <div className="mt-2 text-xs min-h-[1.25rem]" style={{ color: '#dc2626' }}>
+                        {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
+                          <>
+                            {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
+                            {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
+                            {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
+                          </>
+                        )}
+                      </div>
                     </RequirePermission>
                   </div>
                 </div>
