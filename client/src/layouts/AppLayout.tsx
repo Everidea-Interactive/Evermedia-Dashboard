@@ -99,21 +99,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 PICs
               </NavLink>
               {canManageUsers() && (
-                <NavLink
-                  to="/users"
-                  className={({ isActive }) => {
-                    const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
-                    return isActive
-                      ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
-                      : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
-                  }}
-                  style={({ isActive }) => ({
-                    color: isActive ? '#2563eb' : 'var(--text-secondary)',
-                    backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
-                  } as React.CSSProperties)}
-                >
-                  Users
-                </NavLink>
+                <>
+                  <NavLink
+                    to="/users"
+                    className={({ isActive }) => {
+                      const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                      return isActive
+                        ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
+                        : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
+                    }}
+                    style={({ isActive }) => ({
+                      color: isActive ? '#2563eb' : 'var(--text-secondary)',
+                      backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                    } as React.CSSProperties)}
+                  >
+                    Users
+                  </NavLink>
+                  <NavLink
+                    to="/activity-logs"
+                    className={({ isActive }) => {
+                      const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                      return isActive
+                        ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
+                        : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
+                    }}
+                    style={({ isActive }) => ({
+                      color: isActive ? '#2563eb' : 'var(--text-secondary)',
+                      backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                    } as React.CSSProperties)}
+                  >
+                    Activity Logs
+                  </NavLink>
+                </>
               )}
               <RequirePermission permission={canAddPost}>
                 <Link
@@ -228,11 +245,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => setMobileMenuOpen(false)}
                 />
                 {canManageUsers() && (
-                  <MobileNavLink
-                    to="/users"
-                    label="Users"
-                    onClick={() => setMobileMenuOpen(false)}
-                  />
+                  <>
+                    <MobileNavLink
+                      to="/users"
+                      label="Users"
+                      onClick={() => setMobileMenuOpen(false)}
+                    />
+                    <MobileNavLink
+                      to="/activity-logs"
+                      label="Activity Logs"
+                      onClick={() => setMobileMenuOpen(false)}
+                    />
+                  </>
                 )}
                 <RequirePermission permission={canAddPost}>
                   <Link

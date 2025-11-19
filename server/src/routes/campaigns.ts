@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
+import { logActivity, getEntityName } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
   res.json(campaigns || []);
 });
 
-router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
   const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
   if (!name || !categories || !Array.isArray(categories) || categories.length === 0 || !startDate || !endDate || !status) {
     return res.status(400).json({ error: 'Missing fields: name, categories (array), startDate, endDate, and status are required' });
@@ -56,6 +57,17 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => 
     }
   }
   
+  // Log activity
+  if (campaign) {
+    await logActivity(req, {
+      action: 'CREATE',
+      entityType: 'Campaign',
+      entityId: campaign.id,
+      entityName: getEntityName('Campaign', campaign),
+      newValues: campaign,
+    });
+  }
+  
   res.status(201).json(campaign);
 });
 
@@ -83,8 +95,15 @@ router.get('/:id', async (req, res) => {
   res.json({ ...campaign, accounts: accounts || [] });
 });
 
-router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
   const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
+  
+  // Get old campaign data for logging
+  const { data: oldCampaign } = await supabase
+    .from('Campaign')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
   
   const updateData: any = {};
   if (name !== undefined) updateData.name = name;
@@ -130,16 +149,26 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) =
     }
   }
   
+  // Log activity
+  await logActivity(req, {
+    action: 'UPDATE',
+    entityType: 'Campaign',
+    entityId: campaign.id,
+    entityName: getEntityName('Campaign', campaign),
+    oldValues: oldCampaign,
+    newValues: campaign,
+  });
+  
   res.json(campaign);
 });
 
-router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
   const campaignId = req.params.id;
   
-  // First, check if campaign exists
+  // First, check if campaign exists and get full data for logging
   const { data: campaign } = await supabase
     .from('Campaign')
-    .select('id')
+    .select('*')
     .eq('id', campaignId)
     .single();
   
@@ -159,6 +188,15 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res
   // Delete the campaign
   const { error } = await supabase.from('Campaign').delete().eq('id', campaignId);
   if (error) return res.status(500).json({ error: error.message });
+  
+  // Log activity
+  await logActivity(req, {
+    action: 'DELETE',
+    entityType: 'Campaign',
+    entityId: campaignId,
+    entityName: getEntityName('Campaign', campaign),
+    oldValues: campaign,
+  });
   
   res.json({ ok: true });
 });

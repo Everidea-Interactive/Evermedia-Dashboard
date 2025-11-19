@@ -16,6 +16,7 @@ import AllPostsPage from './pages/AllPostsPage.tsx';
 import AccountsPage from './pages/AccountsPage.tsx';
 import PicsPage from './pages/PicsPage.tsx';
 import UsersPage from './pages/UsersPage.tsx';
+import ActivityLogsPage from './pages/ActivityLogsPage.tsx';
 import ProtectedRoute from './components/ProtectedRoute.tsx';
 import RequireRole from './components/RequireRole.tsx';
 import AppLayout from './layouts/AppLayout.tsx';
@@ -57,6 +58,16 @@ const router = createBrowserRouter([
       <ProtectedLayout>
         <RequireRole roles={['ADMIN']}>
           <UsersPage />
+        </RequireRole>
+      </ProtectedLayout>
+    )
+  },
+  { 
+    path: '/activity-logs', 
+    element: (
+      <ProtectedLayout>
+        <RequireRole roles={['ADMIN']}>
+          <ActivityLogsPage />
         </RequireRole>
       </ProtectedLayout>
     )

@@ -11,6 +11,7 @@ import kpiRoutes from './routes/kpis.js';
 import picRoutes from './routes/pics.js';
 import postRoutes from './routes/posts.js';
 import dashboardRoutes from './routes/dashboards.js';
+import activityLogRoutes from './routes/activityLogs.js';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/kpis', kpiRoutes);
 app.use('/api/pics', picRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api', dashboardRoutes);
 
 app.use((err: any, _req: any, res: any, _next: any) => {

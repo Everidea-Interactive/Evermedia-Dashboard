@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
+import { logActivity, getEntityName } from '../utils/activityLog.js';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get('/', async (_req, res) => {
   res.json(users || []);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthRequest, res) => {
   const { name, email, password, role } = req.body as { name: string; email: string; password: string; role: any };
   if (!name || !email || !password || !role) return res.status(400).json({ error: 'Missing fields' });
   
@@ -44,6 +45,15 @@ router.post('/', async (req, res) => {
     return res.status(500).json({ error: userError.message });
   }
   
+  // Log activity
+  await logActivity(req, {
+    action: 'CREATE',
+    entityType: 'User',
+    entityId: user.id,
+    entityName: getEntityName('User', user),
+    newValues: user,
+  });
+  
   res.status(201).json(user);
 });
 
@@ -58,8 +68,15 @@ router.get('/:id', async (req, res) => {
   res.json(user);
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthRequest, res) => {
   const { name, email, password, role } = req.body as { name?: string; email?: string; password?: string; role?: any };
+  
+  // Get old user data for logging
+  const { data: oldUser } = await supabase
+    .from('User')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
   
   const updateData: any = {};
   if (name !== undefined) updateData.name = name;
@@ -85,10 +102,28 @@ router.put('/:id', async (req, res) => {
     .single();
   
   if (userError || !user) return res.status(404).json({ error: 'Not found' });
+  
+  // Log activity
+  await logActivity(req, {
+    action: 'UPDATE',
+    entityType: 'User',
+    entityId: user.id,
+    entityName: getEntityName('User', user),
+    oldValues: oldUser,
+    newValues: user,
+  });
+  
   res.json(user);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
+  // Get user data for logging before deletion
+  const { data: user } = await supabase
+    .from('User')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+  
   // Delete from Supabase Auth
   const { error: authError } = await supabase.auth.admin.deleteUser(req.params.id);
   if (authError) {
@@ -98,6 +133,18 @@ router.delete('/:id', async (req, res) => {
   // Delete from database
   const { error } = await supabase.from('User').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
+  
+  // Log activity
+  if (user) {
+    await logActivity(req, {
+      action: 'DELETE',
+      entityType: 'User',
+      entityId: req.params.id,
+      entityName: getEntityName('User', user),
+      oldValues: user,
+    });
+  }
+  
   res.json({ ok: true });
 });
 

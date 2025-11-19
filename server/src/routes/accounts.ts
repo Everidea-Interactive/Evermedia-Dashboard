@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
+import { logActivity, getEntityName } from '../utils/activityLog.js';
 
 const router = Router();
 
@@ -100,7 +101,7 @@ router.get('/', async (req, res) => {
   res.json(result);
 });
 
-router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const { name, tiktokHandle, accountType, brand, notes, campaignIds } = req.body;
   if (!name || !accountType) return res.status(400).json({ error: 'Missing fields' });
   
@@ -138,6 +139,15 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     .select('id, name, categories')
     .in('id', campaignIdsFromDb);
   
+  // Log activity
+  await logActivity(req, {
+    action: 'CREATE',
+    entityType: 'Account',
+    entityId: account.id,
+    entityName: getEntityName('Account', account),
+    newValues: account,
+  });
+  
   const result = withCrossbrand({ ...account, campaigns: campaigns || [] }, campaigns?.length || 0);
   res.status(201).json(result);
 });
@@ -166,8 +176,15 @@ router.get('/:id', async (req, res) => {
   res.json(a);
 });
 
-router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const { name, tiktokHandle, accountType, brand, notes, campaignIds } = req.body;
+  
+  // Get old account data for logging
+  const { data: oldAccount } = await supabase
+    .from('Account')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
   
   const updateData: any = {};
   if (name !== undefined) updateData.name = name;
@@ -223,12 +240,29 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     .select('id, name, categories')
     .in('id', campaignIdsFromDb);
   
+  // Log activity
+  await logActivity(req, {
+    action: 'UPDATE',
+    entityType: 'Account',
+    entityId: account.id,
+    entityName: getEntityName('Account', account),
+    oldValues: oldAccount,
+    newValues: account,
+  });
+  
   const result = withCrossbrand({ ...account, campaigns: campaigns || [] }, campaigns?.length || 0);
   res.json(result);
 });
 
-router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
   try {
+    // Get account data for logging before deletion
+    const { data: account } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    
     // Check if account has posts
     const { count: postCount } = await supabase
       .from('Post')
@@ -260,6 +294,18 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res
       }
       return res.status(500).json({ error: error.message || 'Failed to delete account' });
     }
+    
+    // Log activity
+    if (account) {
+      await logActivity(req, {
+        action: 'DELETE',
+        entityType: 'Account',
+        entityId: req.params.id,
+        entityName: getEntityName('Account', account),
+        oldValues: account,
+      });
+    }
+    
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Failed to delete account' });

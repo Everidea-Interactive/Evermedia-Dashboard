@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
+import { logActivity, getEntityName } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -60,7 +61,7 @@ router.get('/', async (req, res) => {
   res.json(filtered);
 });
 
-router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const { name, contact, notes, active, roles } = req.body as any;
   if (!name) return res.status(400).json({ error: 'Name required' });
   
@@ -119,11 +120,29 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     .select('name')
     .in('id', roleTypeIds);
   
-  res.status(201).json({ ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) });
+  const result = { ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) };
+  
+  // Log activity
+  await logActivity(req, {
+    action: 'CREATE',
+    entityType: 'PIC',
+    entityId: pic.id,
+    entityName: getEntityName('PIC', pic),
+    newValues: result,
+  });
+  
+  res.status(201).json(result);
 });
 
-router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const { name, contact, notes, active, roles } = req.body as any;
+  
+  // Get old PIC data for logging
+  const { data: oldPic } = await supabase
+    .from('PIC')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
   
   const updateData: any = {};
   if (name !== undefined) updateData.name = name;
@@ -189,12 +208,43 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     .select('name')
     .in('id', roleTypeIds);
   
-  res.json({ ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) });
+  const result = { ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) };
+  
+  // Log activity
+  await logActivity(req, {
+    action: 'UPDATE',
+    entityType: 'PIC',
+    entityId: pic.id,
+    entityName: getEntityName('PIC', pic),
+    oldValues: oldPic,
+    newValues: result,
+  });
+  
+  res.json(result);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
+  // Get PIC data for logging before deletion
+  const { data: pic } = await supabase
+    .from('PIC')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+  
   const { error } = await supabase.from('PIC').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
+  
+  // Log activity
+  if (pic) {
+    await logActivity(req, {
+      action: 'DELETE',
+      entityType: 'PIC',
+      entityId: req.params.id,
+      entityName: getEntityName('PIC', pic),
+      oldValues: pic,
+    });
+  }
+  
   res.json({ ok: true });
 });
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { logActivity, getEntityName } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -17,7 +18,7 @@ router.get('/', async (req, res) => {
   res.json((kpis || []).map((k: any) => ({ ...k, remaining: k.target - k.actual })));
 });
 
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthRequest, res) => {
   const { campaignId, accountId, category, target, actual } = req.body as any;
   if (!campaignId || !category || target == null) return res.status(400).json({ error: 'Missing fields' });
   
@@ -28,11 +29,28 @@ router.post('/', async (req, res) => {
     .single();
   
   if (error) return res.status(500).json({ error: error.message });
+  
+  // Log activity
+  await logActivity(req, {
+    action: 'CREATE',
+    entityType: 'KPI',
+    entityId: kpi.id,
+    entityName: getEntityName('KPI', kpi),
+    newValues: kpi,
+  });
+  
   res.status(201).json({ ...kpi, remaining: kpi.target - kpi.actual });
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthRequest, res) => {
   const { target, actual } = req.body as any;
+  
+  // Get old KPI data for logging
+  const { data: oldKpi } = await supabase
+    .from('KPI')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
   
   const updateData: any = {};
   if (target !== undefined) updateData.target = target;
@@ -46,12 +64,42 @@ router.put('/:id', async (req, res) => {
     .single();
   
   if (error || !kpi) return res.status(404).json({ error: 'Not found' });
+  
+  // Log activity
+  await logActivity(req, {
+    action: 'UPDATE',
+    entityType: 'KPI',
+    entityId: kpi.id,
+    entityName: getEntityName('KPI', kpi),
+    oldValues: oldKpi,
+    newValues: kpi,
+  });
+  
   res.json({ ...kpi, remaining: kpi.target - kpi.actual });
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
+  // Get KPI data for logging before deletion
+  const { data: kpi } = await supabase
+    .from('KPI')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+  
   const { error } = await supabase.from('KPI').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
+  
+  // Log activity
+  if (kpi) {
+    await logActivity(req, {
+      action: 'DELETE',
+      entityType: 'KPI',
+      entityId: req.params.id,
+      entityName: getEntityName('KPI', kpi),
+      oldValues: kpi,
+    });
+  }
+  
   res.json({ ok: true });
 });
 

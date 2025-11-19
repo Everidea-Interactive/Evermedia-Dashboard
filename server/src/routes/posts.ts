@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
-import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
+import { logActivity, getEntityName } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -99,7 +100,7 @@ router.get('/campaign/:id', async (req, res) => {
   res.json((posts || []).map(computeEngagement));
 });
 
-router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const {
     campaignId,
     accountId,
@@ -163,10 +164,19 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     await recalculateCampaignKPIs(post.campaignId);
   }
   
+  // Log activity
+  await logActivity(req, {
+    action: 'CREATE',
+    entityType: 'Post',
+    entityId: post.id,
+    entityName: getEntityName('Post', post),
+    newValues: post,
+  });
+  
   res.status(201).json(computeEngagement(post));
 });
 
-router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const data: any = { ...req.body };
   if (data.postDate) {
     const d = new Date(data.postDate);
@@ -177,7 +187,7 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
   // Get the post before update to know which campaign/account to update KPIs for
   const { data: oldPost } = await supabase
     .from('Post')
-    .select('campaignId, accountId')
+    .select('*')
     .eq('id', req.params.id)
     .single();
   
@@ -206,15 +216,25 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     await recalculateCampaignKPIs(post.campaignId);
   }
   
+  // Log activity
+  await logActivity(req, {
+    action: 'UPDATE',
+    entityType: 'Post',
+    entityId: post.id,
+    entityName: getEntityName('Post', post),
+    oldValues: oldPost,
+    newValues: post,
+  });
+  
   res.json(computeEngagement(post));
 });
 
 
-router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res) => {
+router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
   // Get the post before deletion to know which campaign/account to update KPIs for
   const { data: post } = await supabase
     .from('Post')
-    .select('campaignId, accountId')
+    .select('*')
     .eq('id', req.params.id)
     .single();
   
@@ -229,6 +249,17 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req, res
     }
     // Always recalculate campaign-level KPIs (where accountId is null)
     await recalculateCampaignKPIs(post.campaignId);
+  }
+  
+  // Log activity
+  if (post) {
+    await logActivity(req, {
+      action: 'DELETE',
+      entityType: 'Post',
+      entityId: req.params.id,
+      entityName: getEntityName('Post', post),
+      oldValues: post,
+    });
   }
   
   res.json({ ok: true });
