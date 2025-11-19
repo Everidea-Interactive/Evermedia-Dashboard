@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -30,16 +31,31 @@ router.post('/', async (req: AuthRequest, res) => {
   
   if (error) return res.status(500).json({ error: error.message });
   
+  // Recalculate KPIs to populate actual values from existing posts
+  if (accountId) {
+    await recalculateKPIs(campaignId, accountId);
+  } else {
+    await recalculateCampaignKPIs(campaignId);
+  }
+  
+  // Fetch the updated KPI with recalculated actual value
+  const { data: updatedKpi } = await supabase
+    .from('KPI')
+    .select('*')
+    .eq('id', kpi.id)
+    .single();
+  
   // Log activity
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'KPI',
     entityId: kpi.id,
-    entityName: getEntityName('KPI', kpi),
-    newValues: kpi,
+    entityName: getEntityName('KPI', updatedKpi || kpi),
+    newValues: updatedKpi || kpi,
   });
   
-  res.status(201).json({ ...kpi, remaining: kpi.target - kpi.actual });
+  const finalKpi = updatedKpi || kpi;
+  res.status(201).json({ ...finalKpi, remaining: finalKpi.target - finalKpi.actual });
 });
 
 router.put('/:id', async (req: AuthRequest, res) => {

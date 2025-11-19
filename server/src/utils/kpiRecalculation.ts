@@ -46,7 +46,7 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
       totals.FYP_COUNT += 1;
     }
     // Count posts with yellow cart enabled
-    if (p.yellowCart === true) {
+    if (p.yellowCart === true || p.yellowCart === 1 || p.yellowCart === 'true') {
       totals.YELLOW_CART += 1;
     }
   });
@@ -109,7 +109,7 @@ export async function recalculateCampaignKPIs(campaignId: string) {
       totals.FYP_COUNT += 1;
     }
     // Count posts with yellow cart enabled
-    if (p.yellowCart === true) {
+    if (p.yellowCart === true || p.yellowCart === 1 || p.yellowCart === 'true') {
       totals.YELLOW_CART += 1;
     }
   });

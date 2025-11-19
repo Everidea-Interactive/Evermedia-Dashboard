@@ -56,15 +56,44 @@ export default function AccountKpiEditPage() {
     if (!campaignId || !accountId) return;
     setSaving(true);
     try {
-      await Promise.all(
-        kpis.map((kpi) =>
+      const promises: Promise<any>[] = [];
+      
+      // Update existing KPIs
+      for (const kpi of kpis) {
+        const targetValue = Number(targets[kpi.category]) || 0;
+        promises.push(
           api(`/kpis/${kpi.id}`, {
             method: 'PUT',
-            body: { target: Number(targets[kpi.category]) || 0 },
+            body: { target: targetValue },
             token,
           })
-        )
-      );
+        );
+      }
+      
+      // Create KPIs that don't exist yet if a target value is provided
+      for (const cat of categories) {
+        const existingKpi = kpis.find((k) => k.category === cat);
+        if (!existingKpi) {
+          const targetValue = Number(targets[cat]) || 0;
+          // Only create if target value is provided (non-zero or explicitly set)
+          if (targets[cat] !== '' && targets[cat] !== undefined) {
+            promises.push(
+              api('/kpis', {
+                method: 'POST',
+                body: {
+                  campaignId,
+                  accountId,
+                  category: cat,
+                  target: targetValue,
+                },
+                token,
+              })
+            );
+          }
+        }
+      }
+      
+      await Promise.all(promises);
       navigate(`/campaigns/${campaignId}`);
     } finally {
       setSaving(false);
