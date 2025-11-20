@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
-import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -189,13 +189,29 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     await recalculateCampaignKPIs(post.campaignId);
   }
   
-  // Log activity
+  // Log activity with specific fields
+  const newValues = {
+    postTitle: post.postTitle,
+    status: post.status,
+    contentCategory: post.contentCategory,
+    postDate: post.postDate,
+    totalView: post.totalView,
+    totalLike: post.totalLike,
+    totalComment: post.totalComment,
+    totalShare: post.totalShare,
+    totalSaved: post.totalSaved,
+    contentType: post.contentType,
+    adsOnMusic: post.adsOnMusic,
+    yellowCart: post.yellowCart,
+  };
+  
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'Post',
     entityId: post.id,
     entityName: getEntityName('Post', post),
-    newValues: post,
+    newValues,
+    description: generateChangeDescription('CREATE', 'Post', getEntityName('Post', post), undefined, newValues),
   });
   
   res.status(201).json(computeEngagement(post));
@@ -268,15 +284,36 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     await recalculateCampaignKPIs(post.campaignId);
   }
   
-  // Log activity
-  await logActivity(req, {
-    action: 'UPDATE',
-    entityType: 'Post',
-    entityId: post.id,
-    entityName: getEntityName('Post', post),
-    oldValues: oldPost,
-    newValues: post,
-  });
+  // Log activity with specific changed fields only
+  const changedFields = computeChangedFields(
+    oldPost,
+    post,
+    Object.keys(data)
+  );
+  
+  // Build oldValues and newValues objects from changedFields
+  const oldValues: any = {};
+  const newValues: any = {};
+  
+  for (const [field, change] of Object.entries(changedFields)) {
+    oldValues[field] = change.before;
+    newValues[field] = change.after;
+  }
+  
+  const hasChanges = Object.keys(oldValues).length > 0;
+  
+  // Only log if there are actual changes
+  if (hasChanges) {
+    await logActivity(req, {
+      action: 'UPDATE',
+      entityType: 'Post',
+      entityId: post.id,
+      entityName: getEntityName('Post', post),
+      oldValues,
+      newValues,
+      description: generateChangeDescription('UPDATE', 'Post', getEntityName('Post', post), oldValues, newValues),
+    });
+  }
   
   res.json(computeEngagement(post));
 });
@@ -303,14 +340,22 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async
     await recalculateCampaignKPIs(post.campaignId);
   }
   
-  // Log activity
+  // Log activity with specific fields
   if (post) {
+    const oldValues = {
+      postTitle: post.postTitle,
+      status: post.status,
+      contentCategory: post.contentCategory,
+      postDate: post.postDate,
+    };
+    
     await logActivity(req, {
       action: 'DELETE',
       entityType: 'Post',
       entityId: req.params.id,
       entityName: getEntityName('Post', post),
-      oldValues: post,
+      oldValues,
+      description: generateChangeDescription('DELETE', 'Post', getEntityName('Post', post), oldValues),
     });
   }
   

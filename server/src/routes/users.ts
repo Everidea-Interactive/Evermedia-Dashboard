@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
-import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const router = Router();
 
@@ -45,13 +45,20 @@ router.post('/', async (req: AuthRequest, res) => {
     return res.status(500).json({ error: userError.message });
   }
   
-  // Log activity
+  // Log activity with specific fields
+  const newValues = {
+    name: user.name,
+    email: user.email,
+    role: user.role,
+  };
+  
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'User',
     entityId: user.id,
     entityName: getEntityName('User', user),
-    newValues: user,
+    newValues,
+    description: generateChangeDescription('CREATE', 'User', getEntityName('User', user), undefined, newValues),
   });
   
   res.status(201).json(user);
@@ -103,15 +110,43 @@ router.put('/:id', async (req: AuthRequest, res) => {
   
   if (userError || !user) return res.status(404).json({ error: 'Not found' });
   
-  // Log activity
-  await logActivity(req, {
-    action: 'UPDATE',
-    entityType: 'User',
-    entityId: user.id,
-    entityName: getEntityName('User', user),
-    oldValues: oldUser,
-    newValues: user,
-  });
+  // Log activity with specific changed fields only
+  const fieldsToCompare = Object.keys(updateData).filter(field => !['createdAt', 'updatedAt', 'id'].includes(field));
+  const changedFields = computeChangedFields(
+    oldUser,
+    { ...user, password: password ? '[REDACTED]' : undefined },
+    fieldsToCompare
+  );
+  
+  // Build oldValues and newValues objects from changedFields
+  const oldValues: any = {};
+  const newValues: any = {};
+  
+  for (const [field, change] of Object.entries(changedFields)) {
+    oldValues[field] = change.before;
+    newValues[field] = change.after;
+  }
+  
+  // Track password change separately if it was updated
+  if (password) {
+    oldValues.password = '[REDACTED]';
+    newValues.password = '[REDACTED]';
+  }
+  
+  const hasChanges = Object.keys(oldValues).length > 0;
+  
+  // Only log if there are actual changes
+  if (hasChanges) {
+    await logActivity(req, {
+      action: 'UPDATE',
+      entityType: 'User',
+      entityId: user.id,
+      entityName: getEntityName('User', user),
+      oldValues,
+      newValues,
+      description: generateChangeDescription('UPDATE', 'User', getEntityName('User', user), oldValues, newValues),
+    });
+  }
   
   res.json(user);
 });
@@ -134,14 +169,21 @@ router.delete('/:id', async (req: AuthRequest, res) => {
   const { error } = await supabase.from('User').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
   
-  // Log activity
+  // Log activity with specific fields
   if (user) {
+    const oldValues = {
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
+    
     await logActivity(req, {
       action: 'DELETE',
       entityType: 'User',
       entityId: req.params.id,
       entityName: getEntityName('User', user),
-      oldValues: user,
+      oldValues,
+      description: generateChangeDescription('DELETE', 'User', getEntityName('User', user), oldValues),
     });
   }
   

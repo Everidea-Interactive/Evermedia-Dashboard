@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
-import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -56,14 +56,26 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequ
     }
   }
   
-  // Log activity
+  // Log activity with specific fields
   if (campaign) {
+    const newValues = {
+      name: campaign.name,
+      categories: campaign.categories,
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
+      status: campaign.status,
+      description: campaign.description,
+      targetViewsForFYP: campaign.targetViewsForFYP,
+      accountIds: accountIds || [],
+    };
+    
     await logActivity(req, {
       action: 'CREATE',
       entityType: 'Campaign',
       entityId: campaign.id,
       entityName: getEntityName('Campaign', campaign),
-      newValues: campaign,
+      newValues,
+      description: generateChangeDescription('CREATE', 'Campaign', getEntityName('Campaign', campaign), undefined, newValues),
     });
   }
   
@@ -122,16 +134,19 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRe
   
   if (error || !campaign) return res.status(404).json({ error: 'Not found' });
   
-  // Update account links if provided
+  // Get old account links before updating (for logging and KPI recalculation)
+  let oldAccountIds: string[] = [];
   if (accountIds !== undefined) {
-    // Get old account links before deletion to recalculate KPIs for removed accounts
     const { data: oldLinks } = await supabase
       .from('_CampaignToAccount')
       .select('B')
       .eq('A', req.params.id);
     
-    const oldAccountIds = oldLinks?.map((link: any) => link.B) || [];
-    
+    oldAccountIds = oldLinks?.map((link: any) => link.B) || [];
+  }
+  
+  // Update account links if provided
+  if (accountIds !== undefined) {
     // Find accounts that are being removed (in old but not in new)
     const accountsToRemove = oldAccountIds.filter((id: string) => !accountIds.includes(id));
     
@@ -171,15 +186,50 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRe
     }
   }
   
-  // Log activity
-  await logActivity(req, {
-    action: 'UPDATE',
-    entityType: 'Campaign',
-    entityId: campaign.id,
-    entityName: getEntityName('Campaign', campaign),
-    oldValues: oldCampaign,
-    newValues: campaign,
-  });
+  // Log activity with specific changed fields only
+  const changedFields = computeChangedFields(
+    oldCampaign,
+    campaign,
+    Object.keys(updateData)
+  );
+  
+  // Also track account links changes if they were updated
+  if (accountIds !== undefined && oldCampaign) {
+    // Compare account IDs arrays
+    const oldAccountIdsSorted = [...oldAccountIds].sort().join(',');
+    const newAccountIdsSorted = [...accountIds].sort().join(',');
+    
+    if (oldAccountIdsSorted !== newAccountIdsSorted) {
+      changedFields.accountIds = {
+        before: oldAccountIds,
+        after: accountIds,
+      };
+    }
+  }
+  
+  // Build oldValues and newValues objects from changedFields
+  const oldValues: any = {};
+  const newValues: any = {};
+  
+  for (const [field, change] of Object.entries(changedFields)) {
+    oldValues[field] = change.before;
+    newValues[field] = change.after;
+  }
+  
+  const hasChanges = Object.keys(oldValues).length > 0;
+  
+  // Only log if there are actual changes
+  if (hasChanges) {
+    await logActivity(req, {
+      action: 'UPDATE',
+      entityType: 'Campaign',
+      entityId: campaign.id,
+      entityName: getEntityName('Campaign', campaign),
+      oldValues,
+      newValues,
+      description: generateChangeDescription('UPDATE', 'Campaign', getEntityName('Campaign', campaign), oldValues, newValues),
+    });
+  }
   
   res.json(campaign);
 });
@@ -211,13 +261,24 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
   const { error } = await supabase.from('Campaign').delete().eq('id', campaignId);
   if (error) return res.status(500).json({ error: error.message });
   
-  // Log activity
+  // Log activity with specific fields
+  const oldValues = {
+    name: campaign.name,
+    categories: campaign.categories,
+    startDate: campaign.startDate,
+    endDate: campaign.endDate,
+    status: campaign.status,
+    description: campaign.description,
+    targetViewsForFYP: campaign.targetViewsForFYP,
+  };
+  
   await logActivity(req, {
     action: 'DELETE',
     entityType: 'Campaign',
     entityId: campaignId,
     entityName: getEntityName('Campaign', campaign),
-    oldValues: campaign,
+    oldValues,
+    description: generateChangeDescription('DELETE', 'Campaign', getEntityName('Campaign', campaign), oldValues),
   });
   
   res.json({ ok: true });

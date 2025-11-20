@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
-import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const router = Router();
 
@@ -139,13 +139,23 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     .select('id, name, categories')
     .in('id', campaignIdsFromDb);
   
-  // Log activity
+  // Log activity with specific fields
+  const newValues = {
+    name: account.name,
+    tiktokHandle: account.tiktokHandle,
+    accountType: account.accountType,
+    brand: account.brand,
+    notes: account.notes,
+    campaignIds: campaignIds || [],
+  };
+  
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'Account',
     entityId: account.id,
     entityName: getEntityName('Account', account),
-    newValues: account,
+    newValues,
+    description: generateChangeDescription('CREATE', 'Account', getEntityName('Account', account), undefined, newValues),
   });
   
   const result = withCrossbrand({ ...account, campaigns: campaigns || [] }, campaigns?.length || 0);
@@ -241,15 +251,37 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     .select('id, name, categories')
     .in('id', campaignIdsFromDb);
   
-  // Log activity
-  await logActivity(req, {
-    action: 'UPDATE',
-    entityType: 'Account',
-    entityId: account.id,
-    entityName: getEntityName('Account', account),
-    oldValues: oldAccount,
-    newValues: account,
-  });
+  // Log activity with specific changed fields only
+  const fieldsToCompare = Object.keys(updateData).filter(field => !['createdAt', 'updatedAt', 'id'].includes(field));
+  const changedFields = computeChangedFields(
+    oldAccount,
+    account,
+    fieldsToCompare
+  );
+  
+  // Build oldValues and newValues objects from changedFields
+  const oldValues: any = {};
+  const newValues: any = {};
+  
+  for (const [field, change] of Object.entries(changedFields)) {
+    oldValues[field] = change.before;
+    newValues[field] = change.after;
+  }
+  
+  const hasChanges = Object.keys(oldValues).length > 0;
+  
+  // Only log if there are actual changes
+  if (hasChanges) {
+    await logActivity(req, {
+      action: 'UPDATE',
+      entityType: 'Account',
+      entityId: account.id,
+      entityName: getEntityName('Account', account),
+      oldValues,
+      newValues,
+      description: generateChangeDescription('UPDATE', 'Account', getEntityName('Account', account), oldValues, newValues),
+    });
+  }
   
   const result = withCrossbrand({ ...account, campaigns: campaigns || [] }, campaigns?.length || 0);
   res.json(result);
@@ -296,14 +328,23 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
       return res.status(500).json({ error: error.message || 'Failed to delete account' });
     }
     
-    // Log activity
+    // Log activity with specific fields
     if (account) {
+      const oldValues = {
+        name: account.name,
+        tiktokHandle: account.tiktokHandle,
+        accountType: account.accountType,
+        brand: account.brand,
+        notes: account.notes,
+      };
+      
       await logActivity(req, {
         action: 'DELETE',
         entityType: 'Account',
         entityId: req.params.id,
         entityName: getEntityName('Account', account),
-        oldValues: account,
+        oldValues,
+        description: generateChangeDescription('DELETE', 'Account', getEntityName('Account', account), oldValues),
       });
     }
     

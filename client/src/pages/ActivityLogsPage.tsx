@@ -19,6 +19,7 @@ type ActivityLog = {
   entityName?: string;
   oldValues?: any;
   newValues?: any;
+  description?: string;
   createdAt: string;
 };
 
@@ -207,7 +208,7 @@ export default function ActivityLogsPage() {
                     <TH>User</TH>
                     <TH>Action</TH>
                     <TH>Entity Type</TH>
-                    <TH>Entity Name</TH>
+                    <TH>Description</TH>
                     <TH>Entity ID</TH>
                   </TR>
                 </THead>
@@ -233,8 +234,12 @@ export default function ActivityLogsPage() {
                           </span>
                         </TD>
                         <TD style={{ color: 'var(--text-secondary)' }}>{log.entityType}</TD>
-                        <TD style={{ color: 'var(--text-secondary)' }}>
-                          {log.entityName || '-'}
+                        <TD style={{ color: 'var(--text-primary)' }}>
+                          {log.description || (
+                            <span style={{ color: 'var(--text-tertiary)' }}>
+                              {log.action} {log.entityType}{log.entityName ? ` "${log.entityName}"` : ''}
+                            </span>
+                          )}
                         </TD>
                         <TD>
                           <code className="text-xs" style={{ color: 'var(--text-tertiary)' }}>

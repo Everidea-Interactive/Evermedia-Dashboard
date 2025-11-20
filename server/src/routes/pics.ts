@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
-import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -122,13 +122,22 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
   
   const result = { ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) };
   
-  // Log activity
+  // Log activity with specific fields
+  const newValues = {
+    name: pic.name,
+    contact: pic.contact,
+    notes: pic.notes,
+    active: pic.active,
+    roles: result.roles || [],
+  };
+  
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'PIC',
     entityId: pic.id,
     entityName: getEntityName('PIC', pic),
-    newValues: result,
+    newValues,
+    description: generateChangeDescription('CREATE', 'PIC', getEntityName('PIC', pic), undefined, newValues),
   });
   
   res.status(201).json(result);
@@ -158,6 +167,24 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     .single();
   
   if (picError || !pic) return res.status(404).json({ error: 'Not found' });
+  
+  // Get old roles BEFORE updating them (for logging)
+  let oldRoles: string[] = [];
+  if (roles !== undefined) {
+    const { data: oldPicRoles } = await supabase
+      .from('PICOnRoles')
+      .select('roleTypeId')
+      .eq('picId', req.params.id);
+    
+    const oldRoleTypeIds = (oldPicRoles || []).map((pr: any) => pr.roleTypeId);
+    if (oldRoleTypeIds.length > 0) {
+      const { data: oldRoleTypes } = await supabase
+        .from('PICRoleType')
+        .select('name')
+        .in('id', oldRoleTypeIds);
+      oldRoles = (oldRoleTypes || []).map((rt: any) => rt.name).sort();
+    }
+  }
   
   // Update roles if provided
   if (roles !== undefined) {
@@ -209,16 +236,50 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     .in('id', roleTypeIds);
   
   const result = { ...pic, roles: (fetchedRoleTypes || []).map((rt: any) => rt.name) };
+
+  // Log activity with specific changed fields only
+  const fieldsToCompare = Object.keys(updateData).filter(field => !['createdAt', 'updatedAt', 'id'].includes(field));
+  const changedFields = computeChangedFields(
+    oldPic,
+    pic,
+    fieldsToCompare
+  );
   
-  // Log activity
-  await logActivity(req, {
-    action: 'UPDATE',
-    entityType: 'PIC',
-    entityId: pic.id,
-    entityName: getEntityName('PIC', pic),
-    oldValues: oldPic,
-    newValues: result,
-  });
+  // Track roles changes if they were updated
+  if (roles !== undefined) {
+    const newRoles = (result.roles || []).sort();
+    
+    if (JSON.stringify(oldRoles) !== JSON.stringify(newRoles)) {
+      changedFields.roles = {
+        before: oldRoles,
+        after: newRoles,
+      };
+    }
+  }
+  
+  // Build oldValues and newValues objects from changedFields
+  const oldValues: any = {};
+  const newValues: any = {};
+  
+  for (const [field, change] of Object.entries(changedFields)) {
+    oldValues[field] = change.before;
+    newValues[field] = change.after;
+  }
+  
+  const hasChanges = Object.keys(oldValues).length > 0;
+  
+  // Only log if there are actual changes
+  if (hasChanges) {
+    await logActivity(req, {
+      action: 'UPDATE',
+      entityType: 'PIC',
+      entityId: pic.id,
+      entityName: getEntityName('PIC', pic),
+      oldValues,
+      newValues,
+      description: generateChangeDescription('UPDATE', 'PIC', getEntityName('PIC', pic), oldValues, newValues),
+    });
+  }
   
   res.json(result);
 });
@@ -234,14 +295,22 @@ router.delete('/:id', async (req: AuthRequest, res) => {
   const { error } = await supabase.from('PIC').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
   
-  // Log activity
+  // Log activity with specific fields
   if (pic) {
+    const oldValues = {
+      name: pic.name,
+      contact: pic.contact,
+      notes: pic.notes,
+      active: pic.active,
+    };
+    
     await logActivity(req, {
       action: 'DELETE',
       entityType: 'PIC',
       entityId: req.params.id,
       entityName: getEntityName('PIC', pic),
-      oldValues: pic,
+      oldValues,
+      description: generateChangeDescription('DELETE', 'PIC', getEntityName('PIC', pic), oldValues),
     });
   }
   

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { logActivity, getEntityName } from '../utils/activityLog.js';
+import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
 
 const router = Router();
@@ -45,16 +45,25 @@ router.post('/', async (req: AuthRequest, res) => {
     .eq('id', kpi.id)
     .single();
   
-  // Log activity
+  // Log activity with specific fields
+  const finalKpi = updatedKpi || kpi;
+  const newValues = {
+    category: finalKpi.category,
+    campaignId: finalKpi.campaignId,
+    accountId: finalKpi.accountId,
+    target: finalKpi.target,
+    actual: finalKpi.actual,
+  };
+  
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'KPI',
     entityId: kpi.id,
-    entityName: getEntityName('KPI', updatedKpi || kpi),
-    newValues: updatedKpi || kpi,
+    entityName: getEntityName('KPI', finalKpi),
+    newValues,
+    description: generateChangeDescription('CREATE', 'KPI', getEntityName('KPI', finalKpi), undefined, newValues),
   });
   
-  const finalKpi = updatedKpi || kpi;
   res.status(201).json({ ...finalKpi, remaining: finalKpi.target - finalKpi.actual });
 });
 
@@ -81,15 +90,38 @@ router.put('/:id', async (req: AuthRequest, res) => {
   
   if (error || !kpi) return res.status(404).json({ error: 'Not found' });
   
-  // Log activity
-  await logActivity(req, {
-    action: 'UPDATE',
-    entityType: 'KPI',
-    entityId: kpi.id,
-    entityName: getEntityName('KPI', kpi),
-    oldValues: oldKpi,
-    newValues: kpi,
-  });
+  // Log activity with specific changed fields only
+  // Only compare fields that were actually requested to be updated
+  const fieldsToCompare = Object.keys(updateData).filter(field => !['createdAt', 'updatedAt', 'id'].includes(field));
+  const changedFields = computeChangedFields(
+    oldKpi,
+    kpi,
+    fieldsToCompare
+  );
+  
+  // Build oldValues and newValues objects from changedFields (only fields that actually changed)
+  const oldValues: any = {};
+  const newValues: any = {};
+  
+  for (const [field, change] of Object.entries(changedFields)) {
+    oldValues[field] = change.before;
+    newValues[field] = change.after;
+  }
+  
+  const hasChanges = Object.keys(oldValues).length > 0;
+  
+  // Only log if there are actual changes
+  if (hasChanges) {
+    await logActivity(req, {
+      action: 'UPDATE',
+      entityType: 'KPI',
+      entityId: kpi.id,
+      entityName: getEntityName('KPI', kpi),
+      oldValues,
+      newValues,
+      description: generateChangeDescription('UPDATE', 'KPI', getEntityName('KPI', kpi), oldValues, newValues),
+    });
+  }
   
   res.json({ ...kpi, remaining: kpi.target - kpi.actual });
 });
@@ -105,14 +137,23 @@ router.delete('/:id', async (req: AuthRequest, res) => {
   const { error } = await supabase.from('KPI').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
   
-  // Log activity
+  // Log activity with specific fields
   if (kpi) {
+    const oldValues = {
+      category: kpi.category,
+      campaignId: kpi.campaignId,
+      accountId: kpi.accountId,
+      target: kpi.target,
+      actual: kpi.actual,
+    };
+    
     await logActivity(req, {
       action: 'DELETE',
       entityType: 'KPI',
       entityId: req.params.id,
       entityName: getEntityName('KPI', kpi),
-      oldValues: kpi,
+      oldValues,
+      description: generateChangeDescription('DELETE', 'KPI', getEntityName('KPI', kpi), oldValues),
     });
   }
   
