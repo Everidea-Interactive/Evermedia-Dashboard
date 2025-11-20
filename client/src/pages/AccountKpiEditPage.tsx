@@ -124,12 +124,12 @@ export default function AccountKpiEditPage() {
     }
   };
 
-  const backPath = campaignId ? `/campaigns/${campaignId}/accounts` : '/campaigns';
+  const backPath = campaignId ? `/campaigns/${campaignId}` : '/campaigns';
 
   if (loading) {
     return (
       <div>
-        <PageHeader backPath={backPath} backLabel="Back to accounts" title={<div className="page-title">Loading…</div>} />
+        <PageHeader backPath={backPath} backLabel="Back to campaign" title={<div className="page-title">Loading…</div>} />
         <div className="mt-3">Loading…</div>
       </div>
     );
@@ -139,7 +139,7 @@ export default function AccountKpiEditPage() {
     <div className="space-y-6">
       <PageHeader
         backPath={backPath}
-        backLabel="Back to accounts"
+        backLabel="Back to campaign"
         title={<h1 className="page-title">Account KPIs</h1>}
       />
       <Card>
