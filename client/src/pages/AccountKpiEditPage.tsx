@@ -18,6 +18,14 @@ const labels: Record<string, string> = {
   YELLOW_CART: 'Yellow Cart',
 };
 
+// Helper function to remove leading zeros from number input
+const sanitizeNumberInput = (value: string): string => {
+  if (value === '' || value === '0') return value;
+  // Remove leading zeros but keep the number
+  const num = value.replace(/^0+/, '');
+  return num === '' ? '0' : num;
+};
+
 export default function AccountKpiEditPage() {
   const { campaignId, accountId } = useParams();
   const navigate = useNavigate();
@@ -51,7 +59,8 @@ export default function AccountKpiEditPage() {
   }, [campaignId, accountId, token]);
 
   const handleTargetChange = (category: string, value: string) => {
-    setTargets((prev) => ({ ...prev, [category]: value }));
+    const sanitizedValue = sanitizeNumberInput(value);
+    setTargets((prev) => ({ ...prev, [category]: sanitizedValue }));
   };
 
   const handleSave = async () => {

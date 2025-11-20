@@ -20,6 +20,14 @@ const categoryLabels: Record<string, string> = {
   YELLOW_CART: 'Yellow Cart',
 };
 
+// Helper function to remove leading zeros from number input
+const sanitizeNumberInput = (value: string): string => {
+  if (value === '' || value === '0') return value;
+  // Remove leading zeros but keep the number
+  const num = value.replace(/^0+/, '');
+  return num === '' ? '0' : num;
+};
+
 export default function CampaignEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -103,7 +111,11 @@ export default function CampaignEditPage() {
   }, [accounts, form.accountIds]);
 
   const handleFormChange = (field: keyof typeof form, value: string | string[]) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    // Sanitize targetViewsForFYP to remove leading zeros
+    const sanitizedValue = field === 'targetViewsForFYP' && typeof value === 'string' 
+      ? sanitizeNumberInput(value) 
+      : value;
+    setForm((prev) => ({ ...prev, [field]: sanitizedValue }));
   };
 
   const handleSaveCampaign = async (event: React.FormEvent) => {
@@ -223,9 +235,10 @@ export default function CampaignEditPage() {
   };
 
   const handleGlobalKpiField = (category: string, value: string) => {
+    const sanitizedValue = sanitizeNumberInput(value);
     setCampaignKpiEdits((prev) => ({
       ...prev,
-      [category]: { ...(prev[category] ?? { id: '', target: '', actual: 0 }), target: value },
+      [category]: { ...(prev[category] ?? { id: '', target: '', actual: 0 }), target: sanitizedValue },
     }));
   };
 

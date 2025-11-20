@@ -44,6 +44,14 @@ type Account = {
   tiktokHandle?: string;
 };
 
+// Helper function to remove leading zeros from number input
+const sanitizeNumberInput = (value: string): string => {
+  if (value === '' || value === '0') return value;
+  // Remove leading zeros but keep the number
+  const num = value.replace(/^0+/, '');
+  return num === '' ? '0' : num;
+};
+
 export default function CampaignsPage() {
   const { token } = useAuth();
   const { canManageCampaigns, canDelete } = usePermissions();
@@ -455,7 +463,7 @@ export default function CampaignsPage() {
               label="Target Views for FYP"
               type="number"
               value={form.targetViewsForFYP}
-              onChange={e => setForm(prev => ({ ...prev, targetViewsForFYP: e.target.value }))}
+              onChange={e => setForm(prev => ({ ...prev, targetViewsForFYP: sanitizeNumberInput(e.target.value) }))}
               placeholder="Enter minimum views to mark post as FYP"
               required
               min="1"
@@ -471,7 +479,7 @@ export default function CampaignsPage() {
                     label={categoryLabels[cat]}
                     type="number"
                     value={campaignKpis[cat]}
-                    onChange={e => setCampaignKpis(prev => ({ ...prev, [cat]: e.target.value }))}
+                    onChange={e => setCampaignKpis(prev => ({ ...prev, [cat]: sanitizeNumberInput(e.target.value) }))}
                     placeholder="Target"
                     required
                     min="1"

@@ -92,6 +92,14 @@ const CONTENT_CATEGORY_OPTIONS = ['Teaser', 'BTS', 'Product Highlight', 'Tutoria
 const CONTENT_TYPE_OPTIONS = ['Video', 'Photo', 'Reel', 'Live', 'Story'];
 const STATUS_OPTIONS = ['PLANNED', 'SCHEDULED', 'PUBLISHED', 'COMPLETED', 'CANCELLED'];
 
+// Helper function to remove leading zeros from number input
+const sanitizeNumberInput = (value: string): string => {
+  if (value === '' || value === '0') return value;
+  // Remove leading zeros but keep the number
+  const num = value.replace(/^0+/, '');
+  return num === '' ? '0' : num;
+};
+
 export default function PostsPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
@@ -220,7 +228,10 @@ export default function PostsPage() {
   };
 
   const handleFormChange = (field: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    // Sanitize engagement stats fields to remove leading zeros
+    const engagementFields: (keyof FormState)[] = ['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'];
+    const sanitizedValue = engagementFields.includes(field) ? sanitizeNumberInput(value) : value;
+    setForm((prev) => ({ ...prev, [field]: sanitizedValue }));
     setToast(null);
     if (field === 'accountName') {
       setAccountInputFocused(true);
@@ -1092,7 +1103,7 @@ export default function PostsPage() {
                   type="number"
                   placeholder="0"
                   value={editForm.totalView ?? ''}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, totalView: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalView: sanitizeNumberInput(e.target.value) }))}
                 />
               </div>
               <div>
@@ -1101,7 +1112,7 @@ export default function PostsPage() {
                   type="number"
                   placeholder="0"
                   value={editForm.totalLike ?? ''}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: sanitizeNumberInput(e.target.value) }))}
                 />
               </div>
               <div>
@@ -1110,7 +1121,7 @@ export default function PostsPage() {
                   type="number"
                   placeholder="0"
                   value={editForm.totalComment ?? ''}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: sanitizeNumberInput(e.target.value) }))}
                 />
               </div>
               <div>
@@ -1119,7 +1130,7 @@ export default function PostsPage() {
                   type="number"
                   placeholder="0"
                   value={editForm.totalShare ?? ''}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: sanitizeNumberInput(e.target.value) }))}
                 />
               </div>
               <div>
@@ -1128,7 +1139,7 @@ export default function PostsPage() {
                   type="number"
                   placeholder="0"
                   value={editForm.totalSaved ?? ''}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: sanitizeNumberInput(e.target.value) }))}
                 />
               </div>
             </div>
