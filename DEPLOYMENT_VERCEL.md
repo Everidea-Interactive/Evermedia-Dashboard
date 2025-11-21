@@ -19,13 +19,15 @@ Make sure your code is pushed to a GitHub repository.
 1. Go to [vercel.com](https://vercel.com) and sign in
 2. Click **"Add New Project"**
 3. Import your GitHub repository
-4. Vercel will auto-detect the configuration from `vercel.json`
+4. **Framework Preset**: Choose **"Vite"** (or "Other" if Vite is not available - your `vercel.json` will handle the configuration)
+5. Vercel will auto-detect the configuration from `vercel.json`
 
 ### Step 3: Configure Environment Variables
 
 In Vercel dashboard, go to **Settings** → **Environment Variables** and add:
 
 **For Production:**
+
 ```
 NODE_ENV=production
 SUPABASE_URL=https://your-project-id.supabase.co
@@ -48,6 +50,7 @@ Click **"Deploy"** and wait for the build to complete.
 2. Add your RumahWeb domain (e.g., `yourdomain.com`)
 3. Vercel will provide DNS records to add
 4. In RumahWeb control panel, add the DNS records:
+
    - **Type**: CNAME
    - **Name**: @ (or leave blank for root domain)
    - **Value**: [Vercel provided CNAME value]
@@ -58,6 +61,7 @@ Click **"Deploy"** and wait for the build to complete.
 ## 📝 Project Structure
 
 Your project should have:
+
 ```
 Evermedia Dashboard/
 ├── api/
@@ -123,8 +127,3 @@ Every push to your main branch will automatically trigger a new deployment. You 
 - [Vercel Documentation](https://vercel.com/docs)
 - [Vercel Serverless Functions](https://vercel.com/docs/functions)
 - [Vercel Environment Variables](https://vercel.com/docs/environment-variables)
-
-
-
-
-
