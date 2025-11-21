@@ -295,8 +295,8 @@ export function generateChangeDescription(
         } 
         // Handle date fields
         else if (field === 'startDate' || field === 'endDate' || field === 'postDate') {
-          const oldDate = oldVal ? new Date(oldVal).toLocaleDateString() : 'null';
-          const newDate = newVal ? new Date(newVal).toLocaleDateString() : 'null';
+          const oldDate = oldVal ? new Date(oldVal as string | number | Date).toLocaleDateString() : 'null';
+          const newDate = newVal ? new Date(newVal as string | number | Date).toLocaleDateString() : 'null';
           changes.push(`${fieldName}: ${oldDate} → ${newDate}`);
         }
         // Handle Post stats fields (numbers without quotes)
