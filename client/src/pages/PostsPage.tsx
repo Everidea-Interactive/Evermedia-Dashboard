@@ -151,8 +151,13 @@ export default function PostsPage() {
 
   const fetchPostsForCampaign = useCallback(
     async (campaignId: string) => {
-      const data = await api(`/campaigns/${campaignId}/posts`, { token });
-      return data as Post[];
+      const response = await api(`/campaigns/${campaignId}/posts`, { token });
+      // API returns { posts: [...], total: ... } format
+      if (response && typeof response === 'object' && 'posts' in response) {
+        return (response.posts as Post[]) || [];
+      }
+      // Fallback for old API format (direct array)
+      return Array.isArray(response) ? response : [];
     },
     [token],
   );
