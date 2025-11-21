@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../supabase.js';
+import { supabase, supabaseAuth } from '../supabase.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -17,7 +17,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   
   try {
     // Verify token with Supabase
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser(token);
     if (authError || !authUser) {
       return res.status(401).json({ error: 'Invalid token' });
     }
@@ -29,8 +29,14 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       .eq('id', authUser.id)
       .single();
 
-    if (userError || !user) {
-      return res.status(401).json({ error: 'User not found' });
+    if (userError) {
+      console.error('Error fetching user from database:', userError);
+      return res.status(401).json({ error: 'User not found', details: userError.message });
+    }
+
+    if (!user) {
+      console.error(`User with id ${authUser.id} not found in User table`);
+      return res.status(401).json({ error: 'User not found. Please contact administrator.' });
     }
 
     req.user = {
@@ -54,4 +60,3 @@ export function requireRoles(...roles: Array<'ADMIN' | 'CAMPAIGN_MANAGER' | 'EDI
     next();
   };
 }
-

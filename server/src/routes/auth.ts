@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../supabase.js';
+import { supabase, supabaseAuth } from '../supabase.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -9,7 +9,7 @@ router.post('/login', async (req, res) => {
     const body = z.object({ email: z.string().email(), password: z.string().min(1) }).parse(req.body);
     
     // Authenticate with Supabase
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
       email: body.email,
       password: body.password,
     });
@@ -25,8 +25,14 @@ router.post('/login', async (req, res) => {
       .eq('id', authData.user.id)
       .single();
 
-    if (userError || !user) {
-      return res.status(401).json({ error: 'User not found' });
+    if (userError) {
+      console.error('Error fetching user from database:', userError);
+      return res.status(401).json({ error: 'User not found', details: userError.message });
+    }
+
+    if (!user) {
+      console.error(`User with id ${authData.user.id} not found in User table`);
+      return res.status(401).json({ error: 'User not found. Please contact administrator to create your account.' });
     }
 
     res.json({

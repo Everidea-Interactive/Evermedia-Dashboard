@@ -31,6 +31,7 @@ In Vercel dashboard, go to **Settings** → **Environment Variables** and add:
 ```
 NODE_ENV=production
 SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 FRONTEND_URL=https://yourdomain.com
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
@@ -38,7 +39,11 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here
 VITE_API_URL=https://yourdomain.com
 ```
 
-**Important**: Replace `yourdomain.com` with your actual Vercel deployment URL or custom domain.
+**Important**:
+
+- Replace `yourdomain.com` with your actual Vercel deployment URL (e.g., `evermedia-dashboard.vercel.app`) or custom domain
+- **Do NOT include trailing slashes** in URLs (e.g., use `https://evermedia-dashboard.vercel.app` not `https://evermedia-dashboard.vercel.app/`)
+- Both `FRONTEND_URL` and `VITE_API_URL` should be the same since frontend and API are on the same domain
 
 ### Step 4: Deploy
 
