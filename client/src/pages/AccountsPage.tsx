@@ -32,7 +32,7 @@ type Account = {
 
 export default function AccountsPage() {
   const { token } = useAuth();
-  const { canManageAccounts, canAddAccount, canEditAccount, canDelete } = usePermissions();
+  const { canAddAccount, canEditAccount, canDelete } = usePermissions();
   const [items, setItems] = useState<Account[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [search, setSearch] = useState('');

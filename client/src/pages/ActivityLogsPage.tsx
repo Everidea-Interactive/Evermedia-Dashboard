@@ -217,8 +217,10 @@ export default function ActivityLogsPage() {
                     const badgeStyle = getActionBadgeColor(log.action);
                     return (
                       <TR key={log.id}>
-                        <TD style={{ color: 'var(--text-tertiary)' }}>
-                          {formatDate(log.createdAt)}
+                        <TD>
+                          <span style={{ color: 'var(--text-tertiary)' }}>
+                            {formatDate(log.createdAt)}
+                          </span>
                         </TD>
                         <TD>
                           <div>
@@ -233,13 +235,17 @@ export default function ActivityLogsPage() {
                             {log.action}
                           </span>
                         </TD>
-                        <TD style={{ color: 'var(--text-secondary)' }}>{log.entityType}</TD>
-                        <TD style={{ color: 'var(--text-primary)' }}>
-                          {log.description || (
-                            <span style={{ color: 'var(--text-tertiary)' }}>
-                              {log.action} {log.entityType}{log.entityName ? ` "${log.entityName}"` : ''}
-                            </span>
-                          )}
+                        <TD>
+                          <span style={{ color: 'var(--text-secondary)' }}>{log.entityType}</span>
+                        </TD>
+                        <TD>
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            {log.description || (
+                              <span style={{ color: 'var(--text-tertiary)' }}>
+                                {log.action} {log.entityType}{log.entityName ? ` "${log.entityName}"` : ''}
+                              </span>
+                            )}
+                          </span>
                         </TD>
                         <TD>
                           <code className="text-xs" style={{ color: 'var(--text-tertiary)' }}>

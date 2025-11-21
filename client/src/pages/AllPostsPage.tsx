@@ -81,7 +81,7 @@ export default function AllPostsPage() {
   const [pics, setPics] = useState<PicOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<FilterState & { postTitle: string; contentType: string; contentLink: string; adsOnMusic: string; yellowCart: string; totalView: string; totalLike: string; totalComment: string; totalShare: string; totalSaved: string }>>({});
+  const [editForm, setEditForm] = useState<Partial<FilterState & { postTitle: string; contentType: string; contentLink: string; contentCategory: string; postDate: string; adsOnMusic: string; yellowCart: string; totalView: string; totalLike: string; totalComment: string; totalShare: string; totalSaved: string }>>({});
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);

@@ -285,14 +285,18 @@ export default function UsersPage() {
                           )}
                         </div>
                       </TD>
-                      <TD style={{ color: 'var(--text-secondary)' }}>{user.email}</TD>
+                      <TD>
+                        <span style={{ color: 'var(--text-secondary)' }}>{user.email}</span>
+                      </TD>
                       <TD>
                         <span className="text-xs px-2 py-1 rounded border" style={badgeStyle}>
                           {user.role}
                         </span>
                       </TD>
-                      <TD style={{ color: 'var(--text-tertiary)' }}>
-                        {new Date(user.createdAt).toLocaleDateString()}
+                      <TD>
+                        <span style={{ color: 'var(--text-tertiary)' }}>
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </span>
                       </TD>
                       <TD>
                         <div className="flex gap-2">
