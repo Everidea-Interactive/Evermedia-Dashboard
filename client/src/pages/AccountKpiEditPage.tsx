@@ -71,7 +71,16 @@ export default function AccountKpiEditPage() {
       
       // Update existing KPIs
       for (const kpi of kpis) {
-        const targetValue = Number(targets[kpi.category]) || 0;
+        const targetStr = targets[kpi.category];
+        // Allow 0 as a valid value, only default to 0 if empty/undefined
+        const targetValue = targetStr === '' || targetStr === undefined 
+          ? 0 
+          : Number(targetStr);
+        if (isNaN(targetValue) || targetValue < 0) {
+          setToast({ message: `Invalid target value for ${labels[kpi.category]}`, type: 'error' });
+          setSaving(false);
+          return;
+        }
         promises.push(
           api(`/kpis/${kpi.id}`, {
             method: 'PUT',
@@ -85,9 +94,15 @@ export default function AccountKpiEditPage() {
       for (const cat of categories) {
         const existingKpi = kpis.find((k) => k.category === cat);
         if (!existingKpi) {
-          const targetValue = Number(targets[cat]) || 0;
-          // Only create if target value is provided (non-zero or explicitly set)
-          if (targets[cat] !== '' && targets[cat] !== undefined) {
+          const targetStr = targets[cat];
+          // Only create if target value is provided (including 0)
+          if (targetStr !== '' && targetStr !== undefined) {
+            const targetValue = Number(targetStr);
+            if (isNaN(targetValue) || targetValue < 0) {
+              setToast({ message: `Invalid target value for ${labels[cat]}`, type: 'error' });
+              setSaving(false);
+              return;
+            }
             promises.push(
               api('/kpis', {
                 method: 'POST',
@@ -106,6 +121,8 @@ export default function AccountKpiEditPage() {
       
       await Promise.all(promises);
       navigate(`/campaigns/${campaignId}`);
+    } catch (error: any) {
+      setToast({ message: error?.message || 'Failed to save KPIs', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -159,6 +176,7 @@ export default function AccountKpiEditPage() {
                   value={targets[cat]}
                   placeholder="Target"
                   onChange={(e) => handleTargetChange(cat, e.target.value)}
+                  min="0"
                 />
                 <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Actual: {kpi?.actual ?? 0}</div>
               </div>

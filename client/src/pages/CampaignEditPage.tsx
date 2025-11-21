@@ -139,15 +139,15 @@ export default function CampaignEditPage() {
       setToast({ message: 'End date is required', type: 'error' });
       return;
     }
-    if (!form.targetViewsForFYP || Number(form.targetViewsForFYP) <= 0) {
-      setToast({ message: 'Target Views for FYP is required and must be greater than 0', type: 'error' });
+    if (!form.targetViewsForFYP || form.targetViewsForFYP === '' || Number(form.targetViewsForFYP) < 0) {
+      setToast({ message: 'Target Views for FYP is required and must be 0 or greater', type: 'error' });
       return;
     }
     // Validate all campaign KPIs are filled
     for (const cat of accountCategoryOrder) {
       const entry = campaignKpiEdits[cat];
-      if (!entry || !entry.target || Number(entry.target) <= 0) {
-        setToast({ message: `Target for ${categoryLabels[cat]} is required and must be greater than 0`, type: 'error' });
+      if (!entry || entry.target === '' || entry.target === undefined || Number(entry.target) < 0) {
+        setToast({ message: `Target for ${categoryLabels[cat]} is required and must be 0 or greater`, type: 'error' });
         return;
       }
     }
@@ -211,18 +211,23 @@ export default function CampaignEditPage() {
       const updatedAccounts = [...form.accountIds, pendingAccount];
       await api(`/campaigns/${id}`, { method: 'PUT', body: { accountIds: updatedAccounts }, token });
       await Promise.all(
-        accountCategoryOrder.map((cat) =>
-          api('/kpis', {
+        accountCategoryOrder.map((cat) => {
+          const targetStr = pendingKpis[cat].target;
+          // Allow 0 as a valid value, only default to 0 if empty
+          const targetValue = targetStr === '' || targetStr === undefined 
+            ? 0 
+            : Number(targetStr);
+          return api('/kpis', {
             method: 'POST',
             body: {
               campaignId: id,
               accountId: pendingAccount,
               category: cat,
-              target: Number(pendingKpis[cat].target) || 0,
+              target: isNaN(targetValue) || targetValue < 0 ? 0 : targetValue,
             },
             token,
-          })
-        )
+          });
+        })
       );
       const refreshed = await api(`/campaigns/${id}`, { token });
       setCampaign(refreshed);
@@ -402,7 +407,7 @@ export default function CampaignEditPage() {
               onChange={(e) => handleFormChange('targetViewsForFYP', e.target.value)}
               placeholder="Enter minimum views to mark post as FYP"
               required
-              min="1"
+              min="0"
             />
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Linked accounts</label>
@@ -464,6 +469,7 @@ export default function CampaignEditPage() {
                   placeholder="Target"
                   value={pendingKpis[cat].target}
                   onChange={(e) => setPendingKpis((prev) => ({ ...prev, [cat]: { target: e.target.value } }))}
+                  min="0"
                 />
               </div>
             ))}

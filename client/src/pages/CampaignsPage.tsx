@@ -160,14 +160,14 @@ export default function CampaignsPage() {
       setToast({ message: 'End date is required', type: 'error' });
       return;
     }
-    if (!form.targetViewsForFYP || Number(form.targetViewsForFYP) <= 0) {
-      setToast({ message: 'Target Views for FYP is required and must be greater than 0', type: 'error' });
+    if (!form.targetViewsForFYP || form.targetViewsForFYP === '' || Number(form.targetViewsForFYP) < 0) {
+      setToast({ message: 'Target Views for FYP is required and must be 0 or greater', type: 'error' });
       return;
     }
     // Validate all campaign KPIs are filled
     for (const cat of accountCategoryOrder) {
-      if (!campaignKpis[cat] || Number(campaignKpis[cat]) <= 0) {
-        setToast({ message: `Target for ${categoryLabels[cat]} is required and must be greater than 0`, type: 'error' });
+      if (!campaignKpis[cat] || campaignKpis[cat] === '' || Number(campaignKpis[cat]) < 0) {
+        setToast({ message: `Target for ${categoryLabels[cat]} is required and must be 0 or greater`, type: 'error' });
         return;
       }
     }
@@ -207,18 +207,23 @@ export default function CampaignsPage() {
         const accountKpiData = accountKpis[accountId] || {};
         return accountCategoryOrder
           .filter(cat => accountKpiData[cat] && accountKpiData[cat].trim() !== '')
-          .map(cat =>
-            api('/kpis', {
+          .map(cat => {
+            const targetStr = accountKpiData[cat];
+            // Allow 0 as a valid value
+            const targetValue = targetStr === '' || targetStr === undefined 
+              ? 0 
+              : Number(targetStr);
+            return api('/kpis', {
               method: 'POST',
               token,
               body: {
                 campaignId: campaign.id,
                 accountId: accountId,
                 category: cat,
-                target: Number(accountKpiData[cat]) || 0,
+                target: isNaN(targetValue) || targetValue < 0 ? 0 : targetValue,
               },
-            })
-          );
+            });
+          });
       });
 
       // Wait for all KPIs to be created
@@ -466,7 +471,7 @@ export default function CampaignsPage() {
               onChange={e => setForm(prev => ({ ...prev, targetViewsForFYP: sanitizeNumberInput(e.target.value) }))}
               placeholder="Enter minimum views to mark post as FYP"
               required
-              min="1"
+              min="0"
             />
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
@@ -482,7 +487,7 @@ export default function CampaignsPage() {
                     onChange={e => setCampaignKpis(prev => ({ ...prev, [cat]: sanitizeNumberInput(e.target.value) }))}
                     placeholder="Target"
                     required
-                    min="1"
+                    min="0"
                   />
                 ))}
               </div>
@@ -555,6 +560,7 @@ export default function CampaignsPage() {
                                 },
                               }))}
                               placeholder="Target"
+                              min="0"
                             />
                           ))}
                         </div>
