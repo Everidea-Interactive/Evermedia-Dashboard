@@ -21,7 +21,7 @@ type Account = {
   id: string;
   name: string;
   tiktokHandle?: string;
-  accountType: 'BRAND_SPECIFIC'|'CROSSBRAND';
+  accountType: 'CROSSBRAND' | 'NEW_PERSONA' | 'KOL' | 'PROXY';
   brand?: string;
   notes?: string;
   campaigns?: Campaign[];
@@ -48,7 +48,7 @@ export default function AccountsPage() {
   const [form, setForm] = useState({
     name: '',
     tiktokHandle: '',
-    accountType: '' as 'BRAND_SPECIFIC' | 'CROSSBRAND' | '',
+    accountType: '' as 'CROSSBRAND' | 'NEW_PERSONA' | 'KOL' | 'PROXY' | '',
     notes: '',
     campaignIds: [] as string[],
   });
@@ -222,8 +222,10 @@ export default function AccountsPage() {
           <div className="sm:col-span-2"><Input label="Search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Name or handle" /></div>
           <Select label="Type" value={type} onChange={e => setType(e.target.value)}>
             <option value="">All</option>
-            <option>BRAND_SPECIFIC</option>
             <option>CROSSBRAND</option>
+            <option>NEW_PERSONA</option>
+            <option>KOL</option>
+            <option>PROXY</option>
           </Select>
           <Select label="Crossbrand" value={crossbrand} onChange={e => setCrossbrand(e.target.value)}>
             <option value="">All</option>
@@ -252,12 +254,14 @@ export default function AccountsPage() {
             <Select
               label="Account Type"
               value={form.accountType}
-              onChange={e => setForm(prev => ({ ...prev, accountType: e.target.value as 'BRAND_SPECIFIC' | 'CROSSBRAND' }))}
+              onChange={e => setForm(prev => ({ ...prev, accountType: e.target.value as 'CROSSBRAND' | 'NEW_PERSONA' | 'KOL' | 'PROXY' }))}
               required
             >
               <option value="">Select type</option>
-              <option value="BRAND_SPECIFIC">BRAND_SPECIFIC</option>
               <option value="CROSSBRAND">CROSSBRAND</option>
+              <option value="NEW_PERSONA">New Persona</option>
+              <option value="KOL">KOL</option>
+              <option value="PROXY">Proxy</option>
             </Select>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Campaigns</label>

@@ -76,7 +76,7 @@ async function main() {
 
   // Accounts
   const accounts = [
-    { id: 'acc1', name: 'Brand Alpha', accountType: 'BRAND_SPECIFIC', tiktokHandle: '@brandalpha' },
+    { id: 'acc1', name: 'Brand Alpha', accountType: 'NEW_PERSONA', tiktokHandle: '@brandalpha' },
     { id: 'acc2', name: 'Brand Beta', accountType: 'CROSSBRAND', tiktokHandle: '@brandbeta' },
     { id: 'acc3', name: 'General Channel', accountType: 'CROSSBRAND', tiktokHandle: '@general' },
   ];

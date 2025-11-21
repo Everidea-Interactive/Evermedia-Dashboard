@@ -69,8 +69,8 @@ type FilterState = {
   picPostingId: string;
 };
 
-const CONTENT_CATEGORY_OPTIONS = ['Teaser', 'BTS', 'Product Highlight', 'Tutorial', 'Story', 'Review'];
-const STATUS_OPTIONS = ['PLANNED', 'SCHEDULED', 'PUBLISHED', 'COMPLETED', 'CANCELLED'];
+const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Event', 'Topik Sensitive', 'Sosok/Quotes/Film', 'Storytell', 'Edukasi Product'];
+const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
 
 export default function AllPostsPage() {
   const { token } = useAuth();
@@ -593,11 +593,8 @@ export default function AllPostsPage() {
                 onChange={(e) => setEditForm(prev => ({ ...prev, contentType: e.target.value }))}
               >
                 <option value="">Select type</option>
+                <option value="Slide">Slide</option>
                 <option value="Video">Video</option>
-                <option value="Photo">Photo</option>
-                <option value="Reel">Reel</option>
-                <option value="Live">Live</option>
-                <option value="Story">Story</option>
               </Select>
             </div>
             <div>

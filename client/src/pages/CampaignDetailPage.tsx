@@ -48,7 +48,6 @@ export default function CampaignDetailPage() {
   const [editForm, setEditForm] = useState<any>({});
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [pics, setPics] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -71,7 +70,6 @@ export default function CampaignDetailPage() {
     api(`/campaigns/${id}/dashboard/engagement`, { token }).then(setEngagement);
     api(`/campaigns/${id}/kpis`, { token }).then(setKpis);
     api('/pics?active=true', { token }).then(setPics).catch(() => {});
-    api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [id, token]);
 
   const fetchPosts = useCallback(async () => {
@@ -407,11 +405,10 @@ export default function CampaignDetailPage() {
                 onChange={(e) => handleFilterChange('status', e.target.value)}
               >
                 <option value="">All Status</option>
-                <option value="PLANNED">PLANNED</option>
-                <option value="SCHEDULED">SCHEDULED</option>
-                <option value="PUBLISHED">PUBLISHED</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="CANCELLED">CANCELLED</option>
+                <option value="On Going">On Going</option>
+                <option value="Upload">Upload</option>
+                <option value="Archive">Archive</option>
+                <option value="Take Down">Take Down</option>
               </Select>
               <Select
                 label="Content Type"
@@ -419,11 +416,8 @@ export default function CampaignDetailPage() {
                 onChange={(e) => handleFilterChange('contentType', e.target.value)}
               >
                 <option value="">All Types</option>
+                <option value="Slide">Slide</option>
                 <option value="Video">Video</option>
-                <option value="Photo">Photo</option>
-                <option value="Reel">Reel</option>
-                <option value="Live">Live</option>
-                <option value="Story">Story</option>
               </Select>
               <Select
                 label="Content Category"
@@ -431,12 +425,13 @@ export default function CampaignDetailPage() {
                 onChange={(e) => handleFilterChange('contentCategory', e.target.value)}
               >
                 <option value="">All Categories</option>
-                <option value="Teaser">Teaser</option>
-                <option value="BTS">BTS</option>
-                <option value="Product Highlight">Product Highlight</option>
-                <option value="Tutorial">Tutorial</option>
-                <option value="Story">Story</option>
-                <option value="Review">Review</option>
+                <option value="Hardsell product">Hardsell product</option>
+                <option value="Trend/FOMO">Trend/FOMO</option>
+                <option value="Berita/Event">Berita/Event</option>
+                <option value="Topik Sensitive">Topik Sensitive</option>
+                <option value="Sosok/Quotes/Film">Sosok/Quotes/Film</option>
+                <option value="Storytell">Storytell</option>
+                <option value="Edukasi Product">Edukasi Product</option>
               </Select>
               <Input
                 label="Date From"
@@ -620,7 +615,7 @@ export default function CampaignDetailPage() {
                 if (!post) return;
                 setSubmittingEdit(true);
                 try {
-                  const updatedPost = await api(`/posts/${editingPostId}`, {
+                  await api(`/posts/${editingPostId}`, {
                     method: 'PUT',
                     token,
                     body: {
@@ -641,14 +636,7 @@ export default function CampaignDetailPage() {
                       totalShare: parseInt(editForm.totalShare || '0', 10) || 0,
                       totalSaved: parseInt(editForm.totalSaved || '0', 10) || 0,
                     },
-                  }) as any;
-                  
-                  // Helper to get PIC object or null
-                  const getPicObject = (picId: string | undefined) => {
-                    if (!picId) return null;
-                    const pic = pics.find((p: any) => p.id === picId);
-                    return pic ? { id: pic.id, name: pic.name } : null;
-                  };
+                  });
                   
                   // Refresh KPIs, engagement, and posts to ensure consistency with filters/pagination
                   const [refreshedKpis, refreshedEngagement] = await Promise.all([
@@ -705,11 +693,8 @@ export default function CampaignDetailPage() {
                 onChange={(e) => setEditForm((prev: any) => ({ ...prev, contentType: e.target.value }))}
               >
                 <option value="">Select type</option>
+                <option value="Slide">Slide</option>
                 <option value="Video">Video</option>
-                <option value="Photo">Photo</option>
-                <option value="Reel">Reel</option>
-                <option value="Live">Live</option>
-                <option value="Story">Story</option>
               </Select>
             </div>
             <div>
@@ -719,12 +704,13 @@ export default function CampaignDetailPage() {
                 onChange={(e) => setEditForm((prev: any) => ({ ...prev, contentCategory: e.target.value }))}
               >
                 <option value="">Select content category</option>
-                <option value="Teaser">Teaser</option>
-                <option value="BTS">BTS</option>
-                <option value="Product Highlight">Product Highlight</option>
-                <option value="Tutorial">Tutorial</option>
-                <option value="Story">Story</option>
-                <option value="Review">Review</option>
+                <option value="Hardsell product">Hardsell product</option>
+                <option value="Trend/FOMO">Trend/FOMO</option>
+                <option value="Berita/Event">Berita/Event</option>
+                <option value="Topik Sensitive">Topik Sensitive</option>
+                <option value="Sosok/Quotes/Film">Sosok/Quotes/Film</option>
+                <option value="Storytell">Storytell</option>
+                <option value="Edukasi Product">Edukasi Product</option>
               </Select>
             </div>
           </div>
@@ -780,11 +766,10 @@ export default function CampaignDetailPage() {
                 onChange={(e) => setEditForm((prev: any) => ({ ...prev, status: e.target.value }))}
               >
                 <option value="">Select status</option>
-                <option value="PLANNED">PLANNED</option>
-                <option value="SCHEDULED">SCHEDULED</option>
-                <option value="PUBLISHED">PUBLISHED</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="CANCELLED">CANCELLED</option>
+                <option value="On Going">On Going</option>
+                <option value="Upload">Upload</option>
+                <option value="Archive">Archive</option>
+                <option value="Take Down">Take Down</option>
               </Select>
             </div>
             <div>

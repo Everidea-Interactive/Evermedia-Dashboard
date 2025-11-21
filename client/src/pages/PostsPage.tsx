@@ -57,7 +57,7 @@ type PicOption = {
 type AccountOption = {
   id: string;
   name: string;
-  accountType: 'BRAND_SPECIFIC' | 'CROSSBRAND';
+  accountType: 'CROSSBRAND' | 'NEW_PERSONA' | 'KOL' | 'PROXY';
 };
 
 type FormState = {
@@ -88,9 +88,9 @@ type FormMessage = {
   text: string;
 };
 
-const CONTENT_CATEGORY_OPTIONS = ['Teaser', 'BTS', 'Product Highlight', 'Tutorial', 'Story', 'Review'];
-const CONTENT_TYPE_OPTIONS = ['Video', 'Photo', 'Reel', 'Live', 'Story'];
-const STATUS_OPTIONS = ['PLANNED', 'SCHEDULED', 'PUBLISHED', 'COMPLETED', 'CANCELLED'];
+const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Event', 'Topik Sensitive', 'Sosok/Quotes/Film', 'Storytell', 'Edukasi Product'];
+const CONTENT_TYPE_OPTIONS = ['Slide', 'Video'];
+const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
 
 // Helper function to remove leading zeros from number input
 const sanitizeNumberInput = (value: string): string => {
@@ -311,7 +311,7 @@ export default function PostsPage() {
       if (!accountToUse) {
         const accountPayload = {
           name: form.accountName,
-          accountType: form.accountType || 'BRAND_SPECIFIC',
+          accountType: form.accountType || 'CROSSBRAND',
         };
         const created = await api('/accounts', { method: 'POST', token, body: accountPayload }) as AccountOption;
         accountToUse = created;
@@ -614,8 +614,10 @@ export default function PostsPage() {
                 required
               >
                 <option value="">Select type (auto detects match)</option>
-                <option value="BRAND_SPECIFIC">BRAND_SPECIFIC</option>
                 <option value="CROSSBRAND">CROSSBRAND</option>
+                <option value="NEW_PERSONA">New Persona</option>
+                <option value="KOL">KOL</option>
+                <option value="PROXY">Proxy</option>
               </Select>
             </div>
           </div>
@@ -1069,7 +1071,7 @@ export default function PostsPage() {
               <Select
                 label="Ads On Music"
                 value={editForm.adsOnMusic || 'false'}
-                onChange={(e) => setEditForm(prev => ({ ...prev, adsOnMusic: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, adsOnMusic: e.target.value as 'true' | 'false' }))}
               >
                 <option value="false">No</option>
                 <option value="true">Yes</option>
@@ -1079,7 +1081,7 @@ export default function PostsPage() {
               <Select
                 label="Yellow Cart"
                 value={editForm.yellowCart || 'false'}
-                onChange={(e) => setEditForm(prev => ({ ...prev, yellowCart: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, yellowCart: e.target.value as 'true' | 'false' }))}
               >
                 <option value="false">No</option>
                 <option value="true">Yes</option>
