@@ -298,21 +298,63 @@ router.get('/:id/kpis', async (req, res) => {
   }));
 });
 
-// Convenience: /api/campaigns/:id/posts with filters
+// Convenience: /api/campaigns/:id/posts with filters and pagination
 router.get('/:id/posts', async (req, res) => {
   const id = req.params.id;
-  const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
+  const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category, contentType, limit, offset } = req.query as any;
   
+  // Build base query for filtering
+  let countQuery = supabase.from('Post').select('*', { count: 'exact', head: true }).eq('campaignId', id);
   let query = supabase.from('Post').select('*').eq('campaignId', id);
-  if (accountId) query = query.eq('accountId', accountId);
-  if (status) query = query.ilike('status', `%${String(status)}%`);
-  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
-  if (dateFrom) query = query.gte('postDate', String(dateFrom));
-  if (dateTo) query = query.lte('postDate', String(dateTo));
-  if (picTalentId) query = query.eq('picTalentId', picTalentId);
-  if (picEditorId) query = query.eq('picEditorId', picEditorId);
-  if (picPostingId) query = query.eq('picPostingId', picPostingId);
   
+  if (accountId) {
+    countQuery = countQuery.eq('accountId', accountId);
+    query = query.eq('accountId', accountId);
+  }
+  if (status) {
+    countQuery = countQuery.ilike('status', `%${String(status)}%`);
+    query = query.ilike('status', `%${String(status)}%`);
+  }
+  if (category) {
+    countQuery = countQuery.ilike('contentCategory', `%${String(category)}%`);
+    query = query.ilike('contentCategory', `%${String(category)}%`);
+  }
+  if (contentType) {
+    countQuery = countQuery.ilike('contentType', `%${String(contentType)}%`);
+    query = query.ilike('contentType', `%${String(contentType)}%`);
+  }
+  if (dateFrom) {
+    countQuery = countQuery.gte('postDate', String(dateFrom));
+    query = query.gte('postDate', String(dateFrom));
+  }
+  if (dateTo) {
+    countQuery = countQuery.lte('postDate', String(dateTo));
+    query = query.lte('postDate', String(dateTo));
+  }
+  if (picTalentId) {
+    countQuery = countQuery.eq('picTalentId', picTalentId);
+    query = query.eq('picTalentId', picTalentId);
+  }
+  if (picEditorId) {
+    countQuery = countQuery.eq('picEditorId', picEditorId);
+    query = query.eq('picEditorId', picEditorId);
+  }
+  if (picPostingId) {
+    countQuery = countQuery.eq('picPostingId', picPostingId);
+    query = query.eq('picPostingId', picPostingId);
+  }
+  
+  // Get total count
+  const { count, error: countError } = await countQuery;
+  if (countError) return res.status(500).json({ error: countError.message });
+  
+  // Apply pagination
+  const limitNum = limit ? parseInt(String(limit), 10) : undefined;
+  const offsetNum = offset ? parseInt(String(offset), 10) : undefined;
+  if (limitNum !== undefined) query = query.limit(limitNum);
+  if (offsetNum !== undefined) query = query.range(offsetNum, offsetNum + (limitNum || 0) - 1);
+  
+  // Apply ordering
   const { data: posts, error } = await query.order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   
@@ -340,7 +382,14 @@ router.get('/:id/posts', async (req, res) => {
       picPosting: p.picPostingId ? picMap.get(p.picPostingId) || null : null,
     };
   });
-  res.json(mapped);
+  
+  // Return paginated response
+  res.json({
+    posts: mapped,
+    total: count || 0,
+    limit: limitNum,
+    offset: offsetNum || 0,
+  });
 });
 
 router.delete('/:id/accounts/:accountId', async (req, res) => {

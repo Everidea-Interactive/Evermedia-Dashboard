@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -41,23 +41,91 @@ export default function CampaignDetailPage() {
   const [engagement, setEngagement] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
+  const [postsTotal, setPostsTotal] = useState(0);
+  const [postsLoading, setPostsLoading] = useState(false);
   const [accountRemoving, setAccountRemoving] = useState<Record<string, boolean>>({});
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [pics, setPics] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [postFilters, setPostFilters] = useState({
+    accountId: '',
+    status: '',
+    contentType: '',
+    contentCategory: '',
+    dateFrom: '',
+    dateTo: '',
+  });
+  const [postPagination, setPostPagination] = useState({
+    limit: 5,
+    offset: 0,
+  });
 
   useEffect(() => {
     if (!id) return;
     api(`/campaigns/${id}`, { token }).then(setCampaign);
     api(`/campaigns/${id}/dashboard/engagement`, { token }).then(setEngagement);
     api(`/campaigns/${id}/kpis`, { token }).then(setKpis);
-    api(`/campaigns/${id}/posts`, { token }).then(setPosts);
     api('/pics?active=true', { token }).then(setPics).catch(() => {});
+    api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [id, token]);
+
+  const fetchPosts = useCallback(async () => {
+    if (!id) return;
+    setPostsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (postFilters.accountId) params.append('accountId', postFilters.accountId);
+      if (postFilters.status) params.append('status', postFilters.status);
+      if (postFilters.contentType) params.append('contentType', postFilters.contentType);
+      if (postFilters.contentCategory) params.append('category', postFilters.contentCategory);
+      if (postFilters.dateFrom) params.append('dateFrom', postFilters.dateFrom);
+      if (postFilters.dateTo) params.append('dateTo', postFilters.dateTo);
+      params.append('limit', String(postPagination.limit));
+      params.append('offset', String(postPagination.offset));
+
+      const response = await api(`/campaigns/${id}/posts?${params.toString()}`, { token });
+      if (response.posts) {
+        setPosts(response.posts);
+        setPostsTotal(response.total || 0);
+      } else {
+        // Fallback for old API format
+        setPosts(Array.isArray(response) ? response : []);
+        setPostsTotal(Array.isArray(response) ? response.length : 0);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch posts:', error);
+      setPosts([]);
+      setPostsTotal(0);
+    } finally {
+      setPostsLoading(false);
+    }
+  }, [id, token, postFilters, postPagination]);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  const handleFilterChange = (key: string, value: string) => {
+    setPostFilters((prev) => ({ ...prev, [key]: value }));
+    setPostPagination((prev) => ({ ...prev, offset: 0 })); // Reset to first page when filtering
+  };
+
+  const handleResetFilters = () => {
+    setPostFilters({
+      accountId: '',
+      status: '',
+      contentType: '',
+      contentCategory: '',
+      dateFrom: '',
+      dateTo: '',
+    });
+    setPostPagination((prev) => ({ ...prev, offset: 0 }));
+  };
 
   const handleAccountRemove = async (accountId: string) => {
     if (!id) return;
@@ -312,17 +380,94 @@ export default function CampaignDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">
           <div>
             <h2 className="text-base sm:text-lg font-semibold">Posts overview</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{posts.length} posts · {totalViews.toLocaleString()} views · {totalLikes.toLocaleString()} likes</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{postsTotal} posts · {totalViews.toLocaleString()} views · {totalLikes.toLocaleString()} likes</p>
           </div>
           <Link to={`/campaigns/${campaign.id}/posts`} className="text-xs sm:text-sm hover:underline transition-colors self-start sm:self-auto" style={{ color: '#6366f1' }}>
             View all posts
           </Link>
         </div>
         <Card>
+          <div className="mb-4 px-2 sm:px-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
+              <Select
+                label="Account"
+                value={postFilters.accountId}
+                onChange={(e) => handleFilterChange('accountId', e.target.value)}
+              >
+                <option value="">All Accounts</option>
+                {(campaign?.accounts || []).map((account: any) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Status"
+                value={postFilters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+              >
+                <option value="">All Status</option>
+                <option value="PLANNED">PLANNED</option>
+                <option value="SCHEDULED">SCHEDULED</option>
+                <option value="PUBLISHED">PUBLISHED</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </Select>
+              <Select
+                label="Content Type"
+                value={postFilters.contentType}
+                onChange={(e) => handleFilterChange('contentType', e.target.value)}
+              >
+                <option value="">All Types</option>
+                <option value="Video">Video</option>
+                <option value="Photo">Photo</option>
+                <option value="Reel">Reel</option>
+                <option value="Live">Live</option>
+                <option value="Story">Story</option>
+              </Select>
+              <Select
+                label="Content Category"
+                value={postFilters.contentCategory}
+                onChange={(e) => handleFilterChange('contentCategory', e.target.value)}
+              >
+                <option value="">All Categories</option>
+                <option value="Teaser">Teaser</option>
+                <option value="BTS">BTS</option>
+                <option value="Product Highlight">Product Highlight</option>
+                <option value="Tutorial">Tutorial</option>
+                <option value="Story">Story</option>
+                <option value="Review">Review</option>
+              </Select>
+              <Input
+                label="Date From"
+                type="date"
+                value={postFilters.dateFrom}
+                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+              />
+              <Input
+                label="Date To"
+                type="date"
+                value={postFilters.dateTo}
+                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button
+                variant="outline"
+                onClick={handleResetFilters}
+                className="text-xs sm:text-sm"
+              >
+                Reset Filters
+              </Button>
+            </div>
+          </div>
           <div className="card-inner-table">
-            {posts.length === 0 ? (
-              <div className="text-sm p-4 sm:p-6" style={{ color: 'var(--text-tertiary)' }}>No posts yet.</div>
+            {postsLoading ? (
+              <div className="text-sm p-4 sm:p-6" style={{ color: 'var(--text-tertiary)' }}>Loading posts...</div>
+            ) : posts.length === 0 ? (
+              <div className="text-sm p-4 sm:p-6" style={{ color: 'var(--text-tertiary)' }}>No posts found.</div>
             ) : (
+              <>
               <TableWrap>
                   <Table>
                     <THead>
@@ -352,7 +497,7 @@ export default function CampaignDetailPage() {
                     <tbody>
                       {posts.map((p: any, index) => (
                         <TR key={p.id}>
-                          <TD>{index + 1}</TD>
+                          <TD>{postPagination.offset + index + 1}</TD>
                           <TD>
                             <RequirePermission permission={canEditPost}>
                               <Button
@@ -417,6 +562,32 @@ export default function CampaignDetailPage() {
                     </tbody>
                   </Table>
                 </TableWrap>
+                {Math.ceil(postsTotal / postPagination.limit) > 1 && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
+                    <div className="text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      Showing {postPagination.offset + 1} - {Math.min(postPagination.offset + postPagination.limit, postsTotal)} of {postsTotal}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setPostPagination((prev) => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                        disabled={postPagination.offset === 0 || postsLoading}
+                        className="text-xs sm:text-sm"
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setPostPagination((prev) => ({ ...prev, offset: prev.offset + prev.limit }))}
+                        disabled={postPagination.offset + postPagination.limit >= postsTotal || postsLoading}
+                        className="text-xs sm:text-sm"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Card>
@@ -479,30 +650,16 @@ export default function CampaignDetailPage() {
                     return pic ? { id: pic.id, name: pic.name } : null;
                   };
                   
-                  // Update the post in the list without reloading all posts
-                  setPosts(prevPosts => prevPosts.map((p: any) => {
-                    if (p.id === editingPostId) {
-                      // Preserve account, campaign, and update PIC objects from form
-                      return {
-                        ...updatedPost,
-                        account: p.account,
-                        campaign: p.campaign,
-                        picTalent: getPicObject(editForm.picTalentId),
-                        picEditor: getPicObject(editForm.picEditorId),
-                        picPosting: getPicObject(editForm.picPostingId),
-                        postDay: updatedPost.postDate ? new Date(updatedPost.postDate).toLocaleDateString('en-US', { weekday: 'long' }) : p.postDay,
-                      };
-                    }
-                    return p;
-                  }));
-                  
-                  // Only refresh KPIs and engagement, not posts
+                  // Refresh KPIs, engagement, and posts to ensure consistency with filters/pagination
                   const [refreshedKpis, refreshedEngagement] = await Promise.all([
                     api(`/campaigns/${id}/kpis`, { token }),
                     api(`/campaigns/${id}/dashboard/engagement`, { token }),
                   ]);
                   setKpis(refreshedKpis);
                   setEngagement(refreshedEngagement);
+                  
+                  // Refetch posts to ensure consistency with filters and pagination
+                  await fetchPosts();
                   
                   setEditingPostId(null);
                   setEditForm({});
