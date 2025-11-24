@@ -215,6 +215,10 @@ html.dark .btn-primary-green {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 }
+html.dark .select option {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
 
 .badge {
   background-color: var(--bg-tertiary);

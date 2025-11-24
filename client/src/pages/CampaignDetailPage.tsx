@@ -32,6 +32,10 @@ const categoryLabels: Record<string, string> = {
   YELLOW_CART: 'Yellow Cart',
 };
 
+const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Event', 'Topik Sensitive', 'Sosok/Quotes/Film', 'Storytell', 'Edukasi Product'];
+const CONTENT_TYPE_OPTIONS = ['Slide', 'Video'];
+const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
+
 // Helper function to remove leading zeros from number input
 const sanitizeNumberInput = (value: string): string => {
   if (value === '' || value === '0') return value;
@@ -44,7 +48,7 @@ export default function CampaignDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { canManageCampaigns, canDelete, canEditPost } = usePermissions();
+  const { canManageCampaigns, canDelete, canEditPost, canDeletePost } = usePermissions();
   const [campaign, setCampaign] = useState<any>(null);
   const [engagement, setEngagement] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
@@ -52,12 +56,15 @@ export default function CampaignDetailPage() {
   const [postsTotal, setPostsTotal] = useState(0);
   const [postsLoading, setPostsLoading] = useState(false);
   const [accountRemoving, setAccountRemoving] = useState<Record<string, boolean>>({});
-  const [editingPostId, setEditingPostId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<any>({});
-  const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ postId: string; field: string } | null>(null);
+  const [cellEditValue, setCellEditValue] = useState<string>('');
+  const [savingCell, setSavingCell] = useState<string | null>(null);
   const [pics, setPics] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deletePostConfirm, setDeletePostConfirm] = useState<{ id: string; title: string } | null>(null);
+  const [deletingPost, setDeletingPost] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [postFilters, setPostFilters] = useState({
     accountId: '',
@@ -78,6 +85,7 @@ export default function CampaignDetailPage() {
     api(`/campaigns/${id}/dashboard/engagement`, { token }).then(setEngagement);
     api(`/campaigns/${id}/kpis`, { token }).then(setKpis);
     api('/pics?active=true', { token }).then(setPics).catch(() => {});
+    api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [id, token]);
 
   const fetchPosts = useCallback(async () => {
@@ -133,6 +141,292 @@ export default function CampaignDetailPage() {
     setPostPagination((prev) => ({ ...prev, offset: 0 }));
   };
 
+  // Define the order of editable columns
+  const EDITABLE_FIELDS = [
+    'accountId',
+    'postDate',
+    'postTitle',
+    'contentType',
+    'contentCategory',
+    'campaignCategory',
+    'picTalentId',
+    'picEditorId',
+    'picPostingId',
+    'contentLink',
+    'adsOnMusic',
+    'yellowCart',
+    'status',
+    'totalView',
+    'totalLike',
+    'totalComment',
+    'totalShare',
+    'totalSaved',
+  ] as const;
+
+  const talentPics = useMemo(() => pics.filter((pic: any) => pic.roles?.some((role: string) => role.toUpperCase() === 'TALENT')), [pics]);
+  const editorPics = useMemo(() => pics.filter((pic: any) => pic.roles?.some((role: string) => role.toUpperCase() === 'EDITOR')), [pics]);
+  const postingPics = useMemo(() => pics.filter((pic: any) => pic.roles?.some((role: string) => role.toUpperCase() === 'POSTING')), [pics]);
+
+  const handleCellClick = (postId: string, field: string, currentValue: string | number | boolean) => {
+    let valueToEdit = '';
+    if (typeof currentValue === 'boolean') {
+      valueToEdit = currentValue ? 'true' : 'false';
+    } else if (field === 'postDate' && currentValue) {
+      // Format date as YYYY-MM-DD for date input
+      valueToEdit = new Date(currentValue).toISOString().split('T')[0];
+    } else if (currentValue !== null && currentValue !== undefined) {
+      valueToEdit = String(currentValue);
+    }
+    setEditingCell({ postId, field });
+    setCellEditValue(valueToEdit);
+  };
+
+  const handleCellBlur = async (postId: string, field: string, skipClose?: boolean): Promise<any | null> => {
+    if (!editingCell || editingCell.postId !== postId || editingCell.field !== field) return null;
+    
+    const post = posts.find((p: any) => p.id === postId);
+    if (!post) return null;
+
+    // Check if value actually changed
+    let hasChanged = false;
+    let newValue: any = cellEditValue;
+
+    if (field === 'postDate') {
+      const currentDate = post.postDate ? new Date(post.postDate).toISOString().split('T')[0] : '';
+      hasChanged = cellEditValue !== currentDate;
+      if (!hasChanged) {
+        if (!skipClose) setEditingCell(null);
+        return null;
+      }
+    } else if (field === 'accountId') {
+      hasChanged = cellEditValue !== post.accountId;
+    } else if (field === 'postTitle' || field === 'contentLink') {
+      hasChanged = cellEditValue !== (post[field] || '');
+    } else if (field === 'contentType' || field === 'contentCategory' || field === 'status' || field === 'campaignCategory') {
+      hasChanged = cellEditValue !== (post[field] || '');
+    } else if (field === 'picTalentId' || field === 'picEditorId' || field === 'picPostingId') {
+      const currentId = post[field] || '';
+      hasChanged = cellEditValue !== currentId;
+    } else if (field === 'adsOnMusic' || field === 'yellowCart') {
+      const currentBool = post[field] ? 'true' : 'false';
+      hasChanged = cellEditValue !== currentBool;
+      newValue = cellEditValue === 'true';
+    } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
+      const currentNum = post[field] || 0;
+      const newNum = parseInt(cellEditValue || '0', 10) || 0;
+      hasChanged = newNum !== currentNum;
+      newValue = newNum;
+    }
+
+    if (!hasChanged) {
+      if (!skipClose) setEditingCell(null);
+      return null;
+    }
+
+    setSavingCell(`${postId}-${field}`);
+    try {
+      const updatePayload: any = {};
+      
+      if (field === 'postDate') {
+        updatePayload.postDate = new Date(cellEditValue).toISOString();
+      } else if (field === 'accountId') {
+        updatePayload.accountId = cellEditValue || undefined;
+      } else if (field === 'postTitle') {
+        updatePayload.postTitle = cellEditValue;
+      } else if (field === 'contentLink') {
+        updatePayload.contentLink = cellEditValue;
+      } else if (field === 'contentType') {
+        updatePayload.contentType = cellEditValue;
+      } else if (field === 'contentCategory') {
+        updatePayload.contentCategory = cellEditValue;
+      } else if (field === 'campaignCategory') {
+        updatePayload.campaignCategory = cellEditValue;
+      } else if (field === 'status') {
+        updatePayload.status = cellEditValue;
+      } else if (field === 'picTalentId') {
+        updatePayload.picTalentId = cellEditValue || undefined;
+      } else if (field === 'picEditorId') {
+        updatePayload.picEditorId = cellEditValue || undefined;
+      } else if (field === 'picPostingId') {
+        updatePayload.picPostingId = cellEditValue || undefined;
+      } else if (field === 'adsOnMusic') {
+        updatePayload.adsOnMusic = newValue;
+      } else if (field === 'yellowCart') {
+        updatePayload.yellowCart = newValue;
+      } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
+        updatePayload[field] = newValue;
+      }
+
+      const updatedPost = await api(`/posts/${postId}`, {
+        method: 'PUT',
+        token,
+        body: updatePayload,
+      });
+
+      // Helper functions to get related objects
+      const getPicObject = (picId: string | undefined) => {
+        if (!picId) return null;
+        const pic = pics.find((p: any) => p.id === picId);
+        return pic ? { id: pic.id, name: pic.name } : null;
+      };
+      
+      const getAccountObject = (accountId: string | undefined) => {
+        if (!accountId) return null;
+        const account = accounts.find((a: any) => a.id === accountId);
+        return account ? { id: account.id, name: account.name } : null;
+      };
+      
+      // Build updated post with relations
+      const updatedPostWithRelations: any = {
+        ...updatedPost,
+        account: updatedPost.accountId ? getAccountObject(updatedPost.accountId) : post.account,
+        picTalent: updatedPost.picTalentId ? getPicObject(updatedPost.picTalentId) : post.picTalent,
+        picEditor: updatedPost.picEditorId ? getPicObject(updatedPost.picEditorId) : post.picEditor,
+        picPosting: updatedPost.picPostingId ? getPicObject(updatedPost.picPostingId) : post.picPosting,
+      };
+
+      // Update the post in the list
+      setPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
+        if (p.id === postId) {
+          return updatedPostWithRelations;
+        }
+        return p;
+      }));
+
+      // Refresh KPIs and engagement
+      const [refreshedKpis, refreshedEngagement] = await Promise.all([
+        api(`/campaigns/${id}/kpis`, { token }),
+        api(`/campaigns/${id}/dashboard/engagement`, { token }),
+      ]);
+      setKpis(refreshedKpis);
+      setEngagement(refreshedEngagement);
+
+      setToast({ message: 'Post updated successfully', type: 'success' });
+      return updatedPostWithRelations;
+    } catch (error: any) {
+      setToast({ message: error?.message || 'Failed to update post', type: 'error' });
+      return null;
+    } finally {
+      setSavingCell(null);
+      if (!skipClose) {
+        setEditingCell(null);
+      }
+    }
+  };
+
+  const findNextEditableCell = (currentPostIndex: number, currentField: string, direction: 'next' | 'prev'): { postIndex: number; field: string } | null => {
+    const currentFieldIndex = EDITABLE_FIELDS.indexOf(currentField as typeof EDITABLE_FIELDS[number]);
+    
+    if (direction === 'next') {
+      // Try next field in same row
+      if (currentFieldIndex < EDITABLE_FIELDS.length - 1) {
+        return { postIndex: currentPostIndex, field: EDITABLE_FIELDS[currentFieldIndex + 1] };
+      }
+      // Move to first field of next row
+      if (currentPostIndex < posts.length - 1) {
+        return { postIndex: currentPostIndex + 1, field: EDITABLE_FIELDS[0] };
+      }
+    } else {
+      // Try previous field in same row
+      if (currentFieldIndex > 0) {
+        return { postIndex: currentPostIndex, field: EDITABLE_FIELDS[currentFieldIndex - 1] };
+      }
+      // Move to last field of previous row
+      if (currentPostIndex > 0) {
+        return { postIndex: currentPostIndex - 1, field: EDITABLE_FIELDS[EDITABLE_FIELDS.length - 1] };
+      }
+    }
+    
+    return null;
+  };
+
+  const handleCellKeyDown = (e: React.KeyboardEvent, postId: string, field: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleCellBlur(postId, field);
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      
+      // Save current cell in background (don't wait for it)
+      void handleCellBlur(postId, field, true);
+      
+      // Navigate immediately using current data
+      const currentPostIndex = posts.findIndex((p: any) => p.id === postId);
+      
+      if (currentPostIndex === -1) {
+        setEditingCell(null);
+        return;
+      }
+      
+      // Optimistically update the current post with the edited value for navigation
+      const post = posts.find((p: any) => p.id === postId);
+      if (!post) {
+        setEditingCell(null);
+        return;
+      }
+      
+      // Create optimistic update for navigation
+      const optimisticPost: any = { ...post };
+      if (field === 'postDate') {
+        optimisticPost.postDate = new Date(cellEditValue).toISOString();
+      } else if (field === 'accountId') {
+        optimisticPost.accountId = cellEditValue || post.accountId;
+      } else if (field === 'postTitle' || field === 'contentLink') {
+        optimisticPost[field] = cellEditValue;
+      } else if (field === 'contentType' || field === 'contentCategory' || field === 'status' || field === 'campaignCategory') {
+        optimisticPost[field] = cellEditValue;
+      } else if (field === 'picTalentId' || field === 'picEditorId' || field === 'picPostingId') {
+        optimisticPost[field] = cellEditValue || undefined;
+      } else if (field === 'adsOnMusic' || field === 'yellowCart') {
+        optimisticPost[field] = cellEditValue === 'true';
+      } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
+        optimisticPost[field] = parseInt(cellEditValue || '0', 10) || 0;
+      }
+      
+      const optimisticPosts = posts.map((p: any) => p.id === postId ? optimisticPost : p);
+      
+      const direction = e.shiftKey ? 'prev' : 'next';
+      const nextCell = findNextEditableCell(currentPostIndex, field, direction);
+      
+      if (nextCell) {
+        const nextPost = optimisticPosts[nextCell.postIndex];
+        if (nextPost) {
+          // Get the current value for the next field
+          let currentValue: string | number | boolean = '';
+          
+          if (nextCell.field === 'accountId') {
+            currentValue = nextPost.accountId || '';
+          } else if (nextCell.field === 'picTalentId') {
+            currentValue = nextPost.picTalentId || '';
+          } else if (nextCell.field === 'picEditorId') {
+            currentValue = nextPost.picEditorId || '';
+          } else if (nextCell.field === 'picPostingId') {
+            currentValue = nextPost.picPostingId || '';
+          } else if (nextCell.field === 'postDate') {
+            currentValue = nextPost.postDate ? new Date(nextPost.postDate).toISOString().split('T')[0] : '';
+          } else if (nextCell.field === 'adsOnMusic' || nextCell.field === 'yellowCart') {
+            currentValue = nextPost[nextCell.field];
+          } else {
+            const fieldValue = nextPost[nextCell.field];
+            if (typeof fieldValue === 'boolean') {
+              currentValue = fieldValue;
+            } else if (typeof fieldValue === 'string' || typeof fieldValue === 'number') {
+              currentValue = fieldValue;
+            }
+          }
+          
+          // Navigate immediately
+          handleCellClick(nextPost.id, nextCell.field, currentValue);
+        }
+      } else {
+        // No next cell, close editing
+        setEditingCell(null);
+      }
+    }
+  };
+
   const handleAccountRemove = async (accountId: string) => {
     if (!id) return;
     setAccountRemoving((prev) => ({ ...prev, [accountId]: true }));
@@ -159,6 +453,35 @@ export default function CampaignDetailPage() {
     } finally {
       setDeleting(false);
       setDeleteConfirm(false);
+    }
+  };
+
+  const handleDeletePostClick = (post: any) => {
+    setDeletePostConfirm({ id: post.id, title: post.postTitle });
+  };
+
+  const handleDeletePostConfirm = async () => {
+    if (!deletePostConfirm || !id) return;
+    const { id: postId } = deletePostConfirm;
+    setDeletingPost(true);
+    try {
+      await api(`/posts/${postId}`, { method: 'DELETE', token });
+      await fetchPosts();
+      
+      // Refresh KPIs and engagement after deletion
+      const [refreshedKpis, refreshedEngagement] = await Promise.all([
+        api(`/campaigns/${id}/kpis`, { token }),
+        api(`/campaigns/${id}/dashboard/engagement`, { token }),
+      ]);
+      setKpis(refreshedKpis);
+      setEngagement(refreshedEngagement);
+      
+      setToast({ message: 'Post deleted successfully', type: 'success' });
+    } catch (error: any) {
+      setToast({ message: error?.message || 'Failed to delete post', type: 'error' });
+    } finally {
+      setDeletingPost(false);
+      setDeletePostConfirm(null);
     }
   };
 
@@ -483,12 +806,11 @@ export default function CampaignDetailPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
-                        <TH>Actions</TH>
                         <TH>Account</TH>
-                        <TH>Tanggal Posting</TH>
-                        <TH>Judul</TH>
-                        <TH>Jenis</TH>
-                        <TH>Kategori Konten</TH>
+                        <TH>Post Date</TH>
+                        <TH>Title</TH>
+                        <TH>Type</TH>
+                        <TH>Content Category</TH>
                         <TH>Campaign Category</TH>
                         <TH>PIC Talent</TH>
                         <TH>PIC Editor</TH>
@@ -503,75 +825,467 @@ export default function CampaignDetailPage() {
                         <TH>Shares</TH>
                         <TH>Saved</TH>
                         <TH>Engagement</TH>
+                        <TH>Actions</TH>
                       </TR>
                     </THead>
                     <tbody>
-                      {posts.map((p: any, index) => (
-                        <TR key={p.id}>
-                          <TD>{postPagination.offset + index + 1}</TD>
-                          <TD>
-                            <RequirePermission permission={canEditPost}>
-                              <Button
-                                onClick={() => {
-                                  setEditingPostId(p.id);
-                                  setEditForm({
-                                    postTitle: p.postTitle || '',
-                                    postDate: p.postDate ? new Date(p.postDate).toISOString().split('T')[0] : '',
-                                    contentType: p.contentType || '',
-                                    contentCategory: p.contentCategory || '',
-                                    campaignCategory: p.campaignCategory || '',
-                                    status: p.status || '',
-                                    picTalentId: p.picTalentId || '',
-                                    picEditorId: p.picEditorId || '',
-                                    picPostingId: p.picPostingId || '',
-                                    contentLink: p.contentLink || '',
-                                    adsOnMusic: p.adsOnMusic ? 'true' : 'false',
-                                    yellowCart: p.yellowCart ? 'true' : 'false',
-                                    totalView: p.totalView?.toString() ?? '',
-                                    totalLike: p.totalLike?.toString() ?? '',
-                                    totalComment: p.totalComment?.toString() ?? '',
-                                    totalShare: p.totalShare?.toString() ?? '',
-                                    totalSaved: p.totalSaved?.toString() ?? '',
-                                  });
-                                }}
-                                variant="ghost"
-                                color="blue"
-                                className="text-xs px-2 py-1"
-                                type="button"
+                      {posts.map((p: any, index) => {
+                        const isEditing = editingCell?.postId === p.id;
+                        const isSaving = savingCell?.startsWith(`${p.id}-`);
+                        const postCampaignCategoryOptions = Array.isArray(campaign?.categories) 
+                          ? campaign.categories.filter((cat: string) => cat).sort() 
+                          : [];
+                        
+                        return (
+                          <TR key={p.id}>
+                            <TD>{postPagination.offset + index + 1}</TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'accountId', p.accountId)}
                               >
-                                Edit
-                              </Button>
-                            </RequirePermission>
-                          </TD>
-                          <TD>{p.account?.name || '—'}</TD>
-                          <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
-                          <TD>{p.postTitle}</TD>
-                          <TD>{p.contentType}</TD>
-                          <TD>{p.contentCategory || '—'}</TD>
-                          <TD>{p.campaignCategory || '—'}</TD>
-                          <TD>{p.picTalent?.name || '—'}</TD>
-                          <TD>{p.picEditor?.name || '—'}</TD>
-                          <TD>{p.picPosting?.name || '—'}</TD>
-                          <TD>
-                            {p.contentLink ? (
-                              <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline transition-colors" style={{ color: '#6366f1' }}>
-                                Link
-                              </a>
-                            ) : '—'}
-                          </TD>
-                          <TD>{p.adsOnMusic ? 'Yes' : 'No'}</TD>
-                          <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
-                          <TD>
-                            <span className="badge">{p.status}</span>
-                          </TD>
-                          <TD>{p.totalView}</TD>
-                          <TD>{p.totalLike}</TD>
-                          <TD>{p.totalComment}</TD>
-                          <TD>{p.totalShare}</TD>
-                          <TD>{p.totalSaved}</TD>
-                          <TD>{((p.engagementRate ?? 0) * 100).toFixed(2)}%</TD>
-                        </TR>
-                      ))}
+                                {isEditing && editingCell?.field === 'accountId' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'accountId')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'accountId')}
+                                    autoFocus
+                                  >
+                                    {accounts.map((account) => (
+                                      <option key={account.id} value={account.id}>{account.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-accountId') ? 'opacity-50' : ''}>
+                                    {p.account?.name || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'postDate', p.postDate)}
+                              >
+                                {isEditing && editingCell?.field === 'postDate' ? (
+                                  <input
+                                    type="date"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'postDate')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'postDate')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-postDate') ? 'opacity-50' : ''}>
+                                    {new Date(p.postDate).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'postTitle', p.postTitle)}
+                              >
+                                {isEditing && editingCell?.field === 'postTitle' ? (
+                                  <input
+                                    type="text"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'postTitle')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'postTitle')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-postTitle') ? 'opacity-50' : ''}>
+                                    {p.postTitle}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'contentType', p.contentType)}
+                              >
+                                {isEditing && editingCell?.field === 'contentType' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'contentType')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentType')}
+                                    autoFocus
+                                  >
+                                    {CONTENT_TYPE_OPTIONS.map((type) => (
+                                      <option key={type} value={type}>{type}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-contentType') ? 'opacity-50' : ''}>
+                                    {p.contentType}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'contentCategory', p.contentCategory)}
+                              >
+                                {isEditing && editingCell?.field === 'contentCategory' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'contentCategory')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentCategory')}
+                                    autoFocus
+                                  >
+                                    {CONTENT_CATEGORY_OPTIONS.map((cat) => (
+                                      <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-contentCategory') ? 'opacity-50' : ''}>
+                                    {p.contentCategory || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'campaignCategory', p.campaignCategory || '')}
+                              >
+                                {isEditing && editingCell?.field === 'campaignCategory' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'campaignCategory')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignCategory')}
+                                    autoFocus
+                                  >
+                                    {postCampaignCategoryOptions.map((cat: string) => (
+                                      <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-campaignCategory') ? 'opacity-50' : ''}>
+                                    {p.campaignCategory || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'picTalentId', p.picTalentId || '')}
+                              >
+                                {isEditing && editingCell?.field === 'picTalentId' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'picTalentId')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picTalentId')}
+                                    autoFocus
+                                  >
+                                    {talentPics.map((pic: any) => (
+                                      <option key={pic.id} value={pic.id}>{pic.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-picTalentId') ? 'opacity-50' : ''}>
+                                    {p.picTalent?.name || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'picEditorId', p.picEditorId || '')}
+                              >
+                                {isEditing && editingCell?.field === 'picEditorId' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'picEditorId')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picEditorId')}
+                                    autoFocus
+                                  >
+                                    {editorPics.map((pic: any) => (
+                                      <option key={pic.id} value={pic.id}>{pic.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-picEditorId') ? 'opacity-50' : ''}>
+                                    {p.picEditor?.name || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'picPostingId', p.picPostingId || '')}
+                              >
+                                {isEditing && editingCell?.field === 'picPostingId' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'picPostingId')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picPostingId')}
+                                    autoFocus
+                                  >
+                                    {postingPics.map((pic: any) => (
+                                      <option key={pic.id} value={pic.id}>{pic.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-picPostingId') ? 'opacity-50' : ''}>
+                                    {p.picPosting?.name || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'contentLink', p.contentLink || '')}
+                              >
+                                {isEditing && editingCell?.field === 'contentLink' ? (
+                                  <input
+                                    type="text"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'contentLink')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentLink')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-contentLink') ? 'opacity-50' : ''}>
+                                    {p.contentLink ? (
+                                      <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400 transition-colors" style={{ color: '#6366f1' }}>
+                                        Link
+                                      </a>
+                                    ) : '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'adsOnMusic', p.adsOnMusic)}
+                              >
+                                {isEditing && editingCell?.field === 'adsOnMusic' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'adsOnMusic')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'adsOnMusic')}
+                                    autoFocus
+                                  >
+                                    <option value="false">No</option>
+                                    <option value="true">Yes</option>
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-adsOnMusic') ? 'opacity-50' : ''}>
+                                    {p.adsOnMusic ? 'Yes' : 'No'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'yellowCart', p.yellowCart)}
+                              >
+                                {isEditing && editingCell?.field === 'yellowCart' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'yellowCart')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'yellowCart')}
+                                    autoFocus
+                                  >
+                                    <option value="false">No</option>
+                                    <option value="true">Yes</option>
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-yellowCart') ? 'opacity-50' : ''}>
+                                    {p.yellowCart ? 'Yes' : 'No'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'status', p.status)}
+                              >
+                                {isEditing && editingCell?.field === 'status' ? (
+                                  <select
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'status')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'status')}
+                                    autoFocus
+                                  >
+                                    {STATUS_OPTIONS.map((status) => (
+                                      <option key={status} value={status}>{status}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={`badge ${isSaving && savingCell?.endsWith('-status') ? 'opacity-50' : ''}`}>
+                                    {p.status}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'totalView', p.totalView)}
+                              >
+                                {isEditing && editingCell?.field === 'totalView' ? (
+                                  <input
+                                    type="number"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalView')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalView')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalView') ? 'opacity-50' : ''}>
+                                    {p.totalView}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'totalLike', p.totalLike)}
+                              >
+                                {isEditing && editingCell?.field === 'totalLike' ? (
+                                  <input
+                                    type="number"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalLike')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalLike')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalLike') ? 'opacity-50' : ''}>
+                                    {p.totalLike}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'totalComment', p.totalComment)}
+                              >
+                                {isEditing && editingCell?.field === 'totalComment' ? (
+                                  <input
+                                    type="number"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalComment')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalComment')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalComment') ? 'opacity-50' : ''}>
+                                    {p.totalComment}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'totalShare', p.totalShare)}
+                              >
+                                {isEditing && editingCell?.field === 'totalShare' ? (
+                                  <input
+                                    type="number"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalShare')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalShare')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalShare') ? 'opacity-50' : ''}>
+                                    {p.totalShare}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'totalSaved', p.totalSaved)}
+                              >
+                                {isEditing && editingCell?.field === 'totalSaved' ? (
+                                  <input
+                                    type="number"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalSaved')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalSaved')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalSaved') ? 'opacity-50' : ''}>
+                                    {p.totalSaved}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>{((p.engagementRate ?? 0) * 100).toFixed(2)}%</TD>
+                            <TD>
+                              <div className="flex gap-1.5 justify-center">
+                                <RequirePermission permission={canDeletePost}>
+                                  <Button
+                                    onClick={() => handleDeletePostClick(p)}
+                                    variant="ghost"
+                                    color="red"
+                                    className="text-xs px-2 py-1"
+                                    type="button"
+                                  >
+                                    Delete
+                                  </Button>
+                                </RequirePermission>
+                              </div>
+                            </TD>
+                          </TR>
+                        );
+                      })}
                     </tbody>
                   </Table>
                 </TableWrap>
@@ -606,286 +1320,7 @@ export default function CampaignDetailPage() {
         </Card>
       </section>
 
-      <Dialog
-        open={!!editingPostId}
-        onClose={() => {
-          setEditingPostId(null);
-          setEditForm({});
-        }}
-        title="Edit Post"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditingPostId(null);
-                setEditForm({});
-              }}
-              disabled={submittingEdit}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={async (e: FormEvent) => {
-                e.preventDefault();
-                if (!editingPostId) return;
-                const post = posts.find((p: any) => p.id === editingPostId);
-                if (!post) return;
-                setSubmittingEdit(true);
-                try {
-                  await api(`/posts/${editingPostId}`, {
-                    method: 'PUT',
-                    token,
-                    body: {
-                      postDate: editForm.postDate || post.postDate,
-                      picTalentId: editForm.picTalentId || undefined,
-                      picEditorId: editForm.picEditorId || undefined,
-                      picPostingId: editForm.picPostingId || undefined,
-                      contentCategory: editForm.contentCategory || undefined,
-                      campaignCategory: editForm.campaignCategory || undefined,
-                      adsOnMusic: editForm.adsOnMusic === 'true',
-                      yellowCart: editForm.yellowCart === 'true',
-                      postTitle: editForm.postTitle || post.postTitle,
-                      contentType: editForm.contentType || undefined,
-                      status: editForm.status || undefined,
-                      contentLink: editForm.contentLink || undefined,
-                      totalView: parseInt(editForm.totalView || '0', 10) || 0,
-                      totalLike: parseInt(editForm.totalLike || '0', 10) || 0,
-                      totalComment: parseInt(editForm.totalComment || '0', 10) || 0,
-                      totalShare: parseInt(editForm.totalShare || '0', 10) || 0,
-                      totalSaved: parseInt(editForm.totalSaved || '0', 10) || 0,
-                    },
-                  });
-                  
-                  // Refresh KPIs, engagement, and posts to ensure consistency with filters/pagination
-                  const [refreshedKpis, refreshedEngagement] = await Promise.all([
-                    api(`/campaigns/${id}/kpis`, { token }),
-                    api(`/campaigns/${id}/dashboard/engagement`, { token }),
-                  ]);
-                  setKpis(refreshedKpis);
-                  setEngagement(refreshedEngagement);
-                  
-                  // Refetch posts to ensure consistency with filters and pagination
-                  await fetchPosts();
-                  
-                  setEditingPostId(null);
-                  setEditForm({});
-                } catch (error: any) {
-                  alert(error?.error || 'Failed to update post');
-                } finally {
-                  setSubmittingEdit(false);
-                }
-              }}
-              disabled={submittingEdit}
-              color="blue"
-            >
-              {submittingEdit ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </>
-        }
-      >
-        <form className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <Input
-                label="Post Title"
-                value={editForm.postTitle || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, postTitle: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <Input
-                label="Post Date"
-                type="date"
-                value={editForm.postDate || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, postDate: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Select
-                label="Content Type"
-                value={editForm.contentType || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, contentType: e.target.value }))}
-              >
-                <option value="">Select type</option>
-                <option value="Slide">Slide</option>
-                <option value="Video">Video</option>
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="Content Category"
-                value={editForm.contentCategory || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, contentCategory: e.target.value }))}
-              >
-                <option value="">Select content category</option>
-                <option value="Hardsell product">Hardsell product</option>
-                <option value="Trend/FOMO">Trend/FOMO</option>
-                <option value="Berita/Event">Berita/Event</option>
-                <option value="Topik Sensitive">Topik Sensitive</option>
-                <option value="Sosok/Quotes/Film">Sosok/Quotes/Film</option>
-                <option value="Storytell">Storytell</option>
-                <option value="Edukasi Product">Edukasi Product</option>
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="Campaign Category"
-                value={editForm.campaignCategory || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, campaignCategory: e.target.value }))}
-              >
-                <option value="">Select category</option>
-                {Array.isArray(campaign?.categories) && campaign.categories
-                  .filter((cat: string) => cat)
-                  .sort()
-                  .map((category: string) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Select
-                label="PIC Talent"
-                value={editForm.picTalentId || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, picTalentId: e.target.value }))}
-              >
-                <option value="">Select PIC</option>
-                {pics.filter((pic: any) => pic.roles?.some((r: string) => r.toUpperCase() === 'TALENT')).map((pic: any) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="PIC Editor"
-                value={editForm.picEditorId || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, picEditorId: e.target.value }))}
-              >
-                <option value="">Select Editor</option>
-                {pics.filter((pic: any) => pic.roles?.some((r: string) => r.toUpperCase() === 'EDITOR')).map((pic: any) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="PIC Posting"
-                value={editForm.picPostingId || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, picPostingId: e.target.value }))}
-              >
-                <option value="">Select Posting</option>
-                {pics.filter((pic: any) => pic.roles?.some((r: string) => r.toUpperCase() === 'POSTING')).map((pic: any) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Select
-                label="Status"
-                value={editForm.status || ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, status: e.target.value }))}
-              >
-                <option value="">Select status</option>
-                <option value="On Going">On Going</option>
-                <option value="Upload">Upload</option>
-                <option value="Archive">Archive</option>
-                <option value="Take Down">Take Down</option>
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="Ads On Music"
-                value={editForm.adsOnMusic || 'false'}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, adsOnMusic: e.target.value }))}
-              >
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="Yellow Cart"
-                value={editForm.yellowCart || 'false'}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, yellowCart: e.target.value }))}
-              >
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <Input
-              label="Content Link"
-              placeholder="https://..."
-              value={editForm.contentLink || ''}
-              onChange={(e) => setEditForm((prev: any) => ({ ...prev, contentLink: e.target.value }))}
-            />
-          </div>
-          <div className="grid gap-4 lg:grid-cols-5">
-            <div>
-              <Input
-                label="Views"
-                type="number"
-                placeholder="0"
-                value={editForm.totalView ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalView: sanitizeNumberInput(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Likes"
-                type="number"
-                placeholder="0"
-                value={editForm.totalLike ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalLike: sanitizeNumberInput(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Comments"
-                type="number"
-                placeholder="0"
-                value={editForm.totalComment ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalComment: sanitizeNumberInput(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Shares"
-                type="number"
-                placeholder="0"
-                value={editForm.totalShare ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalShare: sanitizeNumberInput(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <Input
-                label="Saved"
-                type="number"
-                placeholder="0"
-                value={editForm.totalSaved ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalSaved: sanitizeNumberInput(e.target.value) }))}
-              />
-            </div>
-          </div>
-        </form>
-      </Dialog>
+      {/* Edit Post Dialog removed - using inline editing */}
 
       <Dialog
         open={deleteConfirm}
@@ -907,6 +1342,38 @@ export default function CampaignDetailPage() {
         </p>
         <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
           This action cannot be undone. All associated posts, KPIs, and account links will also be deleted.
+        </p>
+      </Dialog>
+
+      <Dialog
+        open={!!deletePostConfirm}
+        onClose={() => setDeletePostConfirm(null)}
+        title="Delete Post"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setDeletePostConfirm(null)}
+              disabled={deletingPost}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              color="red"
+              onClick={handleDeletePostConfirm}
+              disabled={deletingPost}
+            >
+              {deletingPost ? 'Deleting...' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete <strong>"{deletePostConfirm?.title}"</strong>?
+        </p>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          This action cannot be undone. KPIs will be recalculated automatically after deletion.
         </p>
       </Dialog>
       {toast && (
