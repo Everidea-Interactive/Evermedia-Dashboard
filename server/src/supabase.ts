@@ -26,8 +26,9 @@ export const supabase: SupabaseClient = supabaseUrl && supabaseServiceKey
   : ({} as SupabaseClient); // Fallback to prevent immediate crash
 
 // Auth client that can safely manage user sessions without mutating the admin client's session
-export const supabaseAuth: SupabaseClient = supabaseUrl && (supabaseAnonKey || supabaseServiceKey)
-  ? createClient(supabaseUrl, supabaseAnonKey || supabaseServiceKey, clientOptions)
+const authKey = supabaseAnonKey || supabaseServiceKey;
+export const supabaseAuth: SupabaseClient = supabaseUrl && authKey
+  ? createClient(supabaseUrl, authKey, clientOptions)
   : ({} as SupabaseClient);
 
 // Helper function to handle Supabase errors

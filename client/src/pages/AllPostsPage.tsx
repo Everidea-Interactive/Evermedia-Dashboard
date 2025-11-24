@@ -137,6 +137,14 @@ const findPicIdByName = (value: string | undefined, pics: PicOption[]) => {
   return pics.find((pic) => pic.name.trim().toLowerCase() === normalizedValue)?.id;
 };
 
+// Helper function to remove leading zeros from number input
+const sanitizeNumberInput = (value: string): string => {
+  if (value === '' || value === '0') return value;
+  // Remove leading zeros but keep the number
+  const num = value.replace(/^0+/, '');
+  return num === '' ? '0' : num;
+};
+
 export default function AllPostsPage() {
   const { token } = useAuth();
   const { canAddPost, canEditPost, canDeletePost } = usePermissions();
@@ -745,17 +753,6 @@ export default function AllPostsPage() {
 
       {loading ? (
         <div className="skeleton h-10 w-full" />
-      ) : posts.length === 0 ? (
-        <Card>
-          <div className="py-12 text-center">
-            <p className="text-gray-500 text-lg">No posts found</p>
-            <p className="text-gray-400 text-sm mt-2">
-              {Object.values(filters).some(f => f !== '') 
-                ? 'Try adjusting your filters to see more results.'
-                : 'There are no posts available. Create a new post to get started.'}
-            </p>
-          </div>
-        </Card>
       ) : (
         <Card>
           <div className="card-inner-table">
@@ -782,114 +779,125 @@ export default function AllPostsPage() {
                 </Button>
               </div>
             </div>
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>NO</TH>
-                    <TH className="!text-center">Actions</TH>
-                    <TH>Campaign</TH>
-                    <TH>Campaign Category</TH>
-                    <TH>Account</TH>
-                    <TH>Hari Posting</TH>
-                    <TH>Tanggal Posting</TH>
-                    <TH>Judul</TH>
-                    <TH>Jenis</TH>
-                    <TH>Kategori Konten</TH>
-                    <TH>Status</TH>
-                    <TH>PIC Talent</TH>
-                    <TH>PIC Editor</TH>
-                    <TH>PIC Posting</TH>
-                    <TH>Content Link</TH>
-                    <TH>Ads on Music</TH>
-                    <TH>Keranjang Kuning</TH>
-                    <TH>TOTAL VIEW</TH>
-                    <TH>LIKE</TH>
-                    <TH>COMMENT</TH>
-                    <TH>SHARE</TH>
-                    <TH>SAVED</TH>
-                    <TH>Engagement Rate</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {posts.map((p, i) => {
-                    const picTalentName = p.picTalent?.name || (p.picTalentId ? pics.find(pic => pic.id === p.picTalentId)?.name : null) || '—';
-                    const picEditorName = p.picEditor?.name || (p.picEditorId ? pics.find(pic => pic.id === p.picEditorId)?.name : null) || '—';
-                    const picPostingName = p.picPosting?.name || (p.picPostingId ? pics.find(pic => pic.id === p.picPostingId)?.name : null) || '—';
-                    const accountName = p.account?.name || (p.accountId ? accounts.find(acc => acc.id === p.accountId)?.name : null) || '—';
-                    const campaignName = p.campaign?.name || (p.campaignId ? campaigns.find(c => c.id === p.campaignId)?.name : null) || '—';
-                    return (
-                      <TR key={p.id}>
-                        <TD>{i + 1}</TD>
-                        <TD>
-                          <div className="flex gap-1.5 justify-center">
-                            <RequirePermission permission={canEditPost}>
-                              <Button
-                                onClick={() => handleEditPost(p)}
-                                variant="ghost"
-                                color="blue"
-                                className="text-xs px-2 py-1"
-                                type="button"
-                              >
-                                Edit
-                              </Button>
-                            </RequirePermission>
-                            <RequirePermission permission={canDeletePost}>
-                              <Button
-                                onClick={() => handleDeleteClick(p)}
-                                variant="ghost"
-                                color="red"
-                                className="text-xs px-2 py-1"
-                                type="button"
-                              >
-                                Delete
-                              </Button>
-                            </RequirePermission>
-                          </div>
-                        </TD>
-                        <TD>
-                          {campaignName !== '—' ? (
-                            <Link to={`/campaigns/${p.campaignId}`} className="hover:underline" style={{ color: '#2563eb' }}>
-                              {campaignName}
-                            </Link>
-                          ) : (
-                            campaignName
-                          )}
-                        </TD>
-                        <TD>{p.campaignCategory || '—'}</TD>
-                        <TD>{accountName}</TD>
-                        <TD>{p.postDay}</TD>
-                        <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
-                        <TD>{p.postTitle}</TD>
-                        <TD>{p.contentType}</TD>
-                        <TD>{p.contentCategory}</TD>
-                        <TD>
-                          <span className="badge">{p.status}</span>
-                        </TD>
-                        <TD>{picTalentName}</TD>
-                        <TD>{picEditorName}</TD>
-                        <TD>{picPostingName}</TD>
-                        <TD>
-                          {p.contentLink ? (
-                            <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#2563eb' }}>
-                              Link
-                            </a>
-                          ) : '—'}
-                        </TD>
-                        <TD>{p.adsOnMusic ? 'Yes' : 'No'}</TD>
-                        <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
-                        <TD>{p.totalView}</TD>
-                        <TD>{p.totalLike}</TD>
-                        <TD>{p.totalComment}</TD>
-                        <TD>{p.totalShare}</TD>
-                        <TD>{p.totalSaved}</TD>
-                        <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
-                      </TR>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </TableWrap>
+            {posts.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-gray-500 text-lg">No posts found</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  {Object.values(filters).some(f => f !== '') 
+                    ? 'Try adjusting your filters to see more results.'
+                    : 'There are no posts available. Import posts from CSV to get started.'}
+                </p>
+              </div>
+            ) : (
+              <TableWrap>
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>NO</TH>
+                      <TH className="!text-center">Actions</TH>
+                      <TH>Campaign</TH>
+                      <TH>Campaign Category</TH>
+                      <TH>Account</TH>
+                      <TH>Hari Posting</TH>
+                      <TH>Tanggal Posting</TH>
+                      <TH>Judul</TH>
+                      <TH>Jenis</TH>
+                      <TH>Kategori Konten</TH>
+                      <TH>Status</TH>
+                      <TH>PIC Talent</TH>
+                      <TH>PIC Editor</TH>
+                      <TH>PIC Posting</TH>
+                      <TH>Content Link</TH>
+                      <TH>Ads on Music</TH>
+                      <TH>Keranjang Kuning</TH>
+                      <TH>TOTAL VIEW</TH>
+                      <TH>LIKE</TH>
+                      <TH>COMMENT</TH>
+                      <TH>SHARE</TH>
+                      <TH>SAVED</TH>
+                      <TH>Engagement Rate</TH>
+                    </TR>
+                  </THead>
+                  <tbody>
+                    {posts.map((p, i) => {
+                      const picTalentName = p.picTalent?.name || (p.picTalentId ? pics.find(pic => pic.id === p.picTalentId)?.name : null) || '—';
+                      const picEditorName = p.picEditor?.name || (p.picEditorId ? pics.find(pic => pic.id === p.picEditorId)?.name : null) || '—';
+                      const picPostingName = p.picPosting?.name || (p.picPostingId ? pics.find(pic => pic.id === p.picPostingId)?.name : null) || '—';
+                      const accountName = p.account?.name || (p.accountId ? accounts.find(acc => acc.id === p.accountId)?.name : null) || '—';
+                      const campaignName = p.campaign?.name || (p.campaignId ? campaigns.find(c => c.id === p.campaignId)?.name : null) || '—';
+                      return (
+                        <TR key={p.id}>
+                          <TD>{i + 1}</TD>
+                          <TD>
+                            <div className="flex gap-1.5 justify-center">
+                              <RequirePermission permission={canEditPost}>
+                                <Button
+                                  onClick={() => handleEditPost(p)}
+                                  variant="ghost"
+                                  color="blue"
+                                  className="text-xs px-2 py-1"
+                                  type="button"
+                                >
+                                  Edit
+                                </Button>
+                              </RequirePermission>
+                              <RequirePermission permission={canDeletePost}>
+                                <Button
+                                  onClick={() => handleDeleteClick(p)}
+                                  variant="ghost"
+                                  color="red"
+                                  className="text-xs px-2 py-1"
+                                  type="button"
+                                >
+                                  Delete
+                                </Button>
+                              </RequirePermission>
+                            </div>
+                          </TD>
+                          <TD>
+                            {campaignName !== '—' ? (
+                              <Link to={`/campaigns/${p.campaignId}`} className="hover:underline" style={{ color: '#2563eb' }}>
+                                {campaignName}
+                              </Link>
+                            ) : (
+                              campaignName
+                            )}
+                          </TD>
+                          <TD>{p.campaignCategory || '—'}</TD>
+                          <TD>{accountName}</TD>
+                          <TD>{p.postDay}</TD>
+                          <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
+                          <TD>{p.postTitle}</TD>
+                          <TD>{p.contentType}</TD>
+                          <TD>{p.contentCategory}</TD>
+                          <TD>
+                            <span className="badge">{p.status}</span>
+                          </TD>
+                          <TD>{picTalentName}</TD>
+                          <TD>{picEditorName}</TD>
+                          <TD>{picPostingName}</TD>
+                          <TD>
+                            {p.contentLink ? (
+                              <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#2563eb' }}>
+                                Link
+                              </a>
+                            ) : '—'}
+                          </TD>
+                          <TD>{p.adsOnMusic ? 'Yes' : 'No'}</TD>
+                          <TD>{p.yellowCart ? 'Yes' : 'No'}</TD>
+                          <TD>{p.totalView}</TD>
+                          <TD>{p.totalLike}</TD>
+                          <TD>{p.totalComment}</TD>
+                          <TD>{p.totalShare}</TD>
+                          <TD>{p.totalSaved}</TD>
+                          <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
+                        </TR>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrap>
+            )}
           </div>
         </Card>
       )}
@@ -1072,36 +1080,46 @@ export default function AllPostsPage() {
             <div>
               <Input
                 label="Views"
+                type="number"
+                placeholder="0"
                 value={editForm.totalView ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalView: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalView: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Likes"
+                type="number"
+                placeholder="0"
                 value={editForm.totalLike ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalLike: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Comments"
+                type="number"
+                placeholder="0"
                 value={editForm.totalComment ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalComment: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Shares"
+                type="number"
+                placeholder="0"
                 value={editForm.totalShare ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalShare: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Saved"
+                type="number"
+                placeholder="0"
                 value={editForm.totalSaved ?? ''}
-                onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: e.target.value }))}
+                onChange={(e) => setEditForm(prev => ({ ...prev, totalSaved: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
           </div>

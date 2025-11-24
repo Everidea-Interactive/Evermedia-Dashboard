@@ -32,6 +32,14 @@ const categoryLabels: Record<string, string> = {
   YELLOW_CART: 'Yellow Cart',
 };
 
+// Helper function to remove leading zeros from number input
+const sanitizeNumberInput = (value: string): string => {
+  if (value === '' || value === '0') return value;
+  // Remove leading zeros but keep the number
+  const num = value.replace(/^0+/, '');
+  return num === '' ? '0' : num;
+};
+
 export default function CampaignDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -458,9 +466,16 @@ export default function CampaignDetailPage() {
           </div>
           <div className="card-inner-table">
             {postsLoading ? (
-              <div className="text-sm p-4 sm:p-6" style={{ color: 'var(--text-tertiary)' }}>Loading posts...</div>
+              <div className="skeleton h-10 w-full" />
             ) : posts.length === 0 ? (
-              <div className="text-sm p-4 sm:p-6" style={{ color: 'var(--text-tertiary)' }}>No posts found.</div>
+              <div className="py-12 text-center">
+                <p className="text-gray-500 text-lg">No posts found</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  {Object.values(postFilters).some(f => f !== '') 
+                    ? 'Try adjusting your filters to see more results.'
+                    : 'There are no posts available for this campaign.'}
+                </p>
+              </div>
             ) : (
               <>
               <TableWrap>
@@ -826,36 +841,46 @@ export default function CampaignDetailPage() {
             <div>
               <Input
                 label="Views"
+                type="number"
+                placeholder="0"
                 value={editForm.totalView ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalView: e.target.value }))}
+                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalView: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Likes"
+                type="number"
+                placeholder="0"
                 value={editForm.totalLike ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalLike: e.target.value }))}
+                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalLike: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Comments"
+                type="number"
+                placeholder="0"
                 value={editForm.totalComment ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalComment: e.target.value }))}
+                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalComment: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Shares"
+                type="number"
+                placeholder="0"
                 value={editForm.totalShare ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalShare: e.target.value }))}
+                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalShare: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
             <div>
               <Input
                 label="Saved"
+                type="number"
+                placeholder="0"
                 value={editForm.totalSaved ?? ''}
-                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalSaved: e.target.value }))}
+                onChange={(e) => setEditForm((prev: any) => ({ ...prev, totalSaved: sanitizeNumberInput(e.target.value) }))}
               />
             </div>
           </div>

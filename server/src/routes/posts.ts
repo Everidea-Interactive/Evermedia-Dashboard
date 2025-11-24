@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
-import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
+import { recalculateKPIs, recalculateCampaignKPIs, initializeAccountKPIs } from '../utils/kpiRecalculation.js';
 import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const router = Router();
@@ -132,6 +132,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     .eq('B', accountId);
   
   // If no link exists, create it automatically
+  let wasNewlyLinked = false;
   if (!existingLinks || existingLinks.length === 0) {
     const { error: linkError } = await supabase
       .from('_CampaignToAccount')
@@ -146,7 +147,15 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
       if (!linkError.message.includes('duplicate') && !linkError.message.includes('unique')) {
         return res.status(500).json({ error: `Failed to link account to campaign: ${linkError.message}` });
       }
+    } else {
+      // Link was successfully created, mark as newly linked
+      wasNewlyLinked = true;
     }
+  }
+  
+  // If account was newly linked via post creation, initialize/reset KPIs to 0
+  if (wasNewlyLinked) {
+    await initializeAccountKPIs(campaignId, accountId);
   }
   
   const d = new Date(postDate);
@@ -245,6 +254,7 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
   if (error || !post) return res.status(404).json({ error: 'Not found' });
   
   // Check if account is linked to campaign, and link it if not
+  let wasNewlyLinked = false;
   if (post.campaignId && post.accountId) {
     const { data: existingLinks } = await supabase
       .from('_CampaignToAccount')
@@ -267,8 +277,16 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
         if (!linkError.message.includes('duplicate') && !linkError.message.includes('unique')) {
           console.error(`Failed to link account to campaign: ${linkError.message}`);
         }
+      } else {
+        // Link was successfully created, mark as newly linked
+        wasNewlyLinked = true;
       }
     }
+  }
+  
+  // If account was newly linked via post update, initialize/reset KPIs to 0
+  if (wasNewlyLinked && post.campaignId && post.accountId) {
+    await initializeAccountKPIs(post.campaignId, post.accountId);
   }
   
   // Recalculate KPIs for the campaign and account after post update

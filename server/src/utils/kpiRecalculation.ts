@@ -127,3 +127,44 @@ export async function recalculateCampaignKPIs(campaignId: string) {
   }
 }
 
+/**
+ * Initialize or reset KPIs for an account in a campaign.
+ * This is called when an account is automatically added to a campaign via post creation.
+ * All KPIs are set to target=0 and actual=0.
+ */
+export async function initializeAccountKPIs(campaignId: string, accountId: string) {
+  const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
+  
+  // Get existing KPIs for this campaign and account
+  const { data: existingKPIs } = await supabase
+    .from('KPI')
+    .select('*')
+    .eq('campaignId', campaignId)
+    .eq('accountId', accountId);
+  
+  const existingCategories = new Set((existingKPIs || []).map((k: any) => k.category));
+  
+  // Reset existing KPIs to target=0, actual=0
+  for (const kpi of existingKPIs || []) {
+    await supabase
+      .from('KPI')
+      .update({ target: 0, actual: 0 })
+      .eq('id', kpi.id);
+  }
+  
+  // Create missing KPIs with target=0, actual=0
+  for (const category of categories) {
+    if (!existingCategories.has(category)) {
+      await supabase
+        .from('KPI')
+        .insert({
+          campaignId,
+          accountId,
+          category,
+          target: 0,
+          actual: 0,
+        });
+    }
+  }
+}
+
