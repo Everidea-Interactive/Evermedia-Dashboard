@@ -148,7 +148,7 @@ const sanitizeNumberInput = (value: string): string => {
 
 export default function AllPostsPage() {
   const { token } = useAuth();
-  const { canAddPost, canEditPost, canDeletePost } = usePermissions();
+  const { canAddPost, canDeletePost } = usePermissions();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);

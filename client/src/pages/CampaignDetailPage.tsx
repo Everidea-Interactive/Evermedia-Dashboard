@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import type { FormEvent } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -49,7 +48,7 @@ export default function CampaignDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { canManageCampaigns, canDelete, canEditPost, canDeletePost } = usePermissions();
+  const { canManageCampaigns, canDelete, canDeletePost } = usePermissions();
   const [campaign, setCampaign] = useState<any>(null);
   const [engagement, setEngagement] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
