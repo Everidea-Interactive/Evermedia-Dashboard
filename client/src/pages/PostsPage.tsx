@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -12,6 +12,7 @@ import Select from '../components/ui/Select';
 import Dialog from '../components/ui/Dialog';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
+import Papa from 'papaparse';
 
 type Post = {
   id: string;
@@ -28,6 +29,7 @@ type Post = {
   account?: { id: string; name: string } | null;
   campaign?: { id: string; name: string } | null;
   contentCategory: string;
+  campaignCategory?: string;
   adsOnMusic: boolean;
   yellowCart: boolean;
   postTitle: string;
@@ -92,6 +94,66 @@ const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Even
 const CONTENT_TYPE_OPTIONS = ['Slide', 'Video'];
 const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
 
+type CsvRow = Record<string, string>;
+
+const CSV_EXPORT_COLUMNS = [
+  { key: 'no', label: 'NO' },
+  { key: 'postDay', label: 'Hari Posting' },
+  { key: 'postDate', label: 'TANGGAL POSTING' },
+  { key: 'picTalent', label: 'PIC Talent' },
+  { key: 'picEditor', label: 'PIC Editor' },
+  { key: 'picPosting', label: 'PIC Posting' },
+  { key: 'accountType', label: 'Tipe Akun' },
+  { key: 'contentCategory', label: 'Kategori Konten' },
+  { key: 'adsOnMusic', label: 'ADS ON MUSIC' },
+  { key: 'yellowCart', label: 'KERANJANG KUNING' },
+  { key: 'campaignName', label: 'CAMPAIGN' },
+  { key: 'campaignCategory', label: 'CATEGORY' },
+  { key: 'accountName', label: 'AKUN POSTING' },
+  { key: 'postTitle', label: 'JUDUL' },
+  { key: 'contentType', label: 'JENIS' },
+  { key: 'status', label: 'STATUS' },
+  { key: 'contentLink', label: 'LINK KONTEN' },
+  { key: 'totalView', label: 'TOTAL VIEW' },
+  { key: 'totalLike', label: 'TOTAL LIKE' },
+  { key: 'totalComment', label: 'TOTAL COMMENT' },
+  { key: 'totalShare', label: 'TOTAL SHARE' },
+  { key: 'totalSaved', label: 'TOTAL SAVED' },
+] as const;
+
+const ACCOUNT_TYPES: AccountOption['accountType'][] = ['CROSSBRAND', 'NEW_PERSONA', 'KOL', 'PROXY'];
+const CSV_REQUIRED_IMPORT_HEADERS = ['TANGGAL POSTING', 'AKUN POSTING', 'JUDUL', 'JENIS', 'KATEGORI KONTEN', 'STATUS', 'CATEGORY'];
+
+const normalizeCsvHeader = (value?: string) => (value ? value.trim().toUpperCase().replace(/\s+/g, ' ') : '');
+const getCsvValue = (row: CsvRow, headerMap: Map<string, string>, headerName: string) => {
+  const normalized = normalizeCsvHeader(headerName);
+  const actualHeader = headerMap.get(normalized);
+  const candidate = actualHeader ? row[actualHeader] : undefined;
+  return candidate ? candidate.trim() : '';
+};
+const parseBooleanFlag = (value?: string) => {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'yes' || normalized === 'true' || normalized === '1';
+};
+const parseIntegerField = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return 0;
+  const parsed = parseInt(trimmed, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+const normalizeAccountType = (value?: string) => {
+  if (!value) return '';
+  const normalized = value.trim().replace(/[\s-]+/g, '_').toUpperCase();
+  return ACCOUNT_TYPES.includes(normalized as AccountOption['accountType']) ? (normalized as AccountOption['accountType']) : '';
+};
+
+const findPicIdByName = (value: string | undefined, pics: PicOption[]) => {
+  if (!value) return undefined;
+  const normalizedValue = value.trim().toLowerCase();
+  return pics.find((pic) => pic.name.trim().toLowerCase() === normalizedValue)?.id;
+};
+
 // Helper function to remove leading zeros from number input
 const sanitizeNumberInput = (value: string): string => {
   if (value === '' || value === '0') return value;
@@ -142,6 +204,8 @@ export default function PostsPage() {
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<FormState>>({});
   const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const routeCampaignId = id;
   const campaignIdForPosts = routeCampaignId || form.campaignId;
@@ -232,6 +296,240 @@ export default function PostsPage() {
     }
   };
 
+  const handleExportCsv = useCallback(() => {
+    if (!campaignIdForPosts) return;
+    const campaign = campaigns.find((c) => c.id === campaignIdForPosts);
+    const csvRows = posts.map((post, index) => {
+      const picTalentName = post.picTalent?.name || (post.picTalentId ? pics.find((pic) => pic.id === post.picTalentId)?.name : '') || '';
+      const picEditorName = post.picEditor?.name || (post.picEditorId ? pics.find((pic) => pic.id === post.picEditorId)?.name : '') || '';
+      const picPostingName = post.picPosting?.name || (post.picPostingId ? pics.find((pic) => pic.id === post.picPostingId)?.name : '') || '';
+      const account = accounts.find((acc) => acc.id === post.accountId);
+      return {
+        no: index + 1,
+        postDay: post.postDay || '',
+        postDate: post.postDate ? new Date(post.postDate).toISOString().split('T')[0] : '',
+        picTalent: picTalentName,
+        picEditor: picEditorName,
+        picPosting: picPostingName,
+        accountType: account?.accountType || '',
+        contentCategory: post.contentCategory || '',
+        adsOnMusic: post.adsOnMusic ? 'Yes' : 'No',
+        yellowCart: post.yellowCart ? 'Yes' : 'No',
+        campaignName: campaign?.name || '',
+        campaignCategory: post.campaignCategory || post.contentCategory || '',
+        accountName: account?.name || '',
+        postTitle: post.postTitle || '',
+        contentType: post.contentType || '',
+        status: post.status || '',
+        contentLink: post.contentLink || '',
+        totalView: post.totalView ?? 0,
+        totalLike: post.totalLike ?? 0,
+        totalComment: post.totalComment ?? 0,
+        totalShare: post.totalShare ?? 0,
+        totalSaved: post.totalSaved ?? 0,
+      };
+    });
+
+    const csvStringWithKeys = Papa.unparse(csvRows, {
+      columns: CSV_EXPORT_COLUMNS.map((column) => column.key),
+      header: true,
+    });
+    // Replace header row with custom labels
+    const lines = csvStringWithKeys.split('\n');
+    lines[0] = CSV_EXPORT_COLUMNS.map((column) => column.label).join(',');
+    const csvString = lines.join('\n');
+
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const filenameBase = (campaign?.name || 'posts')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'posts';
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filenameBase}-posts.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [campaignIdForPosts, campaigns, posts, accounts, pics]);
+
+  const triggerCsvImport = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleCsvFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input?.files?.[0];
+    if (!file) {
+      return;
+    }
+    if (!token) {
+      setToast({ type: 'error', text: 'Authentication is required to import posts.' });
+      input.value = '';
+      return;
+    }
+    if (!campaignIdForPosts) {
+      setToast({ type: 'error', text: 'Select a campaign before importing posts.' });
+      input.value = '';
+      return;
+    }
+
+    setImportingCsv(true);
+    setToast(null);
+    try {
+      const content = await file.text();
+      const parsed = Papa.parse<CsvRow>(content, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => (header ? header.trim() : ''),
+      });
+
+      if (parsed.errors.length > 0) {
+        throw new Error(parsed.errors[0].message || 'Failed to parse CSV file.');
+      }
+
+      const fields = parsed.meta.fields;
+      if (!fields || fields.length === 0) {
+        throw new Error('CSV file is missing headers.');
+      }
+
+      const headerMap = new Map<string, string>();
+      fields.forEach((field) => {
+        if (field) {
+          headerMap.set(normalizeCsvHeader(field), field);
+        }
+      });
+
+      const missingHeaders = CSV_REQUIRED_IMPORT_HEADERS.filter((header) => !headerMap.has(normalizeCsvHeader(header)));
+      if (missingHeaders.length > 0) {
+        throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
+      }
+
+      const rows = (parsed.data as CsvRow[]).filter((row) =>
+        Object.values(row).some((value) => value && value.trim() !== ''),
+      );
+      if (rows.length === 0) {
+        throw new Error('CSV file does not contain any data rows.');
+      }
+
+      const accountLookup = new Map<string, AccountOption>();
+      accounts.forEach((account) => {
+        if (account.name) {
+          accountLookup.set(account.name.trim().toLowerCase(), account);
+        }
+      });
+
+      const currentCampaign = campaigns.find((c) => c.id === campaignIdForPosts);
+      const normalizedCampaignName = currentCampaign?.name?.trim().toLowerCase() || '';
+      let importedCount = 0;
+
+      for (const [index, row] of rows.entries()) {
+        const rowNumber = index + 2;
+        const accountName = getCsvValue(row, headerMap, 'AKUN POSTING');
+        if (!accountName) {
+          throw new Error(`Row ${rowNumber}: Missing account name`);
+        }
+
+        const campaignNameFromCsv = getCsvValue(row, headerMap, 'CAMPAIGN');
+        if (
+          campaignNameFromCsv &&
+          normalizedCampaignName &&
+          campaignNameFromCsv.trim().toLowerCase() !== normalizedCampaignName
+        ) {
+          throw new Error(
+            `Row ${rowNumber}: Campaign (${campaignNameFromCsv}) does not match current campaign (${currentCampaign?.name}).`,
+          );
+        }
+
+        const normalizedAccountName = accountName.trim().toLowerCase();
+        let account = accountLookup.get(normalizedAccountName);
+        const accountType = normalizeAccountType(getCsvValue(row, headerMap, 'Tipe Akun')) || 'CROSSBRAND';
+        if (!account) {
+          const created = (await api('/accounts', {
+            method: 'POST',
+            token,
+            body: {
+              name: accountName.trim(),
+              accountType,
+            },
+          })) as AccountOption;
+          accountLookup.set(created.name.trim().toLowerCase(), created);
+          setAccounts((prev) => [...prev, created]);
+          account = created;
+        }
+
+        const postTitle = getCsvValue(row, headerMap, 'JUDUL');
+        if (!postTitle) {
+          throw new Error(`Row ${rowNumber}: Missing post title`);
+        }
+
+        const contentType = getCsvValue(row, headerMap, 'JENIS');
+        if (!contentType) {
+          throw new Error(`Row ${rowNumber}: Missing content type`);
+        }
+
+        const contentCategory = getCsvValue(row, headerMap, 'KATEGORI KONTEN');
+        if (!contentCategory) {
+          throw new Error(`Row ${rowNumber}: Missing content category`);
+        }
+
+        const status = getCsvValue(row, headerMap, 'STATUS');
+        if (!status) {
+          throw new Error(`Row ${rowNumber}: Missing status`);
+        }
+
+        const postDateValue = getCsvValue(row, headerMap, 'TANGGAL POSTING');
+        if (!postDateValue) {
+          throw new Error(`Row ${rowNumber}: Missing post date`);
+        }
+
+        const parsedDate = new Date(postDateValue);
+        if (Number.isNaN(parsedDate.getTime())) {
+          throw new Error(`Row ${rowNumber}: Invalid post date (${postDateValue})`);
+        }
+
+        const campaignCategoryValue = getCsvValue(row, headerMap, 'CATEGORY');
+        if (!campaignCategoryValue) {
+          throw new Error(`Row ${rowNumber}: Missing campaign category`);
+        }
+
+        const payload = {
+          campaignId: campaignIdForPosts,
+          accountId: account.id,
+          postDate: parsedDate.toISOString(),
+          picTalentId: findPicIdByName(getCsvValue(row, headerMap, 'PIC Talent'), pics),
+          picEditorId: findPicIdByName(getCsvValue(row, headerMap, 'PIC Editor'), pics),
+          picPostingId: findPicIdByName(getCsvValue(row, headerMap, 'PIC Posting'), pics),
+          contentCategory,
+          campaignCategory: campaignCategoryValue,
+          adsOnMusic: parseBooleanFlag(getCsvValue(row, headerMap, 'ADS ON MUSIC')),
+          yellowCart: parseBooleanFlag(getCsvValue(row, headerMap, 'KERANJANG KUNING')),
+          postTitle,
+          contentType,
+          status,
+          contentLink: getCsvValue(row, headerMap, 'LINK KONTEN'),
+          totalView: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL VIEW')),
+          totalLike: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL LIKE')),
+          totalComment: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL COMMENT')),
+          totalShare: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL SHARE')),
+          totalSaved: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL SAVED')),
+        };
+
+        await api('/posts', { method: 'POST', token, body: payload });
+        importedCount += 1;
+      }
+
+      await refreshPosts();
+      setToast({ type: 'success', text: `Imported ${importedCount} posts.` });
+    } catch (error) {
+      setToast({ type: 'error', text: (error as Error).message });
+    } finally {
+      setImportingCsv(false);
+      input.value = '';
+    }
+  };
+
   const handleFormChange = (field: keyof FormState, value: string) => {
     // Sanitize engagement stats fields to remove leading zeros
     const engagementFields: (keyof FormState)[] = ['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'];
@@ -299,6 +597,13 @@ export default function PostsPage() {
     return selectedCampaign.categories.filter((cat) => cat).sort();
   }, [campaigns, form.campaignId]);
 
+  const editCampaignCategoryOptions = useMemo(() => {
+    if (!editForm.campaignId) return [];
+    const selectedCampaign = campaigns.find((c) => c.id === editForm.campaignId);
+    if (!selectedCampaign || !Array.isArray(selectedCampaign.categories)) return [];
+    return selectedCampaign.categories.filter((cat) => cat).sort();
+  }, [campaigns, editForm.campaignId]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.campaignId || !form.campaignCategory || !form.picContentId || !form.picEditorId || 
@@ -327,15 +632,16 @@ export default function PostsPage() {
       await api('/posts', {
         method: 'POST',
         token,
-        body: {
-          campaignId: form.campaignId,
-          accountId: accountToUse!.id,
-          postDate: form.postDate,
-          picTalentId: form.picContentId || undefined,
-          picEditorId: form.picEditorId || undefined,
-          picPostingId: form.picPostingId || undefined,
-          contentCategory: form.contentCategory || undefined,
-          adsOnMusic: form.adsOnMusic === 'true',
+          body: {
+            campaignId: form.campaignId,
+            accountId: accountToUse!.id,
+            postDate: form.postDate,
+            picTalentId: form.picContentId || undefined,
+            picEditorId: form.picEditorId || undefined,
+            picPostingId: form.picPostingId || undefined,
+            contentCategory: form.contentCategory || undefined,
+            campaignCategory: form.campaignCategory || undefined,
+            adsOnMusic: form.adsOnMusic === 'true',
           yellowCart: form.yellowCart === 'true',
           postTitle: form.postTitle,
           contentType: form.contentType || undefined,
@@ -359,6 +665,7 @@ export default function PostsPage() {
         picPostingId: '',
         accountName: '',
         accountType: '',
+        campaignCategory: '',
         contentCategory: '',
         postTitle: '',
         contentType: '',
@@ -409,7 +716,7 @@ export default function PostsPage() {
     setEditingPostId(post.id);
     setEditForm({
       campaignId: post.campaignId,
-      campaignCategory: '',
+      campaignCategory: post.campaignCategory || '',
       picContentId: post.picTalentId || '',
       picEditorId: post.picEditorId || '',
       picPostingId: post.picPostingId || '',
@@ -449,6 +756,7 @@ export default function PostsPage() {
           picEditorId: editForm.picEditorId || undefined,
           picPostingId: editForm.picPostingId || undefined,
           contentCategory: editForm.contentCategory || undefined,
+          campaignCategory: editForm.campaignCategory || undefined,
           adsOnMusic: editForm.adsOnMusic === 'true',
           yellowCart: editForm.yellowCart === 'true',
           postTitle: editForm.postTitle || post.postTitle,
@@ -523,6 +831,13 @@ export default function PostsPage() {
         backPath={backPath}
         backLabel={backLabel}
         title={<h2 className="page-title">Posts</h2>}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        className="hidden"
+        onChange={handleCsvFileChange}
       />
 
       <RequirePermission permission={canAddPost}>
@@ -838,6 +1153,29 @@ export default function PostsPage() {
         ) : (
           <Card>
             <div className="card-inner-table">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+                <p className="text-xs text-gray-500">
+                  Export the current campaign posts or import new ones from a CSV that follows the official headers.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <RequirePermission permission={canAddPost}>
+                    <Button
+                      onClick={triggerCsvImport}
+                      variant="outline"
+                      disabled={importingCsv}
+                    >
+                      {importingCsv ? 'Importing CSV...' : 'Import CSV'}
+                    </Button>
+                  </RequirePermission>
+                  <Button
+                    onClick={handleExportCsv}
+                    variant="outline"
+                    disabled={posts.length === 0}
+                  >
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
               <TableWrap>
                   <Table>
                     <THead>
@@ -845,6 +1183,7 @@ export default function PostsPage() {
                         <TH>NO</TH>
                         <TH className="!text-center">Actions</TH>
                         <TH>Campaign</TH>
+                        <TH>Campaign Category</TH>
                         <TH>Account</TH>
                         <TH>Hari Posting</TH>
                         <TH>Tanggal Posting</TH>
@@ -901,6 +1240,7 @@ export default function PostsPage() {
                             </div>
                             </TD>
                             <TD>{campaignName}</TD>
+                            <TD>{p.campaignCategory || '—'}</TD>
                             <TD>{accountName}</TD>
                             <TD>{p.postDay}</TD>
                             <TD>{new Date(p.postDate).toLocaleDateString()}</TD>
@@ -983,7 +1323,7 @@ export default function PostsPage() {
               />
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <div>
               <Select
                 label="Content Type"
@@ -1006,6 +1346,20 @@ export default function PostsPage() {
               >
                 <option value="">Select content category</option>
                 {CONTENT_CATEGORY_OPTIONS.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="Campaign Category"
+                value={editForm.campaignCategory || ''}
+                onChange={(e) => setEditForm(prev => ({ ...prev, campaignCategory: e.target.value }))}
+              >
+                <option value="">Select category</option>
+                {editCampaignCategoryOptions.map((category) => (
                   <option key={category} value={category}>
                     {category}
                   </option>

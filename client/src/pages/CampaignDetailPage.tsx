@@ -474,6 +474,7 @@ export default function CampaignDetailPage() {
                         <TH>Judul</TH>
                         <TH>Jenis</TH>
                         <TH>Kategori Konten</TH>
+                        <TH>Campaign Category</TH>
                         <TH>PIC Talent</TH>
                         <TH>PIC Editor</TH>
                         <TH>PIC Posting</TH>
@@ -503,6 +504,7 @@ export default function CampaignDetailPage() {
                                     postDate: p.postDate ? new Date(p.postDate).toISOString().split('T')[0] : '',
                                     contentType: p.contentType || '',
                                     contentCategory: p.contentCategory || '',
+                                    campaignCategory: p.campaignCategory || '',
                                     status: p.status || '',
                                     picTalentId: p.picTalentId || '',
                                     picEditorId: p.picEditorId || '',
@@ -531,6 +533,7 @@ export default function CampaignDetailPage() {
                           <TD>{p.postTitle}</TD>
                           <TD>{p.contentType}</TD>
                           <TD>{p.contentCategory || '—'}</TD>
+                          <TD>{p.campaignCategory || '—'}</TD>
                           <TD>{p.picTalent?.name || '—'}</TD>
                           <TD>{p.picEditor?.name || '—'}</TD>
                           <TD>{p.picPosting?.name || '—'}</TD>
@@ -624,6 +627,7 @@ export default function CampaignDetailPage() {
                       picEditorId: editForm.picEditorId || undefined,
                       picPostingId: editForm.picPostingId || undefined,
                       contentCategory: editForm.contentCategory || undefined,
+                      campaignCategory: editForm.campaignCategory || undefined,
                       adsOnMusic: editForm.adsOnMusic === 'true',
                       yellowCart: editForm.yellowCart === 'true',
                       postTitle: editForm.postTitle || post.postTitle,
@@ -685,7 +689,7 @@ export default function CampaignDetailPage() {
               />
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <div>
               <Select
                 label="Content Type"
@@ -711,6 +715,23 @@ export default function CampaignDetailPage() {
                 <option value="Sosok/Quotes/Film">Sosok/Quotes/Film</option>
                 <option value="Storytell">Storytell</option>
                 <option value="Edukasi Product">Edukasi Product</option>
+              </Select>
+            </div>
+            <div>
+              <Select
+                label="Campaign Category"
+                value={editForm.campaignCategory || ''}
+                onChange={(e) => setEditForm((prev: any) => ({ ...prev, campaignCategory: e.target.value }))}
+              >
+                <option value="">Select category</option>
+                {Array.isArray(campaign?.categories) && campaign.categories
+                  .filter((cat: string) => cat)
+                  .sort()
+                  .map((category: string) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
               </Select>
             </div>
           </div>
