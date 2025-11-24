@@ -1,30 +1,50 @@
-import { StrictMode } from 'react';
+import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.tsx';
 import { ThemeProvider } from './context/ThemeContext.tsx';
-import LoginPage from './pages/LoginPage.tsx';
-import CampaignsPage from './pages/CampaignsPage.tsx';
-import CampaignDetailPage from './pages/CampaignDetailPage.tsx';
-import CampaignEditPage from './pages/CampaignEditPage.tsx';
-import AccountKpiEditPage from './pages/AccountKpiEditPage.tsx';
-import CampaignKpiPage from './pages/CampaignKpiPage.tsx';
-import CampaignAccountsPage from './pages/CampaignAccountsPage.tsx';
-import PostsPage from './pages/PostsPage.tsx';
-import AllPostsPage from './pages/AllPostsPage.tsx';
-import AccountsPage from './pages/AccountsPage.tsx';
-import PicsPage from './pages/PicsPage.tsx';
-import UsersPage from './pages/UsersPage.tsx';
-import ActivityLogsPage from './pages/ActivityLogsPage.tsx';
 import ProtectedRoute from './components/ProtectedRoute.tsx';
 import RequireRole from './components/RequireRole.tsx';
 import AppLayout from './layouts/AppLayout.tsx';
 
+// Keep LoginPage as regular import (needed immediately)
+import LoginPage from './pages/LoginPage.tsx';
+
+// Lazy load all other pages for code splitting
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage.tsx'));
+const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage.tsx'));
+const CampaignEditPage = lazy(() => import('./pages/CampaignEditPage.tsx'));
+const AccountKpiEditPage = lazy(() => import('./pages/AccountKpiEditPage.tsx'));
+const CampaignKpiPage = lazy(() => import('./pages/CampaignKpiPage.tsx'));
+const CampaignAccountsPage = lazy(() => import('./pages/CampaignAccountsPage.tsx'));
+const PostsPage = lazy(() => import('./pages/PostsPage.tsx'));
+const AllPostsPage = lazy(() => import('./pages/AllPostsPage.tsx'));
+const AccountsPage = lazy(() => import('./pages/AccountsPage.tsx'));
+const PicsPage = lazy(() => import('./pages/PicsPage.tsx'));
+const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
+const ActivityLogsPage = lazy(() => import('./pages/ActivityLogsPage.tsx'));
+
+// Loading fallback component
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
-      <AppLayout>{children}</AppLayout>
+      <AppLayout>
+        <Suspense fallback={<PageLoader />}>
+          {children}
+        </Suspense>
+      </AppLayout>
     </ProtectedRoute>
   );
 }
