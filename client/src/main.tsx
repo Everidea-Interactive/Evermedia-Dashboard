@@ -15,7 +15,6 @@ import LoginPage from './pages/LoginPage.tsx';
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage.tsx'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage.tsx'));
 const CampaignEditPage = lazy(() => import('./pages/CampaignEditPage.tsx'));
-const AccountKpiEditPage = lazy(() => import('./pages/AccountKpiEditPage.tsx'));
 const CampaignKpiPage = lazy(() => import('./pages/CampaignKpiPage.tsx'));
 const CampaignAccountsPage = lazy(() => import('./pages/CampaignAccountsPage.tsx'));
 const PostsPage = lazy(() => import('./pages/PostsPage.tsx'));
@@ -69,7 +68,6 @@ const router = createBrowserRouter([
   { path: '/posts/new', element: <ProtectedLayout><PostsPage /></ProtectedLayout> },
   { path: '/posts/all', element: <ProtectedLayout><AllPostsPage /></ProtectedLayout> },
   { path: '/campaigns/:id/accounts', element: <ProtectedLayout><CampaignAccountsPage /></ProtectedLayout> },
-  { path: '/campaigns/:campaignId/accounts/:accountId/edit', element: <ProtectedLayout><AccountKpiEditPage /></ProtectedLayout> },
   { path: '/accounts', element: <ProtectedLayout><AccountsPage /></ProtectedLayout> },
   { path: '/pics', element: <ProtectedLayout><PicsPage /></ProtectedLayout> },
   { 

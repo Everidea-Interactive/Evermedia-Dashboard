@@ -14,6 +14,7 @@ import RequirePermission from '../components/RequirePermission';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 import EngagementVisualizer from '../components/EngagementVisualizer';
+import AccountKpiEditModal from '../components/AccountKpiEditModal';
 
 const statusPills: Record<string, { bg: string; border: string; text: string }> = {
   ACTIVE: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' },
@@ -66,6 +67,8 @@ export default function CampaignDetailPage() {
   const [deletePostConfirm, setDeletePostConfirm] = useState<{ id: string; title: string } | null>(null);
   const [deletingPost, setDeletingPost] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [editingAccountKpi, setEditingAccountKpi] = useState<string | null>(null);
+  const [removeAccountConfirm, setRemoveAccountConfirm] = useState<{ id: string; name: string } | null>(null);
   const [postFilters, setPostFilters] = useState({
     accountId: '',
     status: '',
@@ -427,18 +430,32 @@ export default function CampaignDetailPage() {
     }
   };
 
-  const handleAccountRemove = async (accountId: string) => {
-    if (!id) return;
+  const handleAccountRemove = async () => {
+    if (!id || !removeAccountConfirm) return;
+    const { id: accountId } = removeAccountConfirm;
     setAccountRemoving((prev) => ({ ...prev, [accountId]: true }));
     try {
       await api(`/campaigns/${id}/accounts/${accountId}`, { method: 'DELETE', token });
       const refreshed = await api(`/campaigns/${id}`, { token });
       setCampaign(refreshed);
       setToast({ message: 'Account removed successfully', type: 'success' });
+      setRemoveAccountConfirm(null);
     } catch (error: any) {
       setToast({ message: error?.message || 'Failed to remove account', type: 'error' });
     } finally {
       setAccountRemoving((prev) => ({ ...prev, [accountId]: false }));
+    }
+  };
+
+  const handleRefreshCampaign = async () => {
+    if (!id) return;
+    try {
+      const refreshed = await api(`/campaigns/${id}`, { token });
+      setCampaign(refreshed);
+      const refreshedKpis = await api(`/campaigns/${id}/kpis`, { token });
+      setKpis(refreshedKpis);
+    } catch (error: any) {
+      console.error('Failed to refresh campaign:', error);
     }
   };
 
@@ -691,10 +708,10 @@ export default function CampaignDetailPage() {
                   })}
                 </div>
                 <div className="flex items-stretch sm:items-center gap-2 sm:whitespace-nowrap sm:flex-shrink-0">
-                  <Link to={`/campaigns/${campaign.id}/accounts/${account.id}/edit`} className="btn btn-outline-blue text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none text-center">
+                  <Button variant="outline" color="blue" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setEditingAccountKpi(account.id)}>
                     Edit KPIs
-                  </Link>
-                  <Button variant="ghost" color="red" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => handleAccountRemove(account.id)} disabled={accountRemoving[account.id]}>
+                  </Button>
+                  <Button variant="ghost" color="red" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setRemoveAccountConfirm({ id: account.id, name: account.name })} disabled={accountRemoving[account.id]}>
                     {accountRemoving[account.id] ? 'Removing…' : 'Remove'}
                   </Button>
                 </div>
@@ -1376,6 +1393,47 @@ export default function CampaignDetailPage() {
           This action cannot be undone. KPIs will be recalculated automatically after deletion.
         </p>
       </Dialog>
+
+      <Dialog
+        open={!!removeAccountConfirm}
+        onClose={() => setRemoveAccountConfirm(null)}
+        title="Remove Account"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setRemoveAccountConfirm(null)}
+              disabled={removeAccountConfirm ? accountRemoving[removeAccountConfirm.id] : false}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              color="red"
+              onClick={handleAccountRemove}
+              disabled={removeAccountConfirm ? accountRemoving[removeAccountConfirm.id] : false}
+            >
+              {removeAccountConfirm && accountRemoving[removeAccountConfirm.id] ? 'Removing...' : 'Remove'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Are you sure you want to remove <strong>"{removeAccountConfirm?.name}"</strong> from this campaign?
+        </p>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          This action cannot be undone. KPIs will be recalculated automatically after removal.
+        </p>
+      </Dialog>
+      {id && editingAccountKpi && (
+        <AccountKpiEditModal
+          open={!!editingAccountKpi}
+          onClose={() => setEditingAccountKpi(null)}
+          campaignId={id}
+          accountId={editingAccountKpi}
+          onSuccess={handleRefreshCampaign}
+        />
+      )}
       {toast && (
         <Toast
           message={toast.message}

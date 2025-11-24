@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import Button from '../components/ui/Button';
-import Card from '../components/ui/Card';
-import Input from '../components/ui/Input';
-import Toast from '../components/ui/Toast';
-import PageHeader from '../components/PageHeader';
+import Button from './ui/Button';
+import Dialog from './ui/Dialog';
+import Input from './ui/Input';
+import Toast from './ui/Toast';
 
 const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
 const labels: Record<string, string> = {
@@ -26,9 +24,15 @@ const sanitizeNumberInput = (value: string): string => {
   return num === '' ? '0' : num;
 };
 
-export default function AccountKpiEditPage() {
-  const { campaignId, accountId } = useParams();
-  const navigate = useNavigate();
+type AccountKpiEditModalProps = {
+  open: boolean;
+  onClose: () => void;
+  campaignId: string;
+  accountId: string;
+  onSuccess?: () => void;
+};
+
+export default function AccountKpiEditModal({ open, onClose, campaignId, accountId, onSuccess }: AccountKpiEditModalProps) {
   const { token } = useAuth();
   const [account, setAccount] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
@@ -37,11 +41,10 @@ export default function AccountKpiEditPage() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
-    if (!campaignId || !accountId) return;
+    if (!open || !campaignId || !accountId) return;
     setLoading(true);
     Promise.all([
       api(`/accounts/${accountId}`, { token }),
@@ -56,7 +59,7 @@ export default function AccountKpiEditPage() {
         setTargets((prev) => ({ ...prev, ...map }));
       })
       .finally(() => setLoading(false));
-  }, [campaignId, accountId, token]);
+  }, [open, campaignId, accountId, token]);
 
   const handleTargetChange = (category: string, value: string) => {
     const sanitizedValue = sanitizeNumberInput(value);
@@ -120,7 +123,11 @@ export default function AccountKpiEditPage() {
       }
       
       await Promise.all(promises);
-      navigate(`/campaigns/${campaignId}`);
+      setToast({ message: 'KPIs saved successfully', type: 'success' });
+      onSuccess?.();
+      setTimeout(() => {
+        onClose();
+      }, 1000);
     } catch (error: any) {
       setToast({ message: error?.message || 'Failed to save KPIs', type: 'error' });
     } finally {
@@ -128,70 +135,52 @@ export default function AccountKpiEditPage() {
     }
   };
 
-  const handleRemove = async () => {
-    if (!campaignId || !accountId) return;
-    setRemoving(true);
-    try {
-      await api(`/campaigns/${campaignId}/accounts/${accountId}`, { method: 'DELETE', token });
-      navigate(`/campaigns/${campaignId}`);
-    } catch (error: any) {
-      setToast({ message: error?.message || 'Failed to remove account', type: 'error' });
-    } finally {
-      setRemoving(false);
-    }
-  };
-
-  const backPath = campaignId ? `/campaigns/${campaignId}` : '/campaigns';
-
-  if (loading) {
-    return (
-      <div>
-        <PageHeader backPath={backPath} backLabel="Back to campaign" title={<div className="page-title">Loading…</div>} />
-        <div className="mt-3">Loading…</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        backPath={backPath}
-        backLabel="Back to campaign"
-        title={<h1 className="page-title">Account KPIs</h1>}
-      />
-      <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Editing KPIs for {account?.name}</h2>
-          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{account?.tiktokHandle}</span>
-        </div>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Update target values; actuals are system-calculated.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
-          {categories.map((cat) => {
-            const kpi = kpis.find((k) => k.category === cat);
-            return (
-              <div key={cat} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{labels[cat]}</div>
-                <Input
-                  type="number"
-                  value={targets[cat]}
-                  placeholder="Target"
-                  onChange={(e) => handleTargetChange(cat, e.target.value)}
-                  min="0"
-                />
-                <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Actual: {kpi?.actual ?? 0}</div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-3 mt-4">
-          <Button variant="primary" color="blue" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save targets'}
-          </Button>
-          <Button variant="ghost" color="red" onClick={handleRemove} disabled={removing}>
-            {removing ? 'Removing…' : 'Remove account'}
-          </Button>
-        </div>
-      </Card>
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title={`Edit KPIs for ${account?.name || 'Account'}`}
+        footer={
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="primary" color="blue" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save targets'}
+            </Button>
+          </div>
+        }
+      >
+        {loading ? (
+          <div className="text-center py-8">Loading…</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{account?.tiktokHandle}</span>
+            </div>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Update target values; actuals are system-calculated.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {categories.map((cat) => {
+                const kpi = kpis.find((k) => k.category === cat);
+                return (
+                  <div key={cat} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                    <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{labels[cat]}</div>
+                    <Input
+                      type="number"
+                      value={targets[cat]}
+                      placeholder="Target"
+                      onChange={(e) => handleTargetChange(cat, e.target.value)}
+                      min="0"
+                    />
+                    <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Actual: {kpi?.actual ?? 0}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </Dialog>
       {toast && (
         <Toast
           message={toast.message}
@@ -199,6 +188,7 @@ export default function AccountKpiEditPage() {
           onClose={() => setToast(null)}
         />
       )}
-    </div>
+    </>
   );
 }
+
