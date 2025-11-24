@@ -12,6 +12,102 @@ function withCrossbrand(account: any, campaignCount: number) {
   return { ...account, isCrossbrand: campaignCount >= 2 };
 }
 
+/**
+ * Generates a TikTok handle from an account name
+ * Converts to lowercase, removes special characters, replaces spaces
+ * @param accountName The account name to convert
+ * @returns A handle in the format @username
+ */
+function generateHandleFromName(accountName: string): string {
+  if (!accountName || !accountName.trim()) {
+    return '@account';
+  }
+  
+  // Convert to lowercase and remove leading/trailing whitespace
+  let handle = accountName.trim().toLowerCase();
+  
+  // Remove special characters, keep only alphanumeric and spaces
+  handle = handle.replace(/[^a-z0-9\s]/g, '');
+  
+  // Replace spaces with nothing (remove spaces)
+  handle = handle.replace(/\s+/g, '');
+  
+  // Remove leading/trailing spaces that might remain
+  handle = handle.trim();
+  
+  // If empty after processing, use default
+  if (!handle) {
+    return '@account';
+  }
+  
+  // Add @ prefix if not already present
+  if (!handle.startsWith('@')) {
+    handle = '@' + handle;
+  }
+  
+  return handle;
+}
+
+/**
+ * Generates a unique TikTok handle from an account name
+ * Checks for existing handles and appends a number if needed
+ * @param accountName The account name to convert
+ * @param excludeAccountId Optional account ID to exclude from uniqueness check (for updates)
+ * @returns A unique handle in the format @username or @username1, @username2, etc.
+ */
+async function generateUniqueHandle(accountName: string, excludeAccountId?: string): Promise<string> {
+  const baseHandle = generateHandleFromName(accountName);
+  
+  // Check if handle already exists
+  let query = supabase
+    .from('Account')
+    .select('id, tiktokHandle')
+    .eq('tiktokHandle', baseHandle);
+  
+  if (excludeAccountId) {
+    query = query.neq('id', excludeAccountId);
+  }
+  
+  const { data: existing } = await query;
+  
+  // If handle doesn't exist, return it
+  if (!existing || existing.length === 0) {
+    return baseHandle;
+  }
+  
+  // Extract base name without @
+  const baseName = baseHandle.substring(1);
+  let counter = 1;
+  let uniqueHandle = `@${baseName}${counter}`;
+  
+  // Keep incrementing until we find a unique handle
+  while (true) {
+    let checkQuery = supabase
+      .from('Account')
+      .select('id')
+      .eq('tiktokHandle', uniqueHandle);
+    
+    if (excludeAccountId) {
+      checkQuery = checkQuery.neq('id', excludeAccountId);
+    }
+    
+    const { data: existingWithNumber } = await checkQuery;
+    
+    if (!existingWithNumber || existingWithNumber.length === 0) {
+      return uniqueHandle;
+    }
+    
+    counter++;
+    uniqueHandle = `@${baseName}${counter}`;
+    
+    // Safety check to prevent infinite loop
+    if (counter > 1000) {
+      // Fallback to timestamp-based handle
+      return `@${baseName}${Date.now()}`;
+    }
+  }
+}
+
 router.get('/', async (req, res) => {
   const { search, accountType, crossbrand } = req.query as any;
   let query = supabase.from('Account').select('*').order('createdAt', { ascending: false });
@@ -105,9 +201,12 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
   const { name, tiktokHandle, accountType, brand, notes, campaignIds } = req.body;
   if (!name || !accountType) return res.status(400).json({ error: 'Missing fields' });
   
+  // Auto-generate handle if not provided
+  const finalTiktokHandle = tiktokHandle || await generateUniqueHandle(name);
+  
   const { data: account, error } = await supabase
     .from('Account')
-    .insert({ name, tiktokHandle, accountType, brand, notes })
+    .insert({ name, tiktokHandle: finalTiktokHandle, accountType, brand, notes })
     .select()
     .single();
   
