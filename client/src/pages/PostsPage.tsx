@@ -206,6 +206,8 @@ export default function PostsPage() {
   const [savingCell, setSavingCell] = useState<string | null>(null);
   const [importingCsv, setImportingCsv] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectChangeInProgressRef = useRef<string | null>(null);
+  const initialCellValueRef = useRef<string>('');
 
   const routeCampaignId = id;
   const campaignIdForPosts = routeCampaignId || form.campaignId;
@@ -718,43 +720,47 @@ export default function PostsPage() {
     }
     setEditingCell({ postId, field });
     setCellEditValue(valueToEdit);
+    initialCellValueRef.current = valueToEdit;
   };
 
-  const handleCellBlur = async (postId: string, field: string, skipClose?: boolean): Promise<Post | null> => {
+  const handleCellBlur = async (postId: string, field: string, skipClose?: boolean, overrideValue?: string): Promise<Post | null> => {
     if (!editingCell || editingCell.postId !== postId || editingCell.field !== field) return null;
     
     const post = posts.find(p => p.id === postId);
     if (!post) return null;
 
+    // Use override value if provided (for immediate saves from onChange), otherwise use state
+    const valueToUse = overrideValue !== undefined ? overrideValue : cellEditValue;
+
     // Check if value actually changed
     let hasChanged = false;
-    let newValue: any = cellEditValue;
+    let newValue: any = valueToUse;
 
     if (field === 'postDate') {
       const currentDate = post.postDate ? new Date(post.postDate).toISOString().split('T')[0] : '';
-      hasChanged = cellEditValue !== currentDate;
+      hasChanged = valueToUse !== currentDate;
       if (!hasChanged) {
         if (!skipClose) setEditingCell(null);
         return null;
       }
     } else if (field === 'campaignId') {
-      hasChanged = cellEditValue !== post.campaignId;
+      hasChanged = valueToUse !== post.campaignId;
     } else if (field === 'accountId') {
-      hasChanged = cellEditValue !== post.accountId;
+      hasChanged = valueToUse !== post.accountId;
     } else if (field === 'postTitle' || field === 'contentLink') {
-      hasChanged = cellEditValue !== (post[field] || '');
+      hasChanged = valueToUse !== (post[field] || '');
     } else if (field === 'contentType' || field === 'contentCategory' || field === 'status' || field === 'campaignCategory') {
-      hasChanged = cellEditValue !== (post[field] || '');
+      hasChanged = valueToUse !== (post[field] || '');
     } else if (field === 'picTalentId' || field === 'picEditorId' || field === 'picPostingId') {
       const currentId = post[field] || '';
-      hasChanged = cellEditValue !== currentId;
+      hasChanged = valueToUse !== currentId;
     } else if (field === 'adsOnMusic' || field === 'yellowCart') {
       const currentBool = post[field] ? 'true' : 'false';
-      hasChanged = cellEditValue !== currentBool;
-      newValue = cellEditValue === 'true';
+      hasChanged = valueToUse !== currentBool;
+      newValue = valueToUse === 'true';
     } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
       const currentNum = post[field as keyof Post] as number;
-      const newNum = parseInt(cellEditValue || '0', 10) || 0;
+      const newNum = parseInt(valueToUse || '0', 10) || 0;
       hasChanged = newNum !== currentNum;
       newValue = newNum;
     }
@@ -769,29 +775,29 @@ export default function PostsPage() {
       const updatePayload: any = {};
       
       if (field === 'postDate') {
-        updatePayload.postDate = new Date(cellEditValue).toISOString();
+        updatePayload.postDate = new Date(valueToUse).toISOString();
       } else if (field === 'campaignId') {
-        updatePayload.campaignId = cellEditValue || undefined;
+        updatePayload.campaignId = valueToUse || undefined;
       } else if (field === 'accountId') {
-        updatePayload.accountId = cellEditValue || undefined;
+        updatePayload.accountId = valueToUse || undefined;
       } else if (field === 'postTitle') {
-        updatePayload.postTitle = cellEditValue;
+        updatePayload.postTitle = valueToUse;
       } else if (field === 'contentLink') {
-        updatePayload.contentLink = cellEditValue;
+        updatePayload.contentLink = valueToUse;
       } else if (field === 'contentType') {
-        updatePayload.contentType = cellEditValue;
+        updatePayload.contentType = valueToUse;
       } else if (field === 'contentCategory') {
-        updatePayload.contentCategory = cellEditValue;
+        updatePayload.contentCategory = valueToUse;
       } else if (field === 'campaignCategory') {
-        updatePayload.campaignCategory = cellEditValue;
+        updatePayload.campaignCategory = valueToUse;
       } else if (field === 'status') {
-        updatePayload.status = cellEditValue;
+        updatePayload.status = valueToUse;
       } else if (field === 'picTalentId') {
-        updatePayload.picTalentId = cellEditValue || undefined;
+        updatePayload.picTalentId = valueToUse || undefined;
       } else if (field === 'picEditorId') {
-        updatePayload.picEditorId = cellEditValue || undefined;
+        updatePayload.picEditorId = valueToUse || undefined;
       } else if (field === 'picPostingId') {
-        updatePayload.picPostingId = cellEditValue || undefined;
+        updatePayload.picPostingId = valueToUse || undefined;
       } else if (field === 'adsOnMusic') {
         updatePayload.adsOnMusic = newValue;
       } else if (field === 'yellowCart') {
@@ -1423,8 +1429,37 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'campaignId')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      // Mark that a change is in progress to prevent onBlur from interfering
+                                      const changeKey = `${p.id}-campaignId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      // Close the cell immediately
+                                      setEditingCell(null);
+                                      // Save in the background with the new value
+                                      void handleCellBlur(p.id, 'campaignId', true, newValue).finally(() => {
+                                        // Clear the flag after a delay
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      // Skip blur handling if onChange is handling the change
+                                      const changeKey = `${p.id}-campaignId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      // If value changed from initial, onChange already handled it or will handle it
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        // Value changed, let onChange handle it
+                                        return;
+                                      }
+                                      // Only save if value hasn't changed (user clicked outside without changing)
+                                      void handleCellBlur(p.id, 'campaignId');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignId')}
                                     autoFocus
                                   >
@@ -1448,8 +1483,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'campaignCategory')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-campaignCategory`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'campaignCategory', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-campaignCategory`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'campaignCategory');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignCategory')}
                                     autoFocus
                                   >
@@ -1473,8 +1529,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'accountId')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-accountId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'accountId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-accountId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'accountId');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'accountId')}
                                     autoFocus
                                   >
@@ -1543,8 +1620,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'contentType')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-contentType`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'contentType', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-contentType`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'contentType');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentType')}
                                     autoFocus
                                   >
@@ -1568,8 +1666,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'contentCategory')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-contentCategory`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'contentCategory', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-contentCategory`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'contentCategory');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentCategory')}
                                     autoFocus
                                   >
@@ -1593,8 +1712,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'status')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-status`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'status', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-status`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'status');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'status')}
                                     autoFocus
                                   >
@@ -1618,8 +1758,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'picTalentId')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-picTalentId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'picTalentId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-picTalentId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'picTalentId');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picTalentId')}
                                     autoFocus
                                   >
@@ -1643,8 +1804,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'picEditorId')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-picEditorId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'picEditorId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-picEditorId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'picEditorId');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picEditorId')}
                                     autoFocus
                                   >
@@ -1668,8 +1850,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'picPostingId')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-picPostingId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'picPostingId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-picPostingId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'picPostingId');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picPostingId')}
                                     autoFocus
                                   >
@@ -1719,8 +1922,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'adsOnMusic')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-adsOnMusic`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'adsOnMusic', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-adsOnMusic`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'adsOnMusic');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'adsOnMusic')}
                                     autoFocus
                                   >
@@ -1743,8 +1967,29 @@ export default function PostsPage() {
                                   <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
                                     value={cellEditValue}
-                                    onChange={(e) => setCellEditValue(e.target.value)}
-                                    onBlur={() => handleCellBlur(p.id, 'yellowCart')}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-yellowCart`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'yellowCart', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-yellowCart`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'yellowCart');
+                                    }}
                                     onKeyDown={(e) => handleCellKeyDown(e, p.id, 'yellowCart')}
                                     autoFocus
                                   >
