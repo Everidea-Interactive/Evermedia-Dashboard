@@ -9,6 +9,44 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>TikTok Proxy Account Dashboard</title>
     <script>
+      // Polyfill for adoptedStyleSheets to prevent browser extension errors
+      // Some extensions incorrectly assume adoptedStyleSheets is an array and call .filter() on it
+      (function() {
+        try {
+          const originalDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'adoptedStyleSheets') ||
+                                     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(document), 'adoptedStyleSheets');
+          
+          if (originalDescriptor && originalDescriptor.get) {
+            const originalGetter = originalDescriptor.get;
+            Object.defineProperty(Document.prototype, 'adoptedStyleSheets', {
+              get: function() {
+                const sheets = originalGetter.call(this);
+                if (!sheets) return [];
+                
+                // Return a Proxy that makes it array-like
+                return new Proxy(sheets, {
+                  get: function(target, prop) {
+                    // If accessing an array method, convert to array first
+                    if (typeof prop === 'string' && ['filter', 'map', 'forEach', 'find', 'some', 'every', 'reduce'].includes(prop)) {
+                      const arr = Array.from ? Array.from(target) : [].slice.call(target);
+                      const method = Array.prototype[prop];
+                      if (method) {
+                        return method.bind(arr);
+                      }
+                    }
+                    // Otherwise, return the original property
+                    return target[prop];
+                  }
+                });
+              },
+              configurable: true
+            });
+          }
+        } catch (e) {
+          // Silently fail - this is just a polyfill for browser extensions
+        }
+      })();
+
       // Apply theme immediately to prevent flash
       (function() {
         const stored = localStorage.getItem('theme');

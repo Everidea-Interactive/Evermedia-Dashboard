@@ -596,8 +596,6 @@ export default function CampaignDetailPage() {
           const errorMsg = errorMap.get(post.contentLink);
           if (errorMsg) {
             console.warn(`Failed to scrape ${post.contentLink}: ${errorMsg}`);
-          } else {
-            console.warn(`No engagement data found for ${post.contentLink}. Available URLs:`, Array.from(engagementMap.keys()));
           }
           failedCount++;
         }
@@ -620,10 +618,15 @@ export default function CampaignDetailPage() {
         type: failedCount > 0 ? 'info' : 'success' 
       });
       
-      // Show errors if any
-      if (scrapeResult.errors.length > 0) {
-        const errorUrls = scrapeResult.errors.map(e => e.url).join(', ');
-        console.warn('Failed to scrape URLs:', errorUrls);
+      // Only log errors if there are actual failures that couldn't be retried
+      // (Errors that were retried successfully are not logged)
+      if (failedCount > 0 && scrapeResult.errors.length > 0) {
+        const failedUrls = scrapeResult.errors
+          .filter(e => !engagementMap.has(e.url))
+          .map(e => e.url);
+        if (failedUrls.length > 0) {
+          console.warn('Failed to scrape URLs after retries:', failedUrls.join(', '));
+        }
       }
     } catch (error: any) {
       console.error('Failed to update engagement stats:', error);
