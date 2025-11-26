@@ -5,6 +5,7 @@ A full-stack dashboard application for managing TikTok proxy accounts, campaigns
 ## 🚀 Tech Stack
 
 ### Backend
+
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js
 - **Language**: TypeScript
@@ -13,6 +14,7 @@ A full-stack dashboard application for managing TikTok proxy accounts, campaigns
 - **Authentication**: Supabase Auth
 
 ### Frontend
+
 - **Framework**: React 19
 - **Language**: TypeScript
 - **Build Tool**: Vite
@@ -20,6 +22,7 @@ A full-stack dashboard application for managing TikTok proxy accounts, campaigns
 - **Routing**: React Router DOM
 
 ### DevOps
+
 - **Database**: Supabase (Managed PostgreSQL)
 
 ## 📋 Prerequisites
@@ -87,7 +90,10 @@ Create a `.env` file in the `client/` directory (copy from `client/.env.example`
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key-here
 VITE_API_URL=http://localhost:4000
+VITE_TIKTOK_SCRAPER_API_URL=https://your-tiktok-scraper-api.onrender.com
 ```
+
+**Note**: The `VITE_TIKTOK_SCRAPER_API_URL` should point to your deployed TikTok scraper API on Render.com. If you haven't deployed it yet, see the [TikTok Scraper Integration](#-tiktok-scraper-integration) section below.
 
 ### 4. Set up Supabase database
 
@@ -105,10 +111,11 @@ npm run db:seed
 ```
 
 This will seed the database with initial users:
-  - `admin@example.com` / `password123` (ADMIN role)
-  - `manager@example.com` / `password123` (CAMPAIGN_MANAGER role)
-  - `operator@example.com` / `password123` (OPERATOR role)
-  - `viewer@example.com` / `password123` (VIEWER role)
+
+- `admin@example.com` / `password123` (ADMIN role)
+- `manager@example.com` / `password123` (CAMPAIGN_MANAGER role)
+- `operator@example.com` / `password123` (OPERATOR role)
+- `viewer@example.com` / `password123` (VIEWER role)
 
 ## 🏃 Running the Application
 
@@ -121,6 +128,7 @@ npm run dev
 ```
 
 This will start:
+
 - **Server**: http://localhost:4000
 - **Client**: http://localhost:5173
 
@@ -186,6 +194,7 @@ Evermedia Dashboard/
 ### Authentication
 
 #### Login
+
 ```http
 POST /api/auth/login
 Content-Type: application/json
@@ -197,6 +206,7 @@ Content-Type: application/json
 ```
 
 Response:
+
 ```json
 {
   "token": "supabase-access-token-here",
@@ -219,6 +229,7 @@ Authorization: Bearer <your-supabase-access-token>
 ### API Endpoints
 
 #### Users (ADMIN only)
+
 - `GET /api/users` - List all users
 - `GET /api/users/:id` - Get user by ID
 - `POST /api/users` - Create user
@@ -226,6 +237,7 @@ Authorization: Bearer <your-supabase-access-token>
 - `DELETE /api/users/:id` - Delete user
 
 #### Accounts
+
 - `GET /api/accounts` - List accounts (supports filters: `search`, `accountType`, `crossbrand`)
 - `GET /api/accounts/:id` - Get account by ID
 - `POST /api/accounts` - Create account
@@ -234,6 +246,7 @@ Authorization: Bearer <your-supabase-access-token>
 - `GET /api/accounts/:id/campaigns` - Get campaigns for an account
 
 #### Campaigns
+
 - `GET /api/campaigns` - List campaigns (supports filters: `status`, `category`, `dateFrom`, `dateTo`)
 - `GET /api/campaigns/:id` - Get campaign by ID
 - `POST /api/campaigns` - Create campaign
@@ -245,6 +258,7 @@ Authorization: Bearer <your-supabase-access-token>
 - `GET /api/campaigns/:id/dashboard/engagement` - Get engagement dashboard data
 
 #### KPIs
+
 - `GET /api/kpis` - List KPIs
 - `GET /api/kpis/:id` - Get KPI by ID
 - `POST /api/kpis` - Create KPI
@@ -252,6 +266,7 @@ Authorization: Bearer <your-supabase-access-token>
 - `DELETE /api/kpis/:id` - Delete KPI
 
 #### Posts
+
 - `GET /api/posts` - List posts
 - `GET /api/posts/:id` - Get post by ID
 - `POST /api/posts` - Create post
@@ -259,6 +274,7 @@ Authorization: Bearer <your-supabase-access-token>
 - `DELETE /api/posts/:id` - Delete post
 
 #### Pics
+
 - `GET /api/pics` - List pics
 - `GET /api/pics/:id` - Get pic by ID
 - `POST /api/pics` - Upload pic
@@ -273,6 +289,45 @@ Authorization: Bearer <your-supabase-access-token>
 - **KPI Tracking**: Monitor key performance indicators with target vs actual metrics
 - **Post Analytics**: Track post performance with engagement metrics
 - **Dashboard Views**: Visualize campaign performance and engagement data
+- **TikTok Scraper Integration**: Automatically update engagement stats from TikTok posts
+
+## 🎬 TikTok Scraper Integration
+
+The dashboard includes integration with the TikTok scraper API to automatically update engagement statistics (views, likes, comments, shares, bookmarks) for posts in campaigns.
+
+### Setup
+
+1. **Deploy TikTok Scraper API**: The TikTok scraper is already deployed on Render.com. If you need to deploy your own instance, see the `TiktokScrapper/` directory README.
+
+2. **Configure Environment Variable**: Add the TikTok scraper API URL to your client `.env` file:
+
+   ```env
+   VITE_TIKTOK_SCRAPER_API_URL=https://your-tiktok-scraper-api.onrender.com
+   ```
+
+3. **Update Engagement Stats**:
+   - Navigate to any campaign detail page
+   - Click the "Update Engagement Stats" button in the Posts overview section
+   - The system will automatically:
+     - Fetch all posts with TikTok URLs in the campaign
+     - Scrape engagement data from TikTok (with automatic retry on errors)
+     - Update each post's engagement statistics
+     - Refresh campaign KPIs and engagement metrics
+
+### Features
+
+- **Batch Processing**: Updates all posts in a campaign simultaneously
+- **Error Handling**: Automatic retry logic (up to 3 retries) for failed URLs
+- **Progress Tracking**: Real-time progress indicator during updates
+- **Smart Filtering**: Only processes posts with valid TikTok URLs
+- **Automatic Refresh**: Campaign KPIs and engagement metrics are automatically recalculated
+
+### Usage
+
+1. Ensure posts have valid TikTok URLs in the `contentLink` field
+2. Click "Update Engagement Stats" button on the campaign detail page
+3. Wait for the process to complete (progress is shown)
+4. View updated engagement statistics in the posts table
 
 ## 🔐 Security Notes
 
@@ -300,18 +355,21 @@ npm run lint
 ## 📦 Scripts
 
 ### Root Level
+
 - `npm run dev` - Run both server and client in development mode
 - `npm run server` - Run server only
 - `npm run client` - Run client only
 - `npm run build` - Build both server and client for production
 
 ### Server
+
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Compile TypeScript to JavaScript
 - `npm start` - Start production server
 - `npm run db:seed` - Seed the database with initial data
 
 ### Client
+
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
@@ -345,6 +403,7 @@ ISC
 ### Prisma Client Not Generated
 
 Run:
+
 ```bash
 cd server
 npm run prisma:generate

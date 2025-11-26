@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { scrapeTikTokUrlsBatch, isTikTokUrl } from '../lib/tiktokScraper';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
@@ -82,6 +83,8 @@ export default function CampaignDetailPage() {
     limit: 5,
     offset: 0,
   });
+  const [updatingEngagement, setUpdatingEngagement] = useState(false);
+  const [engagementUpdateProgress, setEngagementUpdateProgress] = useState<{ current: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -507,6 +510,110 @@ export default function CampaignDetailPage() {
     }
   };
 
+  const handleUpdateEngagementStats = async () => {
+    if (!id) return;
+    
+    setUpdatingEngagement(true);
+    setEngagementUpdateProgress(null);
+    
+    try {
+      // Fetch all posts for the campaign (not just filtered ones) - use endpoint without pagination
+      const allPosts = await api(`/posts/campaign/${id}`, { token });
+      
+      // Filter posts with TikTok URLs
+      const postsWithTikTokUrls = (Array.isArray(allPosts) ? allPosts : []).filter((post: any) => 
+        post.contentLink && isTikTokUrl(post.contentLink)
+      );
+      
+      if (postsWithTikTokUrls.length === 0) {
+        setToast({ 
+          message: 'No posts with TikTok URLs found in this campaign', 
+          type: 'info' 
+        });
+        setUpdatingEngagement(false);
+        return;
+      }
+      
+      setEngagementUpdateProgress({ current: 0, total: postsWithTikTokUrls.length });
+      
+      // Extract URLs
+      const urls = postsWithTikTokUrls.map((post: any) => post.contentLink);
+      
+      // Scrape engagement data
+      const scrapeResult = await scrapeTikTokUrlsBatch(urls, 3, 1000);
+      
+      // Create a map of URL to engagement data
+      const engagementMap = new Map(
+        scrapeResult.results.map((result) => [result.url, result])
+      );
+      
+      // Update each post
+      let updatedCount = 0;
+      let failedCount = 0;
+      
+      for (let i = 0; i < postsWithTikTokUrls.length; i++) {
+        const post = postsWithTikTokUrls[i];
+        const engagementData = engagementMap.get(post.contentLink);
+        
+        setEngagementUpdateProgress({ current: i + 1, total: postsWithTikTokUrls.length });
+        
+        if (engagementData) {
+          try {
+            await api(`/posts/${post.id}`, {
+              method: 'PUT',
+              token,
+              body: {
+                totalView: engagementData.views,
+                totalLike: engagementData.likes,
+                totalComment: engagementData.comments,
+                totalShare: engagementData.shares,
+                totalSaved: engagementData.bookmarks,
+              },
+            });
+            updatedCount++;
+          } catch (error: any) {
+            console.error(`Failed to update post ${post.id}:`, error);
+            failedCount++;
+          }
+        } else {
+          failedCount++;
+        }
+      }
+      
+      // Refresh posts, KPIs, and engagement
+      await fetchPosts();
+      const [refreshedKpis, refreshedEngagement] = await Promise.all([
+        api(`/campaigns/${id}/kpis`, { token }),
+        api(`/campaigns/${id}/dashboard/engagement`, { token }),
+      ]);
+      setKpis(refreshedKpis);
+      setEngagement(refreshedEngagement);
+      
+      // Show success message with details
+      const successMessage = `Updated ${updatedCount} post${updatedCount !== 1 ? 's' : ''}`;
+      const errorMessage = failedCount > 0 ? ` (${failedCount} failed)` : '';
+      setToast({ 
+        message: `${successMessage}${errorMessage}`, 
+        type: failedCount > 0 ? 'info' : 'success' 
+      });
+      
+      // Show errors if any
+      if (scrapeResult.errors.length > 0) {
+        const errorUrls = scrapeResult.errors.map(e => e.url).join(', ');
+        console.warn('Failed to scrape URLs:', errorUrls);
+      }
+    } catch (error: any) {
+      console.error('Failed to update engagement stats:', error);
+      setToast({ 
+        message: error?.message || 'Failed to update engagement stats. Please try again.', 
+        type: 'error' 
+      });
+    } finally {
+      setUpdatingEngagement(false);
+      setEngagementUpdateProgress(null);
+    }
+  };
+
   const totalViews = useMemo(() => posts.reduce((acc, p) => acc + (p.totalView ?? 0), 0), [posts]);
   const totalLikes = useMemo(() => posts.reduce((acc, p) => acc + (p.totalLike ?? 0), 0), [posts]);
   const campaignKpiSummary = useMemo(() => {
@@ -733,9 +840,26 @@ export default function CampaignDetailPage() {
             <h2 className="text-base sm:text-lg font-semibold">Posts overview</h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{postsTotal} posts · {totalViews.toLocaleString()} views · {totalLikes.toLocaleString()} likes</p>
           </div>
-          <Link to={`/campaigns/${campaign.id}/posts`} className="text-xs sm:text-sm hover:underline transition-colors self-start sm:self-auto" style={{ color: '#6366f1' }}>
-            View all posts
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <RequirePermission permission={canManageCampaigns}>
+              <Button
+                variant="outline"
+                color="blue"
+                onClick={handleUpdateEngagementStats}
+                disabled={updatingEngagement}
+                className="text-xs sm:text-sm whitespace-nowrap"
+              >
+                {updatingEngagement 
+                  ? (engagementUpdateProgress 
+                      ? `Updating... (${engagementUpdateProgress.current}/${engagementUpdateProgress.total})` 
+                      : 'Updating...')
+                  : 'Update Engagement Stats'}
+              </Button>
+            </RequirePermission>
+            <Link to={`/campaigns/${campaign.id}/posts`} className="text-xs sm:text-sm hover:underline transition-colors self-start sm:self-auto" style={{ color: '#6366f1' }}>
+              View all posts
+            </Link>
+          </div>
         </div>
         <Card>
           <div className="mb-4 px-2 sm:px-0">

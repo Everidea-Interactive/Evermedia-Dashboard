@@ -44,12 +44,14 @@ VITE_API_URL=https://your-backend-domain.com
 You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md](./DEPLOYMENT_VERCEL.md)** for detailed instructions.
 
 **Quick Steps:**
+
 1. Push code to GitHub
 2. Import to Vercel (it will auto-detect `vercel.json`)
 3. Add environment variables
 4. Deploy!
 
 **Pros:**
+
 - ✅ Single platform for everything
 - ✅ Free tier available
 - ✅ Automatic HTTPS
@@ -57,6 +59,7 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
 - ✅ Automatic deployments from GitHub
 
 **Cons:**
+
 - ⚠️ Serverless functions have timeout limits (10s free, 60s pro)
 - ⚠️ Cold starts on first request
 - ⚠️ Not ideal for long-running processes
@@ -68,11 +71,13 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
 ### Frontend: Vercel
 
 1. **Install Vercel CLI** (optional):
+
    ```bash
    npm i -g vercel
    ```
 
 2. **Deploy**:
+
    - Go to [vercel.com](https://vercel.com)
    - Import your GitHub repository
    - Configure:
@@ -83,10 +88,12 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
      - **Install Command**: `npm install`
 
 3. **Environment Variables** (in Vercel dashboard):
+
    ```
    VITE_SUPABASE_URL=your-supabase-url
    VITE_SUPABASE_ANON_KEY=your-anon-key
    VITE_API_URL=https://your-backend-url.com
+   VITE_TIKTOK_SCRAPER_API_URL=https://your-tiktok-scraper-api.onrender.com
    ```
 
 4. **Deploy**: Click "Deploy"
@@ -94,11 +101,13 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
 ### Backend: Railway
 
 1. **Install Railway CLI** (optional):
+
    ```bash
    npm i -g @railway/cli
    ```
 
 2. **Deploy**:
+
    - Go to [railway.app](https://railway.app)
    - Click "New Project" → "Deploy from GitHub repo"
    - Select your repository
@@ -108,6 +117,7 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
      - **Start Command**: `npm start`
 
 3. **Environment Variables** (in Railway dashboard):
+
    ```
    NODE_ENV=production
    PORT=4000
@@ -120,6 +130,7 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
 ### Alternative Backend Options
 
 **Render**:
+
 - Similar to Railway
 - Go to [render.com](https://render.com)
 - Create a new "Web Service"
@@ -129,6 +140,7 @@ You can deploy both frontend and backend to Vercel. See **[DEPLOYMENT_VERCEL.md]
 - Start: `npm start`
 
 **Fly.io**:
+
 ```bash
 cd server
 fly launch
@@ -143,23 +155,27 @@ fly deploy
 ### Server Setup
 
 1. **SSH into your VPS**:
+
    ```bash
    ssh user@your-server-ip
    ```
 
 2. **Install dependencies**:
+
    ```bash
    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
    sudo apt-get install -y nodejs nginx certbot python3-certbot-nginx
    ```
 
 3. **Clone repository**:
+
    ```bash
    git clone <your-repo-url>
    cd "Evermedia Dashboard"
    ```
 
 4. **Build and run backend**:
+
    ```bash
    cd server
    npm install
@@ -169,6 +185,7 @@ fly deploy
    ```
 
 5. **Set up PM2** (process manager):
+
    ```bash
    sudo npm install -g pm2
    pm2 start dist/index.js --name evermedia-server
@@ -177,6 +194,7 @@ fly deploy
    ```
 
 6. **Build frontend**:
+
    ```bash
    cd ../client
    npm install
@@ -184,22 +202,24 @@ fly deploy
    ```
 
 7. **Configure Nginx**:
+
    ```bash
    sudo nano /etc/nginx/sites-available/evermedia
    ```
-   
+
    Add configuration:
+
    ```nginx
    server {
        listen 80;
        server_name your-domain.com;
-       
+
        # Frontend
        location / {
            root /home/user/Evermedia Dashboard/client/dist;
            try_files $uri $uri/ /index.html;
        }
-       
+
        # Backend API
        location /api {
            proxy_pass http://localhost:4000;
@@ -211,8 +231,9 @@ fly deploy
        }
    }
    ```
-   
+
    Enable site:
+
    ```bash
    sudo ln -s /etc/nginx/sites-available/evermedia /etc/nginx/sites-enabled/
    sudo nginx -t
@@ -260,6 +281,7 @@ This option separates frontend and backend for more control and better performan
 3. Add the following DNS records:
 
    **For Frontend (Vercel)**:
+
    ```
    Type: CNAME
    Name: @ (or app, or leave blank for root domain)
@@ -268,6 +290,7 @@ This option separates frontend and backend for more control and better performan
    ```
 
    **For Backend API**:
+
    ```
    Type: CNAME
    Name: api (or api.yourdomain.com)
@@ -276,6 +299,7 @@ This option separates frontend and backend for more control and better performan
    ```
 
    **Alternative: Using A Record (if CNAME not supported for root)**:
+
    ```
    Type: A
    Name: @
@@ -288,13 +312,16 @@ This option separates frontend and backend for more control and better performan
 #### Step 4: Update Environment Variables
 
 **Frontend (Vercel)**:
+
 ```
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_API_URL=https://api.yourdomain.com
+VITE_TIKTOK_SCRAPER_API_URL=https://your-tiktok-scraper-api.onrender.com
 ```
 
 **Backend (Railway/Render)**:
+
 ```
 NODE_ENV=production
 PORT=4000
@@ -309,17 +336,18 @@ If you prefer to use a single domain with subdirectories or want full control:
 
 1. **Deploy to VPS** (see Option 2 above)
 2. **Configure Nginx** to serve both frontend and backend:
+
    ```nginx
    server {
        listen 80;
        server_name yourdomain.com www.yourdomain.com;
-       
+
        # Frontend
        location / {
            root /var/www/evermedia/client/dist;
            try_files $uri $uri/ /index.html;
        }
-       
+
        # Backend API
        location /api {
            proxy_pass http://localhost:4000;
@@ -336,12 +364,13 @@ If you prefer to use a single domain with subdirectories or want full control:
    ```
 
 3. **Update DNS in RumahWeb**:
+
    ```
    Type: A
    Name: @
    Value: [Your VPS IP address]
    TTL: 3600
-   
+
    Type: A
    Name: www
    Value: [Your VPS IP address]
@@ -349,6 +378,7 @@ If you prefer to use a single domain with subdirectories or want full control:
    ```
 
 4. **Set SSL**:
+
    ```bash
    sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
    ```
@@ -408,7 +438,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: "20"
       - name: Deploy to Railway
         run: |
           # Add Railway deployment commands
@@ -420,20 +450,24 @@ jobs:
 ## 🐛 Troubleshooting
 
 ### CORS Errors
+
 - Ensure `VITE_API_URL` matches your backend URL exactly
 - Update CORS configuration in `server/src/index.ts` to include your frontend domain
 
 ### Environment Variables Not Loading
+
 - Verify `.env` files are in correct directories
 - Check variable names match exactly (case-sensitive)
 - Restart server after changing environment variables
 
 ### Database Connection Issues
+
 - Verify Supabase project is active
 - Check `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are correct
 - Ensure migrations have been applied
 
 ### Build Failures
+
 - Check Node.js version (requires 18+)
 - Clear `node_modules` and reinstall: `rm -rf node_modules && npm install`
 - Check for TypeScript errors: `npm run build`
@@ -443,13 +477,16 @@ jobs:
 ## 📊 Monitoring Recommendations
 
 1. **Application Monitoring**:
+
    - [PM2 Plus](https://pm2.io) for Node.js monitoring
    - [New Relic](https://newrelic.com) or [Datadog](https://datadoghq.com)
 
 2. **Error Tracking**:
+
    - [Sentry](https://sentry.io) - Free tier available
 
 3. **Uptime Monitoring**:
+
    - [Uptime Robot](https://uptimerobot.com) - Free tier available
    - [Pingdom](https://pingdom.com)
 
@@ -475,12 +512,14 @@ jobs:
 ## 💰 Cost Estimates
 
 ### Free Tier Options:
+
 - **Vercel**: Free tier (hobby) - sufficient for small projects
 - **Railway**: $5/month after free trial
 - **Render**: Free tier available (with limitations)
 - **Supabase**: Free tier available (500MB database)
 
 ### Paid Options:
+
 - **VPS** (DigitalOcean/Linode): $5-10/month
 - **AWS/GCP/Azure**: Pay-as-you-go (can be expensive)
 - **Managed services**: $10-50/month depending on traffic
@@ -499,9 +538,9 @@ jobs:
 ## 🆘 Need Help?
 
 If you encounter issues during deployment:
+
 1. Check the troubleshooting section above
 2. Review server logs
 3. Verify all environment variables are set correctly
 4. Ensure database migrations are applied
 5. Check network/firewall settings
-
