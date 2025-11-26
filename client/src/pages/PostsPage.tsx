@@ -1466,7 +1466,7 @@ export default function PostsPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Export the current campaign posts or import new ones from a CSV that follows the official headers.
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                   {showPostTable && (
                     <RequirePermission permission={canManageCampaigns}>
                       <Button
@@ -1474,13 +1474,23 @@ export default function PostsPage() {
                         variant="outline"
                         color="blue"
                         disabled={updatingEngagement}
-                        className="text-xs sm:text-sm whitespace-nowrap"
+                        className="text-xs sm:text-sm whitespace-nowrap px-2.5 py-1.5 sm:px-3 sm:py-2"
                       >
                         {updatingEngagement 
                           ? (engagementUpdateProgress 
-                              ? `Updating... (${engagementUpdateProgress.current}/${engagementUpdateProgress.total})` 
+                              ? (
+                                <>
+                                  <span className="hidden sm:inline">Updating... ({engagementUpdateProgress.current}/{engagementUpdateProgress.total})</span>
+                                  <span className="sm:hidden">{engagementUpdateProgress.current}/{engagementUpdateProgress.total}</span>
+                                </>
+                              )
                               : 'Updating...')
-                          : 'Update Engagement Stats'}
+                          : (
+                            <>
+                              <span className="hidden sm:inline">Update Engagement Stats</span>
+                              <span className="sm:hidden">Update Stats</span>
+                            </>
+                          )}
                       </Button>
                     </RequirePermission>
                   )}
@@ -1489,6 +1499,7 @@ export default function PostsPage() {
                       onClick={triggerCsvImport}
                       variant="outline"
                       disabled={importingCsv}
+                      className="text-xs sm:text-sm px-2.5 py-1.5 sm:px-3 sm:py-2"
                     >
                       {importingCsv ? 'Importing CSV...' : 'Import CSV'}
                     </Button>
@@ -1497,6 +1508,7 @@ export default function PostsPage() {
                     onClick={handleExportCsv}
                     variant="outline"
                     disabled={posts.length === 0}
+                    className="text-xs sm:text-sm px-2.5 py-1.5 sm:px-3 sm:py-2"
                   >
                     Export CSV
                   </Button>

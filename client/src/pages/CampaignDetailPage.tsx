@@ -866,23 +866,36 @@ export default function CampaignDetailPage() {
             <h2 className="text-base sm:text-lg font-semibold">Posts overview</h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{postsTotal} posts · {totalViews.toLocaleString()} views · {totalLikes.toLocaleString()} likes</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
             <RequirePermission permission={canManageCampaigns}>
               <Button
                 variant="outline"
                 color="blue"
                 onClick={handleUpdateEngagementStats}
                 disabled={updatingEngagement}
-                className="text-xs sm:text-sm whitespace-nowrap"
+                className="text-xs sm:text-sm whitespace-nowrap px-2.5 py-1.5 sm:px-3 sm:py-2 flex-1 sm:flex-none"
               >
                 {updatingEngagement 
                   ? (engagementUpdateProgress 
-                      ? `Updating... (${engagementUpdateProgress.current}/${engagementUpdateProgress.total})` 
+                      ? (
+                        <>
+                          <span className="hidden sm:inline">Updating... ({engagementUpdateProgress.current}/{engagementUpdateProgress.total})</span>
+                          <span className="sm:hidden">{engagementUpdateProgress.current}/{engagementUpdateProgress.total}</span>
+                        </>
+                      )
                       : 'Updating...')
-                  : 'Update Engagement Stats'}
+                  : (
+                    <>
+                      <span className="hidden sm:inline">Update Engagement Stats</span>
+                      <span className="sm:hidden">Update Stats</span>
+                    </>
+                  )}
               </Button>
             </RequirePermission>
-            <Link to={`/campaigns/${campaign.id}/posts`} className="text-xs sm:text-sm hover:underline transition-colors self-start sm:self-auto" style={{ color: '#6366f1' }}>
+            <Link 
+              to={`/campaigns/${campaign.id}/posts`} 
+              className="btn btn-outline-blue text-xs sm:text-sm whitespace-nowrap px-2.5 py-1.5 sm:px-3 sm:py-2 no-underline hover:no-underline flex-1 sm:flex-none text-center"
+            >
               View all posts
             </Link>
           </div>
