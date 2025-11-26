@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
 import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -166,7 +167,7 @@ export default function PostsPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { canAddPost, canDeletePost } = usePermissions();
+  const { canAddPost, canDeletePost, canManageCampaigns } = usePermissions();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -176,6 +177,8 @@ export default function PostsPage() {
   const [toast, setToast] = useState<FormMessage | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [updatingEngagement, setUpdatingEngagement] = useState(false);
+  const [engagementUpdateProgress, setEngagementUpdateProgress] = useState<{ current: number; total: number } | null>(null);
   const [form, setForm] = useState<FormState>({
     campaignId: id ?? '',
     campaignCategory: '',
@@ -1023,6 +1026,114 @@ export default function PostsPage() {
     }
   };
 
+  const handleUpdateEngagementStats = async () => {
+    if (!campaignIdForPosts) return;
+    
+    setUpdatingEngagement(true);
+    setEngagementUpdateProgress(null);
+    
+    try {
+      // Fetch all posts for the campaign
+      const allPosts = await fetchPostsForCampaign(campaignIdForPosts);
+      
+      // Filter posts with TikTok URLs
+      const postsWithTikTokUrls = allPosts.filter((post: Post) => 
+        post.contentLink && isTikTokUrl(post.contentLink)
+      );
+      
+      if (postsWithTikTokUrls.length === 0) {
+        setToast({ 
+          type: 'error',
+          text: 'No posts with TikTok URLs found in this campaign'
+        });
+        setUpdatingEngagement(false);
+        return;
+      }
+      
+      setEngagementUpdateProgress({ current: 0, total: postsWithTikTokUrls.length });
+      
+      // Extract URLs
+      const urls = postsWithTikTokUrls.map((post: Post) => post.contentLink!);
+      
+      // Scrape engagement data with original URL tracking
+      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals(urls, 3, 1000);
+      
+      // Create a map of original URL to engagement data
+      const engagementMap = new Map<string, any>();
+      scrapeResult.results.forEach((result) => {
+        // Map by original URL (which matches post.contentLink)
+        engagementMap.set(result.originalUrl, result.data);
+        // Also map by resolved URL in case we need it
+        if (result.resolvedUrl !== result.originalUrl) {
+          engagementMap.set(result.resolvedUrl, result.data);
+        }
+      });
+      
+      // Map errors by URL for debugging
+      const errorMap = new Map<string, string>();
+      scrapeResult.errors.forEach((error) => {
+        errorMap.set(error.url, error.error);
+      });
+      
+      // Update each post
+      let updatedCount = 0;
+      let failedCount = 0;
+      
+      for (let i = 0; i < postsWithTikTokUrls.length; i++) {
+        const post = postsWithTikTokUrls[i];
+        const engagementData = engagementMap.get(post.contentLink!);
+        
+        setEngagementUpdateProgress({ current: i + 1, total: postsWithTikTokUrls.length });
+        
+        if (engagementData) {
+          try {
+            await api(`/posts/${post.id}`, {
+              method: 'PUT',
+              token,
+              body: {
+                totalView: engagementData.views,
+                totalLike: engagementData.likes,
+                totalComment: engagementData.comments,
+                totalShare: engagementData.shares,
+                totalSaved: engagementData.bookmarks,
+              },
+            });
+            updatedCount++;
+          } catch (error: any) {
+            console.error(`Failed to update post ${post.id}:`, error);
+            failedCount++;
+          }
+        } else {
+          const errorMsg = errorMap.get(post.contentLink!);
+          if (errorMsg) {
+            console.warn(`Failed to scrape ${post.contentLink}: ${errorMsg}`);
+          }
+          failedCount++;
+        }
+      }
+      
+      // Refresh posts
+      await refreshPosts();
+      
+      // Show success message with details
+      const successMessage = `Updated ${updatedCount} post${updatedCount !== 1 ? 's' : ''}`;
+      const errorMessage = failedCount > 0 ? ` (${failedCount} failed)` : '';
+      setToast({ 
+        type: failedCount > 0 ? 'error' : 'success',
+        text: `${successMessage}${errorMessage}`
+      });
+    } catch (error: any) {
+      console.error('Failed to update engagement stats:', error);
+      setToast({ 
+        type: 'error',
+        text: error?.message || 'Failed to update engagement stats. Please try again.'
+      });
+    } finally {
+      setUpdatingEngagement(false);
+      setEngagementUpdateProgress(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -1356,6 +1467,23 @@ export default function PostsPage() {
                   Export the current campaign posts or import new ones from a CSV that follows the official headers.
                 </p>
                 <div className="flex flex-wrap gap-2">
+                  {showPostTable && (
+                    <RequirePermission permission={canManageCampaigns}>
+                      <Button
+                        onClick={handleUpdateEngagementStats}
+                        variant="outline"
+                        color="blue"
+                        disabled={updatingEngagement}
+                        className="text-xs sm:text-sm whitespace-nowrap"
+                      >
+                        {updatingEngagement 
+                          ? (engagementUpdateProgress 
+                              ? `Updating... (${engagementUpdateProgress.current}/${engagementUpdateProgress.total})` 
+                              : 'Updating...')
+                          : 'Update Engagement Stats'}
+                      </Button>
+                    </RequirePermission>
+                  )}
                   <RequirePermission permission={canAddPost}>
                     <Button
                       onClick={triggerCsvImport}
