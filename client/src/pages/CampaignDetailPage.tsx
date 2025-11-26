@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
-import { scrapeTikTokUrlsBatch, isTikTokUrl } from '../lib/tiktokScraper';
+import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
@@ -536,16 +536,32 @@ export default function CampaignDetailPage() {
       
       setEngagementUpdateProgress({ current: 0, total: postsWithTikTokUrls.length });
       
-      // Extract URLs
-      const urls = postsWithTikTokUrls.map((post: any) => post.contentLink);
+      // Extract URLs - keep track of which post corresponds to which URL
+      const urlToPostMap = new Map<string, any>();
+      const urls = postsWithTikTokUrls.map((post: any) => {
+        urlToPostMap.set(post.contentLink, post);
+        return post.contentLink;
+      });
       
-      // Scrape engagement data
-      const scrapeResult = await scrapeTikTokUrlsBatch(urls, 3, 1000);
+      // Scrape engagement data with original URL tracking
+      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals(urls, 3, 1000);
       
-      // Create a map of URL to engagement data
-      const engagementMap = new Map(
-        scrapeResult.results.map((result) => [result.url, result])
-      );
+      // Create a map of original URL to engagement data
+      const engagementMap = new Map<string, any>();
+      scrapeResult.results.forEach((result) => {
+        // Map by original URL (which matches post.contentLink)
+        engagementMap.set(result.originalUrl, result.data);
+        // Also map by resolved URL in case we need it
+        if (result.resolvedUrl !== result.originalUrl) {
+          engagementMap.set(result.resolvedUrl, result.data);
+        }
+      });
+      
+      // Map errors by URL for debugging
+      const errorMap = new Map<string, string>();
+      scrapeResult.errors.forEach((error) => {
+        errorMap.set(error.url, error.error);
+      });
       
       // Update each post
       let updatedCount = 0;
@@ -576,6 +592,13 @@ export default function CampaignDetailPage() {
             failedCount++;
           }
         } else {
+          // Check if there's an error for this URL
+          const errorMsg = errorMap.get(post.contentLink);
+          if (errorMsg) {
+            console.warn(`Failed to scrape ${post.contentLink}: ${errorMsg}`);
+          } else {
+            console.warn(`No engagement data found for ${post.contentLink}. Available URLs:`, Array.from(engagementMap.keys()));
+          }
           failedCount++;
         }
       }
