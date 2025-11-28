@@ -150,12 +150,6 @@ const normalizeAccountType = (value?: string) => {
   return ACCOUNT_TYPES.includes(normalized as AccountOption['accountType']) ? (normalized as AccountOption['accountType']) : '';
 };
 
-const findPicIdByName = (value: string | undefined, pics: PicOption[]) => {
-  if (!value) return undefined;
-  const normalizedValue = value.trim().toLowerCase();
-  return pics.find((pic) => pic.name.trim().toLowerCase() === normalizedValue)?.id;
-};
-
 // Helper function to remove leading zeros from number input
 const sanitizeNumberInput = (value: string): string => {
   if (value === '' || value === '0') return value;
@@ -604,10 +598,10 @@ export default function PostsPage() {
                     },
                   })) as PicOption;
                   picsMap.set(picKey, updated);
-                  setPics((prev) => prev.map((p) => (p.id === pic.id ? updated : p)));
+                  setPics((prev) => prev.map((p) => (p.id === pic!.id ? updated : p)));
                   pic = updated;
                 } catch (picError: any) {
-                  console.warn(`Failed to update PIC ${pic.name} with roles:`, picError);
+                  console.warn(`Failed to update PIC ${pic!.name} with roles:`, picError);
                   // Continue with existing PIC if update fails
                 }
               }
