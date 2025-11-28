@@ -36,8 +36,8 @@ export default function LoginPage() {
           </div>
           {error && <div className="mb-3 text-sm" style={{ color: '#dc2626' }}>{error}</div>}
           <div className="space-y-3">
-            <Input label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
-            <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+            <Input label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" />
+            <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" />
             <Button disabled={loading} className="w-full" type="submit">{loading ? 'Signing in…' : 'Sign in'}</Button>
           </div>
         </div>
