@@ -33,7 +33,7 @@ NODE_ENV=production
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
-FRONTEND_URL=https://yourdomain.com
+FRONTEND_URL=https://yourdomain.com,https://www.yourdomain.com
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key-here
 VITE_API_URL=https://yourdomain.com
@@ -44,6 +44,7 @@ VITE_API_URL=https://yourdomain.com
 - Replace `yourdomain.com` with your actual Vercel deployment URL (e.g., `evermedia-dashboard.vercel.app`) or custom domain
 - **Do NOT include trailing slashes** in URLs (e.g., use `https://evermedia-dashboard.vercel.app` not `https://evermedia-dashboard.vercel.app/`)
 - Both `FRONTEND_URL` and `VITE_API_URL` should be the same since frontend and API are on the same domain
+- **Multiple domains**: You can specify multiple domains in `FRONTEND_URL` by separating them with commas (e.g., `https://domain1.com,https://domain2.com`). This is useful when you have multiple domains pointing to the same Vercel deployment. The backend will accept CORS requests from all listed domains.
 
 ### Step 4: Deploy
 
@@ -114,8 +115,10 @@ The server will detect it's not running on Vercel and start normally.
 
 ### CORS Errors
 
-- Ensure `FRONTEND_URL` environment variable matches your domain
+- Ensure `FRONTEND_URL` environment variable matches your domain(s)
+- For multiple domains, separate them with commas: `https://domain1.com,https://domain2.com`
 - Check that CORS configuration in `server/src/index.ts` includes your domain
+- The backend automatically splits comma-separated domains in `FRONTEND_URL` for CORS configuration
 
 ## 💡 Vercel Limitations
 

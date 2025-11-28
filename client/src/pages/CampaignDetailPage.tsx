@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
+import { formatDate } from '../lib/dateUtils';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
@@ -1087,7 +1088,7 @@ export default function CampaignDetailPage() {
                                   />
                                 ) : (
                                   <span className={isSaving && savingCell?.endsWith('-postDate') ? 'opacity-50' : ''}>
-                                    {new Date(p.postDate).toLocaleDateString()}
+                                    {formatDate(p.postDate)}
                                   </span>
                                 )}
                               </div>

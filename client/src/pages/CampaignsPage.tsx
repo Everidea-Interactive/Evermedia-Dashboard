@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { formatDate } from '../lib/dateUtils';
 import { Link } from 'react-router-dom';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -659,8 +660,8 @@ export default function CampaignsPage() {
                           <span style={{ color: 'var(--text-tertiary)' }}>-</span>
                         )}
                       </TD>
-                      <TD>{new Date(c.startDate).toLocaleDateString()}</TD>
-                      <TD>{new Date(c.endDate).toLocaleDateString()}</TD>
+                      <TD>{formatDate(c.startDate)}</TD>
+                      <TD>{formatDate(c.endDate)}</TD>
                       <TD>
                         <span 
                           className="badge border" 

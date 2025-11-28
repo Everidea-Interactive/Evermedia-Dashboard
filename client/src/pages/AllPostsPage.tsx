@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { formatDate, parseDate } from '../lib/dateUtils';
 import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -161,6 +162,11 @@ export default function AllPostsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    importedCount: number;
+    errors: Array<{ row: number; error: string }>;
+    type: 'success' | 'error' | 'partial';
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectChangeInProgressRef = useRef<string | null>(null);
   const initialCellValueRef = useRef<string>('');
@@ -554,7 +560,7 @@ export default function AllPostsPage() {
       return {
         no: index + 1,
         postDay: post.postDay || '',
-        postDate: post.postDate ? new Date(post.postDate).toISOString().split('T')[0] : '',
+        postDate: post.postDate ? formatDate(post.postDate) : '',
         picTalent: picTalentName,
         picEditor: picEditorName,
         picPosting: picPostingName,
@@ -665,125 +671,269 @@ export default function AllPostsPage() {
         }
       });
 
+      const picsMap = new Map<string, PicOption>();
+      pics.forEach((pic) => {
+        if (pic.name) {
+          picsMap.set(pic.name.trim().toLowerCase(), pic);
+        }
+      });
+
       let importedCount = 0;
+      const errors: Array<{ row: number; error: string }> = [];
 
       for (const [index, row] of rows.entries()) {
         const rowNumber = index + 2;
-        const accountName = getCsvValue(row, headerMap, 'AKUN POSTING');
-        if (!accountName) {
-          throw new Error(`Row ${rowNumber}: Missing account name`);
-        }
+        try {
+          const accountName = getCsvValue(row, headerMap, 'AKUN POSTING');
+          if (!accountName) {
+            throw new Error(`Row ${rowNumber}: Missing account name`);
+          }
 
-        const campaignNameFromCsv = getCsvValue(row, headerMap, 'CAMPAIGN');
-        if (!campaignNameFromCsv) {
-          throw new Error(`Row ${rowNumber}: Missing campaign name`);
-        }
+          const campaignNameFromCsv = getCsvValue(row, headerMap, 'CAMPAIGN');
+          if (!campaignNameFromCsv) {
+            throw new Error(`Row ${rowNumber}: Missing campaign name`);
+          }
 
-        // Find campaign by name
-        const normalizedCampaignName = campaignNameFromCsv.trim().toLowerCase();
-        let campaign = campaignLookup.get(normalizedCampaignName);
-        
-        if (!campaign) {
-          // Try to find in existing campaigns (case-insensitive)
-          campaign = campaigns.find((c) => c.name.trim().toLowerCase() === normalizedCampaignName);
-          if (campaign) {
-            campaignLookup.set(normalizedCampaignName, campaign);
-          } else {
+          // Find campaign by name
+          const normalizedCampaignName = campaignNameFromCsv.trim().toLowerCase();
+          let campaign = campaignLookup.get(normalizedCampaignName);
+          
+          if (!campaign) {
+            // Try to find in existing campaigns (case-insensitive)
+            campaign = campaigns.find((c) => c.name.trim().toLowerCase() === normalizedCampaignName);
+            if (campaign) {
+              campaignLookup.set(normalizedCampaignName, campaign);
+            } else {
+              throw new Error(
+                `Row ${rowNumber}: Campaign "${campaignNameFromCsv}" not found. Please create the campaign first.`,
+              );
+            }
+          }
+
+          const normalizedAccountName = accountName.trim().toLowerCase();
+          let account = accountLookup.get(normalizedAccountName);
+          const accountType = normalizeAccountType(getCsvValue(row, headerMap, 'Tipe Akun')) || 'CROSSBRAND';
+          if (!account) {
+            try {
+              const created = (await api('/accounts', {
+                method: 'POST',
+                token,
+                body: {
+                  name: accountName.trim(),
+                  accountType,
+                },
+              })) as AccountOption;
+              accountLookup.set(created.name.trim().toLowerCase(), created);
+              setAccounts((prev) => [...prev, created]);
+              account = created;
+            } catch (accountError: any) {
+              throw new Error(`Row ${rowNumber}: Failed to create account "${accountName}": ${accountError?.message || accountError?.error || 'Unknown error'}`);
+            }
+          }
+
+          const postTitle = getCsvValue(row, headerMap, 'JUDUL');
+          if (!postTitle) {
+            throw new Error(`Row ${rowNumber}: Missing post title`);
+          }
+
+          const contentType = getCsvValue(row, headerMap, 'JENIS');
+          if (!contentType) {
+            throw new Error(`Row ${rowNumber}: Missing content type`);
+          }
+
+          const contentCategory = getCsvValue(row, headerMap, 'KATEGORI KONTEN');
+          if (!contentCategory) {
+            throw new Error(`Row ${rowNumber}: Missing content category`);
+          }
+
+          const status = getCsvValue(row, headerMap, 'STATUS');
+          if (!status) {
+            throw new Error(`Row ${rowNumber}: Missing status`);
+          }
+
+          const postDateValue = getCsvValue(row, headerMap, 'TANGGAL POSTING');
+          if (!postDateValue) {
+            throw new Error(`Row ${rowNumber}: Missing post date`);
+          }
+
+          const parsedDate = parseDate(postDateValue);
+          if (!parsedDate) {
+            throw new Error(`Row ${rowNumber}: Invalid post date (${postDateValue}). Expected format: dd/mm/yyyy`);
+          }
+
+          const campaignCategoryValue = getCsvValue(row, headerMap, 'CATEGORY');
+          if (!campaignCategoryValue) {
+            throw new Error(`Row ${rowNumber}: Missing campaign category`);
+          }
+
+          // Validate campaign category belongs to the campaign
+          if (!campaign.categories.includes(campaignCategoryValue)) {
             throw new Error(
-              `Row ${rowNumber}: Campaign "${campaignNameFromCsv}" not found. Please create the campaign first.`,
+              `Row ${rowNumber}: Campaign category "${campaignCategoryValue}" is not valid for campaign "${campaign.name}". Valid categories: ${campaign.categories.join(', ')}`,
             );
           }
+
+          // Handle PIC creation/updates - collect PIC names from this row
+          const picTalentName = getCsvValue(row, headerMap, 'PIC Talent');
+          const picEditorName = getCsvValue(row, headerMap, 'PIC Editor');
+          const picPostingName = getCsvValue(row, headerMap, 'PIC Posting');
+          
+          // Collect unique PIC names and their required roles
+          const picRolesMap = new Map<string, Set<'TALENT' | 'EDITOR' | 'POSTING'>>();
+          
+          if (picTalentName && picTalentName.trim()) {
+            const key = picTalentName.trim().toLowerCase();
+            if (!picRolesMap.has(key)) picRolesMap.set(key, new Set());
+            picRolesMap.get(key)!.add('TALENT');
+          }
+          
+          if (picEditorName && picEditorName.trim()) {
+            const key = picEditorName.trim().toLowerCase();
+            if (!picRolesMap.has(key)) picRolesMap.set(key, new Set());
+            picRolesMap.get(key)!.add('EDITOR');
+          }
+          
+          if (picPostingName && picPostingName.trim()) {
+            const key = picPostingName.trim().toLowerCase();
+            if (!picRolesMap.has(key)) picRolesMap.set(key, new Set());
+            picRolesMap.get(key)!.add('POSTING');
+          }
+          
+          // Process each PIC - create or update with roles
+          for (const [picKey, rolesSet] of picRolesMap.entries()) {
+            const picName = picTalentName?.trim() === picKey || picTalentName?.trim().toLowerCase() === picKey
+              ? picTalentName.trim()
+              : picEditorName?.trim() === picKey || picEditorName?.trim().toLowerCase() === picKey
+              ? picEditorName.trim()
+              : picPostingName?.trim() === picKey || picPostingName?.trim().toLowerCase() === picKey
+              ? picPostingName.trim()
+              : picKey;
+            
+            const roles = Array.from(rolesSet);
+            // Default to TALENT if no roles (shouldn't happen, but safety check)
+            if (roles.length === 0) roles.push('TALENT');
+            
+            let pic = picsMap.get(picKey);
+            
+            if (!pic) {
+              // Create new PIC
+              try {
+                const created = (await api('/pics', {
+                  method: 'POST',
+                  token,
+                  body: {
+                    name: picName,
+                    active: true,
+                    roles,
+                  },
+                })) as PicOption;
+                picsMap.set(picKey, created);
+                setPics((prev) => [...prev, created]);
+                pic = created;
+              } catch (picError: any) {
+                throw new Error(`Row ${rowNumber}: Failed to create PIC "${picName}": ${picError?.message || picError?.error || 'Unknown error'}`);
+              }
+            } else {
+              // Update existing PIC - merge roles only if needed
+              const existingRoles = new Set(pic.roles.map((r) => r.toUpperCase()));
+              // Check if ALL required roles are already present
+              const allRolesPresent = roles.every((r) => existingRoles.has(r));
+              
+              if (!allRolesPresent) {
+                // Only update if at least one required role is missing
+                const mergedRoles = Array.from(new Set([...pic.roles.map((r) => r.toUpperCase()), ...roles]));
+                try {
+                  const updated = (await api(`/pics/${pic.id}`, {
+                    method: 'PUT',
+                    token,
+                    body: {
+                      name: pic.name,
+                      roles: mergedRoles,
+                    },
+                  })) as PicOption;
+                  picsMap.set(picKey, updated);
+                  setPics((prev) => prev.map((p) => (p.id === pic.id ? updated : p)));
+                  pic = updated;
+                } catch (picError: any) {
+                  console.warn(`Failed to update PIC ${pic.name} with roles:`, picError);
+                  // Continue with existing PIC if update fails
+                }
+              }
+              // If all roles are already present, skip the API call
+            }
+          }
+          
+          // Get PIC IDs for payload
+          const picTalentId = picTalentName && picTalentName.trim() 
+            ? picsMap.get(picTalentName.trim().toLowerCase())?.id 
+            : undefined;
+          const picEditorId = picEditorName && picEditorName.trim()
+            ? picsMap.get(picEditorName.trim().toLowerCase())?.id
+            : undefined;
+          const picPostingId = picPostingName && picPostingName.trim()
+            ? picsMap.get(picPostingName.trim().toLowerCase())?.id
+            : undefined;
+
+          const payload = {
+            campaignId: campaign.id,
+            accountId: account.id,
+            postDate: parsedDate.toISOString(),
+            picTalentId,
+            picEditorId,
+            picPostingId,
+            contentCategory,
+            campaignCategory: campaignCategoryValue,
+            adsOnMusic: parseBooleanFlag(getCsvValue(row, headerMap, 'ADS ON MUSIC')),
+            yellowCart: parseBooleanFlag(getCsvValue(row, headerMap, 'KERANJANG KUNING')),
+            postTitle,
+            contentType,
+            status,
+            contentLink: getCsvValue(row, headerMap, 'LINK KONTEN'),
+            totalView: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL VIEW')),
+            totalLike: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL LIKE')),
+            totalComment: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL COMMENT')),
+            totalShare: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL SHARE')),
+            totalSaved: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL SAVED')),
+          };
+
+          await api('/posts', { method: 'POST', token, body: payload });
+          importedCount += 1;
+        } catch (rowError: any) {
+          const errorMessage = rowError?.message || rowError?.error || String(rowError) || 'Unknown error';
+          errors.push({ row: rowNumber, error: errorMessage });
         }
-
-        const normalizedAccountName = accountName.trim().toLowerCase();
-        let account = accountLookup.get(normalizedAccountName);
-        const accountType = normalizeAccountType(getCsvValue(row, headerMap, 'Tipe Akun')) || 'CROSSBRAND';
-        if (!account) {
-          const created = (await api('/accounts', {
-            method: 'POST',
-            token,
-            body: {
-              name: accountName.trim(),
-              accountType,
-            },
-          })) as AccountOption;
-          accountLookup.set(created.name.trim().toLowerCase(), created);
-          setAccounts((prev) => [...prev, created]);
-          account = created;
-        }
-
-        const postTitle = getCsvValue(row, headerMap, 'JUDUL');
-        if (!postTitle) {
-          throw new Error(`Row ${rowNumber}: Missing post title`);
-        }
-
-        const contentType = getCsvValue(row, headerMap, 'JENIS');
-        if (!contentType) {
-          throw new Error(`Row ${rowNumber}: Missing content type`);
-        }
-
-        const contentCategory = getCsvValue(row, headerMap, 'KATEGORI KONTEN');
-        if (!contentCategory) {
-          throw new Error(`Row ${rowNumber}: Missing content category`);
-        }
-
-        const status = getCsvValue(row, headerMap, 'STATUS');
-        if (!status) {
-          throw new Error(`Row ${rowNumber}: Missing status`);
-        }
-
-        const postDateValue = getCsvValue(row, headerMap, 'TANGGAL POSTING');
-        if (!postDateValue) {
-          throw new Error(`Row ${rowNumber}: Missing post date`);
-        }
-
-        const parsedDate = new Date(postDateValue);
-        if (Number.isNaN(parsedDate.getTime())) {
-          throw new Error(`Row ${rowNumber}: Invalid post date (${postDateValue})`);
-        }
-
-        const campaignCategoryValue = getCsvValue(row, headerMap, 'CATEGORY');
-        if (!campaignCategoryValue) {
-          throw new Error(`Row ${rowNumber}: Missing campaign category`);
-        }
-
-        // Validate campaign category belongs to the campaign
-        if (!campaign.categories.includes(campaignCategoryValue)) {
-          throw new Error(
-            `Row ${rowNumber}: Campaign category "${campaignCategoryValue}" is not valid for campaign "${campaign.name}". Valid categories: ${campaign.categories.join(', ')}`,
-          );
-        }
-
-        const payload = {
-          campaignId: campaign.id,
-          accountId: account.id,
-          postDate: parsedDate.toISOString(),
-          picTalentId: findPicIdByName(getCsvValue(row, headerMap, 'PIC Talent'), pics),
-          picEditorId: findPicIdByName(getCsvValue(row, headerMap, 'PIC Editor'), pics),
-          picPostingId: findPicIdByName(getCsvValue(row, headerMap, 'PIC Posting'), pics),
-          contentCategory,
-          campaignCategory: campaignCategoryValue,
-          adsOnMusic: parseBooleanFlag(getCsvValue(row, headerMap, 'ADS ON MUSIC')),
-          yellowCart: parseBooleanFlag(getCsvValue(row, headerMap, 'KERANJANG KUNING')),
-          postTitle,
-          contentType,
-          status,
-          contentLink: getCsvValue(row, headerMap, 'LINK KONTEN'),
-          totalView: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL VIEW')),
-          totalLike: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL LIKE')),
-          totalComment: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL COMMENT')),
-          totalShare: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL SHARE')),
-          totalSaved: parseIntegerField(getCsvValue(row, headerMap, 'TOTAL SAVED')),
-        };
-
-        await api('/posts', { method: 'POST', token, body: payload });
-        importedCount += 1;
       }
 
       await fetchPosts();
-      setToast({ type: 'success', text: `Imported ${importedCount} posts.` });
+      
+      // Show comprehensive summary in modal
+      if (errors.length === 0) {
+        setImportResult({
+          importedCount,
+          errors: [],
+          type: 'success',
+        });
+      } else if (importedCount === 0) {
+        // All rows failed
+        setImportResult({
+          importedCount: 0,
+          errors,
+          type: 'error',
+        });
+      } else {
+        // Partial success
+        setImportResult({
+          importedCount,
+          errors,
+          type: 'partial',
+        });
+      }
     } catch (error) {
-      setToast({ type: 'error', text: (error as Error).message });
+      setImportResult({
+        importedCount: 0,
+        errors: [{ row: 0, error: (error as Error).message }],
+        type: 'error',
+      });
     } finally {
       setImportingCsv(false);
       input.value = '';
@@ -1200,7 +1350,7 @@ export default function AllPostsPage() {
                                 />
                               ) : (
                                 <span className={isSaving && savingCell?.endsWith('-postDate') ? 'opacity-50' : ''}>
-                                  {new Date(p.postDate).toLocaleDateString()}
+                                  {formatDate(p.postDate)}
                                 </span>
                               )}
                             </div>
@@ -1786,6 +1936,93 @@ export default function AllPostsPage() {
         <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
           This action cannot be undone. KPIs will be recalculated automatically after deletion.
         </p>
+      </Dialog>
+
+      <Dialog
+        open={!!importResult}
+        onClose={() => setImportResult(null)}
+        title={
+          importResult?.type === 'success'
+            ? 'Import Successful'
+            : importResult?.type === 'error'
+            ? 'Import Failed'
+            : 'Import Completed with Errors'
+        }
+        footer={
+          <Button variant="primary" color={importResult?.type === 'error' ? 'red' : 'blue'} onClick={() => setImportResult(null)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          {importResult?.type === 'success' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+              <div className="text-2xl">✓</div>
+              <div>
+                <p className="font-semibold" style={{ color: '#10b981' }}>
+                  Successfully imported {importResult.importedCount} post{importResult.importedCount !== 1 ? 's' : ''}
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  All posts have been imported successfully.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {importResult?.type === 'error' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+              <div className="text-2xl">✗</div>
+              <div>
+                <p className="font-semibold" style={{ color: '#ef4444' }}>
+                  Import failed
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  No posts were imported. Please fix the errors and try again.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {importResult?.type === 'partial' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+              <div className="text-2xl">⚠</div>
+              <div>
+                <p className="font-semibold" style={{ color: '#3b82f6' }}>
+                  Partial Import Success
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  {importResult.importedCount} post{importResult.importedCount !== 1 ? 's' : ''} imported successfully, but {importResult.errors.length} error{importResult.errors.length !== 1 ? 's' : ''} occurred.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {importResult && importResult.errors.length > 0 && (
+            <div>
+              <h4 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+                Errors ({importResult.errors.length}):
+              </h4>
+              <div className="max-h-96 overflow-y-auto border rounded-lg" style={{ borderColor: 'var(--border-color)' }}>
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                    <tr>
+                      <th className="px-4 py-2 text-left border-b" style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>Row</th>
+                      <th className="px-4 py-2 text-left border-b" style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importResult.errors.map((error, index) => (
+                      <tr key={index} className="border-b" style={{ borderColor: 'var(--border-color)' }}>
+                        <td className="px-4 py-2 font-medium" style={{ color: 'var(--text-primary)' }}>{error.row}</td>
+                        <td className="px-4 py-2" style={{ color: 'var(--text-secondary)' }}>{error.error}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       </Dialog>
 
       {toast && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { formatDateTime } from '../lib/dateUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -107,10 +108,6 @@ export default function ActivityLogsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
 
   const totalPages = Math.ceil(total / pagination.limit);
   const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
@@ -219,7 +216,7 @@ export default function ActivityLogsPage() {
                       <TR key={log.id}>
                         <TD>
                           <span style={{ color: 'var(--text-tertiary)' }}>
-                            {formatDate(log.createdAt)}
+                            {formatDateTime(log.createdAt)}
                           </span>
                         </TD>
                         <TD>

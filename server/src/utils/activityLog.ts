@@ -1,5 +1,6 @@
 import { supabase } from '../supabase.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { formatDate } from './dateUtils.js';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'DELETE';
 export type EntityType = 'Campaign' | 'Account' | 'Post' | 'User' | 'KPI' | 'PIC';
@@ -205,8 +206,8 @@ export function generateChangeDescription(
         createFields.push(`categories: ${newValues.categories.join(', ')}`);
       }
       if (newValues.status) createFields.push(`status: ${newValues.status}`);
-      if (newValues.startDate) createFields.push(`start date: ${new Date(newValues.startDate).toLocaleDateString()}`);
-      if (newValues.endDate) createFields.push(`end date: ${new Date(newValues.endDate).toLocaleDateString()}`);
+      if (newValues.startDate) createFields.push(`start date: ${formatDate(newValues.startDate)}`);
+      if (newValues.endDate) createFields.push(`end date: ${formatDate(newValues.endDate)}`);
       if (newValues.targetViewsForFYP !== undefined && newValues.targetViewsForFYP !== null) {
         createFields.push(`target views for FYP: ${newValues.targetViewsForFYP}`);
       }
@@ -217,7 +218,7 @@ export function generateChangeDescription(
       // Post fields
       if (newValues.postTitle) createFields.push(`title: "${newValues.postTitle}"`);
       if (newValues.contentCategory) createFields.push(`category: ${newValues.contentCategory}`);
-      if (newValues.postDate) createFields.push(`post date: ${new Date(newValues.postDate).toLocaleDateString()}`);
+      if (newValues.postDate) createFields.push(`post date: ${formatDate(newValues.postDate)}`);
       if (newValues.totalView !== undefined) createFields.push(`views: ${newValues.totalView}`);
       if (newValues.totalLike !== undefined) createFields.push(`likes: ${newValues.totalLike}`);
       if (newValues.totalComment !== undefined) createFields.push(`comments: ${newValues.totalComment}`);
@@ -295,8 +296,8 @@ export function generateChangeDescription(
         } 
         // Handle date fields
         else if (field === 'startDate' || field === 'endDate' || field === 'postDate') {
-          const oldDate = oldVal ? new Date(oldVal as string | number | Date).toLocaleDateString() : 'null';
-          const newDate = newVal ? new Date(newVal as string | number | Date).toLocaleDateString() : 'null';
+          const oldDate = oldVal ? formatDate(oldVal as string | number | Date) : 'null';
+          const newDate = newVal ? formatDate(newVal as string | number | Date) : 'null';
           changes.push(`${fieldName}: ${oldDate} → ${newDate}`);
         }
         // Handle Post stats fields (numbers without quotes)

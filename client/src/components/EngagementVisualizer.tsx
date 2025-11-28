@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { formatDateForChart } from '../lib/dateUtils';
 
 interface EngagementVisualizerProps {
   engagement: {
@@ -72,7 +73,7 @@ export default function EngagementVisualizer({ engagement, posts }: EngagementVi
     posts.forEach((post) => {
       const postDate = new Date(post.postDate);
       const dateKey = postDate.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
-      const dateDisplay = postDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const dateDisplay = formatDateForChart(postDate, 'numeric');
       
       const existing = groupedByDate.get(dateKey);
       if (existing) {

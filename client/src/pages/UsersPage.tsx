@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { formatDate } from '../lib/dateUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -295,7 +296,7 @@ export default function UsersPage() {
                       </TD>
                       <TD>
                         <span style={{ color: 'var(--text-tertiary)' }}>
-                          {new Date(user.createdAt).toLocaleDateString()}
+                          {formatDate(user.createdAt)}
                         </span>
                       </TD>
                       <TD>
