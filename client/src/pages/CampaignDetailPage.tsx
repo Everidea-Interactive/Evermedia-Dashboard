@@ -70,6 +70,7 @@ export default function CampaignDetailPage() {
   const [engagement, setEngagement] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
+  const [categoryOverview, setCategoryOverview] = useState<{ category: string; posts: number; views: number }[]>([]);
   const [postsTotal, setPostsTotal] = useState(0);
   const [postsLoading, setPostsLoading] = useState(false);
   const [accountRemoving, setAccountRemoving] = useState<Record<string, boolean>>({});
@@ -104,14 +105,41 @@ export default function CampaignDetailPage() {
   const [engagementUpdateResult, setEngagementUpdateResult] = useState<EngagementUpdateResult | null>(null);
   const [retryingUpdateRows, setRetryingUpdateRows] = useState<Record<string, boolean>>({});
 
+  const refreshDashboardMetrics = useCallback(async () => {
+    if (!id) return;
+    const [kpisResult, engagementResult, categoriesResult] = await Promise.allSettled([
+      api(`/campaigns/${id}/kpis`, { token }),
+      api(`/campaigns/${id}/dashboard/engagement`, { token }),
+      api(`/campaigns/${id}/dashboard/categories`, { token }),
+    ]);
+
+    if (kpisResult.status === 'fulfilled') {
+      setKpis(kpisResult.value);
+    } else {
+      console.error('Failed to refresh KPIs:', kpisResult.reason);
+    }
+
+    if (engagementResult.status === 'fulfilled') {
+      setEngagement(engagementResult.value);
+    } else {
+      console.error('Failed to refresh engagement:', engagementResult.reason);
+    }
+
+    if (categoriesResult.status === 'fulfilled') {
+      setCategoryOverview(Array.isArray(categoriesResult.value) ? categoriesResult.value : []);
+    } else {
+      console.error('Failed to refresh category overview:', categoriesResult.reason);
+      setCategoryOverview([]);
+    }
+  }, [id, token]);
+
   useEffect(() => {
     if (!id) return;
     api(`/campaigns/${id}`, { token }).then(setCampaign);
-    api(`/campaigns/${id}/dashboard/engagement`, { token }).then(setEngagement);
-    api(`/campaigns/${id}/kpis`, { token }).then(setKpis);
+    void refreshDashboardMetrics();
     api('/pics?active=true', { token }).then(setPics).catch(() => {});
     api('/accounts', { token }).then(setAccounts).catch(() => {});
-  }, [id, token]);
+  }, [id, token, refreshDashboardMetrics]);
 
   const fetchPosts = useCallback(async () => {
     if (!id) return;
@@ -323,12 +351,7 @@ export default function CampaignDetailPage() {
       }));
 
       // Refresh KPIs and engagement
-      const [refreshedKpis, refreshedEngagement] = await Promise.all([
-        api(`/campaigns/${id}/kpis`, { token }),
-        api(`/campaigns/${id}/dashboard/engagement`, { token }),
-      ]);
-      setKpis(refreshedKpis);
-      setEngagement(refreshedEngagement);
+      await refreshDashboardMetrics();
 
       setToast({ message: 'Post updated successfully', type: 'success' });
       return updatedPostWithRelations;
@@ -478,8 +501,7 @@ export default function CampaignDetailPage() {
     try {
       const refreshed = await api(`/campaigns/${id}`, { token });
       setCampaign(refreshed);
-      const refreshedKpis = await api(`/campaigns/${id}/kpis`, { token });
-      setKpis(refreshedKpis);
+      await refreshDashboardMetrics();
     } catch (error: any) {
       console.error('Failed to refresh campaign:', error);
     }
@@ -512,12 +534,7 @@ export default function CampaignDetailPage() {
       await fetchPosts();
       
       // Refresh KPIs and engagement after deletion
-      const [refreshedKpis, refreshedEngagement] = await Promise.all([
-        api(`/campaigns/${id}/kpis`, { token }),
-        api(`/campaigns/${id}/dashboard/engagement`, { token }),
-      ]);
-      setKpis(refreshedKpis);
-      setEngagement(refreshedEngagement);
+      await refreshDashboardMetrics();
       
       setToast({ message: 'Post deleted successfully', type: 'success' });
     } catch (error: any) {
@@ -646,12 +663,7 @@ export default function CampaignDetailPage() {
       // Refresh posts, KPIs, and engagement (best-effort)
       try {
         await fetchPosts();
-        const [refreshedKpis, refreshedEngagement] = await Promise.all([
-          api(`/campaigns/${id}/kpis`, { token }),
-          api(`/campaigns/${id}/dashboard/engagement`, { token }),
-        ]);
-        setKpis(refreshedKpis);
-        setEngagement(refreshedEngagement);
+        await refreshDashboardMetrics();
       } catch (refreshError) {
         console.error('Failed to refresh campaign data after updating engagement:', refreshError);
       }
@@ -761,6 +773,7 @@ export default function CampaignDetailPage() {
 
       try {
         await fetchPosts();
+        await refreshDashboardMetrics();
       } catch (refreshError) {
         console.error('Failed to refresh posts after retrying update:', refreshError);
       }
@@ -821,6 +834,43 @@ export default function CampaignDetailPage() {
     });
     return map;
   }, [kpis, posts]);
+
+  const categoryOverviewRows = useMemo(() => {
+    const totals = new Map<string, { posts: number; views: number }>();
+    const campaignCategories = Array.isArray(campaign?.categories) ? campaign.categories.filter(Boolean) : [];
+
+    campaignCategories.forEach((cat) => totals.set(cat, { posts: 0, views: 0 }));
+
+    categoryOverview.forEach((entry) => {
+      const current = totals.get(entry.category) ?? { posts: 0, views: 0 };
+      totals.set(entry.category, {
+        posts: current.posts + (entry.posts ?? 0),
+        views: current.views + (entry.views ?? 0),
+      });
+    });
+
+    const extraCategories = Array.from(totals.keys()).filter((cat) => !campaignCategories.includes(cat) && cat !== 'Uncategorized').sort((a, b) => a.localeCompare(b));
+    const ordered = [...campaignCategories, ...extraCategories];
+    if (totals.has('Uncategorized')) ordered.push('Uncategorized');
+
+    return ordered.map((cat) => ({
+      category: cat,
+      posts: totals.get(cat)?.posts ?? 0,
+      views: totals.get(cat)?.views ?? 0,
+    }));
+  }, [campaign?.categories, categoryOverview]);
+
+  const categoryOverviewTotals = useMemo(
+    () =>
+      categoryOverviewRows.reduce(
+        (acc, row) => ({
+          posts: acc.posts + (row.posts ?? 0),
+          views: acc.views + (row.views ?? 0),
+        }),
+        { posts: 0, views: 0 }
+      ),
+    [categoryOverviewRows]
+  );
 
   const backPath = '/campaigns';
 
@@ -931,32 +981,100 @@ export default function CampaignDetailPage() {
       </div>
 
       <section className="mb-4 sm:mb-6">
-        <Card>
-          <div className="flex items-center justify-between mb-3 px-2 sm:px-0">
-            <h2 className="text-base sm:text-lg font-semibold">Campaign KPIs</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
-            {accountCategoryOrder.map((cat) => {
-              const kpi = campaignKpiSummary.get(cat);
-              const target = kpi?.target ?? 0;
-              const actual = kpi?.actual ?? 0;
-              const isAchieved = target > 0 && actual >= target;
-              return (
-                <div 
-                  key={cat} 
-                  className="rounded-lg border p-2 text-center" 
-                  style={{ 
-                    borderColor: isAchieved ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)', 
-                    backgroundColor: isAchieved ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)' 
-                  }}
-                >
-                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
-                  <div className="text-xs sm:text-sm font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{actual.toLocaleString()}/{target.toLocaleString()}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <Card className="h-full flex flex-col">
+            <div className="flex items-center justify-between mb-3 px-2 sm:px-0">
+              <h2 className="text-base sm:text-lg font-semibold leading-none m-0">Campaign KPIs</h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
+              {accountCategoryOrder.map((cat) => {
+                const kpi = campaignKpiSummary.get(cat);
+                const target = kpi?.target ?? 0;
+                const actual = kpi?.actual ?? 0;
+                const isAchieved = target > 0 && actual >= target;
+                return (
+                  <div 
+                    key={cat} 
+                    className="rounded-lg border p-3 sm:p-3.5 text-center min-h-[88px] flex flex-col items-center justify-center gap-1" 
+                    style={{ 
+                      borderColor: isAchieved ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)', 
+                      backgroundColor: isAchieved ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)' 
+                    }}
+                  >
+                    <div className="text-[10px] sm:text-xs uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>{categoryLabels[cat]}</div>
+                    <div className="text-sm sm:text-base font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{actual.toLocaleString()}/{target.toLocaleString()}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card className="h-full flex flex-col">
+            <div className="flex items-center justify-between gap-2 mb-3 px-2 sm:px-0">
+              <div className="flex items-center">
+                <h2 className="text-base sm:text-lg font-semibold leading-none m-0">Category Overview</h2>
+              </div>
+              <span className="text-xs sm:text-sm font-medium whitespace-nowrap leading-none self-center" style={{ color: 'var(--text-tertiary)' }}>
+                {categoryOverviewRows.length} categories
+              </span>
+            </div>
+            <div
+              className="grid gap-3 overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0"
+              style={{ maxHeight: '200px' }}
+            >
+              {categoryOverviewRows.length === 0 ? (
+                <div className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                  No category data yet.
                 </div>
-              );
-            })}
-          </div>
-        </Card>
+              ) : (
+                categoryOverviewRows.map((row) => {
+                  const metrics = [
+                    { label: 'Posts', value: row.posts.toLocaleString() },
+                    { label: 'Views', value: row.views.toLocaleString() },
+                  ];
+
+                  return (
+                    <div
+                      key={row.category}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 border border-dashed rounded-lg px-3 sm:px-4 py-3"
+                      style={{ borderColor: 'var(--border-color)' }}
+                    >
+                      <div className="flex-1 min-w-0 sm:min-w-[150px]">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-medium text-sm sm:text-base truncate">{row.category}</div>
+                        {row.posts === 0 && (
+                          <span
+                            className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border"
+                            style={{ color: 'var(--text-tertiary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}
+                          >
+                            No posts yet
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-nowrap items-center sm:justify-end gap-2 text-[10px] uppercase tracking-wide sm:flex-1 sm:min-w-0" style={{ color: 'var(--text-tertiary)' }}>
+                        {metrics.map((metric) => (
+                          <div
+                            key={metric.label}
+                            className="flex min-w-[90px] sm:min-w-[110px] flex-col items-center rounded-lg border px-1.5 sm:px-2 py-1 text-center"
+                            style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}
+                          >
+                            <div className="text-[8px] sm:text-[9px] whitespace-nowrap" style={{ color: 'var(--text-tertiary)' }}>
+                              {metric.label}
+                            </div>
+                            <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                              {metric.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Card>
+        </div>
       </section>
 
       <section className="mb-4 sm:mb-6">

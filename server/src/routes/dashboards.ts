@@ -33,6 +33,33 @@ router.get('/campaigns/:id/dashboard/engagement', async (req, res) => {
   res.json({ ...sum, engagementRate: engagementRate(sum) });
 });
 
+router.get('/campaigns/:id/dashboard/categories', async (req, res) => {
+  const campaignId = req.params.id;
+  const { data: posts, error } = await supabase
+    .from('Post')
+    .select('campaignCategory, totalView')
+    .eq('campaignId', campaignId);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const totals = (posts || []).reduce((map: Map<string, { posts: number; views: number }>, post: any) => {
+    const category = (post.campaignCategory || '').trim() || 'Uncategorized';
+    const current = map.get(category) ?? { posts: 0, views: 0 };
+    const views = typeof post.totalView === 'number' ? post.totalView : Number(post.totalView) || 0;
+    map.set(category, { posts: current.posts + 1, views: current.views + views });
+    return map;
+  }, new Map<string, { posts: number; views: number }>());
+
+  const data = Array.from(totals.entries()).map(([category, stats]) => ({
+    category,
+    posts: stats.posts,
+    views: stats.views,
+  }));
+
+  data.sort((a, b) => b.posts - a.posts || b.views - a.views || a.category.localeCompare(b.category));
+  res.json(data);
+});
+
 router.get('/campaigns/all/engagement', async (req, res) => {
   const { data: posts, error } = await supabase
     .from('Post')
