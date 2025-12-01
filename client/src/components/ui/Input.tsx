@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 
 type Props = React.InputHTMLAttributes<HTMLInputElement> & {
-  label?: string;
+  label?: React.ReactNode;
   hint?: string;
 };
 

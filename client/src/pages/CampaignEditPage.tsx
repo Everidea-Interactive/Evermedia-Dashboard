@@ -45,6 +45,7 @@ export default function CampaignEditPage() {
     accountIds: [] as string[],
     targetViewsForFYP: '',
     quotationNumber: '',
+    brandName: '',
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -77,6 +78,7 @@ export default function CampaignEditPage() {
       accountIds: (campaign.accounts || []).map((a: any) => a.id),
       targetViewsForFYP: campaign.targetViewsForFYP ? String(campaign.targetViewsForFYP) : '',
       quotationNumber: campaign.quotationNumber || '',
+      brandName: campaign.brandName || '',
     });
   }, [campaign]);
 
@@ -129,8 +131,8 @@ export default function CampaignEditPage() {
       setToast({ message: 'Campaign name is required', type: 'error' });
       return;
     }
-    if (form.categories.length === 0) {
-      setToast({ message: 'At least one category is required', type: 'error' });
+    if (!form.brandName.trim()) {
+      setToast({ message: 'Brand name is required', type: 'error' });
       return;
     }
     if (!form.startDate) {
@@ -166,6 +168,7 @@ export default function CampaignEditPage() {
         accountIds: form.accountIds,
         targetViewsForFYP: Number(form.targetViewsForFYP),
         quotationNumber: form.quotationNumber.trim() || null,
+        brandName: form.brandName.trim(),
       };
       const updated = await api(`/campaigns/${id}`, { method: 'PUT', body: payload, token });
       setCampaign(updated);
@@ -276,11 +279,20 @@ export default function CampaignEditPage() {
         <form className="space-y-6" onSubmit={handleSaveCampaign}>
           <div className="space-y-3">
             <h3 className="text-md font-medium" style={{ color: 'var(--text-secondary)' }}>Campaign Metadata</h3>
-            <Input label="Campaign name" value={form.name} onChange={(e) => handleFormChange('name', e.target.value)} required />
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Categories <span style={{ color: '#dc2626' }}>*</span>
-              </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input label={<span>Campaign name <span style={{ color: '#dc2626' }}>*</span></span>} value={form.name} onChange={(e) => handleFormChange('name', e.target.value)} required />
+              <Input
+                label={<span>Brand name <span style={{ color: '#dc2626' }}>*</span></span>}
+                value={form.brandName}
+                onChange={(e) => handleFormChange('brandName', e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                  Categories
+                </label>
               <div className="space-y-2">
                 <div className="relative">
                   <Input
@@ -393,13 +405,23 @@ export default function CampaignEditPage() {
                   </div>
                 )}
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Input label="Start date" type="date" value={form.startDate} onChange={(e) => handleFormChange('startDate', e.target.value)} required />
-              <Input label="End date" type="date" value={form.endDate} onChange={(e) => handleFormChange('endDate', e.target.value)} required />
+              </div>
+              <Input 
+                label={<span>Target Views for FYP <span style={{ color: '#dc2626' }}>*</span></span>}
+                type="number" 
+                value={form.targetViewsForFYP} 
+                onChange={(e) => handleFormChange('targetViewsForFYP', e.target.value)}
+                placeholder="Enter minimum views to mark post as FYP"
+                required
+                min="0"
+              />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Select label="Status" value={form.status} onChange={(e) => handleFormChange('status', e.target.value)} required>
+              <Input label={<span>Start date <span style={{ color: '#dc2626' }}>*</span></span>} type="date" value={form.startDate} onChange={(e) => handleFormChange('startDate', e.target.value)} required />
+              <Input label={<span>End date <span style={{ color: '#dc2626' }}>*</span></span>} type="date" value={form.endDate} onChange={(e) => handleFormChange('endDate', e.target.value)} required />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select label={<span>Status <span style={{ color: '#dc2626' }}>*</span></span>} value={form.status} onChange={(e) => handleFormChange('status', e.target.value)} required>
                 {statusOptions.map((status) => (
                   <option key={status}>{status}</option>
                 ))}
@@ -411,15 +433,6 @@ export default function CampaignEditPage() {
                 placeholder="Optional"
               />
             </div>
-            <Input 
-              label="Target Views for FYP" 
-              type="number" 
-              value={form.targetViewsForFYP} 
-              onChange={(e) => handleFormChange('targetViewsForFYP', e.target.value)}
-              placeholder="Enter minimum views to mark post as FYP"
-              required
-              min="0"
-            />
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Linked accounts</label>
               <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{form.accountIds.length} accounts</div>

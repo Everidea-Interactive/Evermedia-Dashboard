@@ -1,7 +1,7 @@
 import React from 'react';
 
 type Props = React.SelectHTMLAttributes<HTMLSelectElement> & {
-  label?: string;
+  label?: React.ReactNode;
 };
 
 export default function Select({ label, className = '', children, ...rest }: Props) {

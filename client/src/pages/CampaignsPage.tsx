@@ -38,6 +38,7 @@ type Campaign = {
   endDate: string;
   status: string;
   quotationNumber?: string | null;
+  brandName?: string | null;
 };
 
 type Account = {
@@ -85,6 +86,7 @@ export default function CampaignsPage() {
     accountIds: [] as string[],
     targetViewsForFYP: '',
     quotationNumber: '',
+    brandName: '',
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -96,6 +98,7 @@ export default function CampaignsPage() {
   const [accountKpis, setAccountKpis] = useState<Record<string, Record<string, string>>>({});
   const [hoveredCampaignId, setHoveredCampaignId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  const [showBrandsModal, setShowBrandsModal] = useState(false);
 
   const fetchCampaigns = () => {
     setLoading(true);
@@ -140,6 +143,7 @@ export default function CampaignsPage() {
       accountIds: [],
       targetViewsForFYP: '',
       quotationNumber: '',
+      brandName: '',
     });
     setSelectedAccount('');
     setNewCategory('');
@@ -153,8 +157,8 @@ export default function CampaignsPage() {
       setToast({ message: 'Campaign name is required', type: 'error' });
       return;
     }
-    if (form.categories.length === 0) {
-      setToast({ message: 'At least one category is required', type: 'error' });
+    if (!form.brandName.trim()) {
+      setToast({ message: 'Brand name is required', type: 'error' });
       return;
     }
     if (!form.startDate) {
@@ -192,6 +196,7 @@ export default function CampaignsPage() {
           accountIds: form.accountIds.length > 0 ? form.accountIds : undefined,
           targetViewsForFYP: Number(form.targetViewsForFYP),
           quotationNumber: form.quotationNumber.trim() || null,
+          brandName: form.brandName.trim(),
         },
       });
 
@@ -284,7 +289,7 @@ export default function CampaignsPage() {
       </div>
       
       {/* Engagement Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-2 sm:gap-3 mb-4 sm:mb-6">
         <Card>
           <div className="section-title text-xs sm:text-sm">Project Numbers</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.projectNumbersCount?.toLocaleString() ?? '-'}</div>
@@ -313,6 +318,23 @@ export default function CampaignsPage() {
           <div className="section-title text-xs sm:text-sm">Engagement Rate</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.engagementRate ? (engagement.engagementRate * 100).toFixed(2) + '%' : '-'}</div>
         </Card>
+        <Card 
+          className="cursor-pointer transition-opacity hover:opacity-80"
+          onClick={() => setShowBrandsModal(true)}
+        >
+          <div className="section-title text-xs sm:text-sm">Unique Brand</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">
+            {(() => {
+              const uniqueBrands = new Set<string>();
+              items.forEach(campaign => {
+                if (campaign.brandName && campaign.brandName.trim()) {
+                  uniqueBrands.add(campaign.brandName.trim());
+                }
+              });
+              return uniqueBrands.size;
+            })()}
+          </div>
+        </Card>
       </div>
 
       <Card>
@@ -339,17 +361,26 @@ export default function CampaignsPage() {
         <Card className="mt-4">
           <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Add Campaign</h2>
           <form onSubmit={handleAddCampaign} className="space-y-3">
-            <Input
-              label="Campaign Name"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Categories <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label={<span>Campaign Name <span style={{ color: '#dc2626' }}>*</span></span>}
+                value={form.name}
+                onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+                required
+              />
+              <Input
+                label={<span>Brand name <span style={{ color: '#dc2626' }}>*</span></span>}
+                value={form.brandName}
+                onChange={e => setForm(prev => ({ ...prev, brandName: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                  Categories
+                </label>
+                <div className="space-y-2">
                 <div className="relative">
                   <Input
                     value={newCategory}
@@ -445,18 +476,28 @@ export default function CampaignsPage() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <Input
-                label="Start Date"
+                label={<span>Target Views for FYP <span style={{ color: '#dc2626' }}>*</span></span>}
+                type="number"
+                value={form.targetViewsForFYP}
+                onChange={e => setForm(prev => ({ ...prev, targetViewsForFYP: sanitizeNumberInput(e.target.value) }))}
+                placeholder="Enter minimum views to mark post as FYP"
+                required
+                min="0"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label={<span>Start Date <span style={{ color: '#dc2626' }}>*</span></span>}
                 type="date"
                 value={form.startDate}
                 onChange={e => setForm(prev => ({ ...prev, startDate: e.target.value }))}
                 required
               />
               <Input
-                label="End Date"
+                label={<span>End Date <span style={{ color: '#dc2626' }}>*</span></span>}
                 type="date"
                 value={form.endDate}
                 onChange={e => setForm(prev => ({ ...prev, endDate: e.target.value }))}
@@ -465,7 +506,7 @@ export default function CampaignsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Select
-                label="Status"
+                label={<span>Status <span style={{ color: '#dc2626' }}>*</span></span>}
                 value={form.status}
                 onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
                 required
@@ -482,15 +523,6 @@ export default function CampaignsPage() {
                 placeholder="Optional"
               />
             </div>
-            <Input
-              label="Target Views for FYP"
-              type="number"
-              value={form.targetViewsForFYP}
-              onChange={e => setForm(prev => ({ ...prev, targetViewsForFYP: sanitizeNumberInput(e.target.value) }))}
-              placeholder="Enter minimum views to mark post as FYP"
-              required
-              min="0"
-            />
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                 Campaign-Level KPIs <span style={{ color: '#dc2626' }}>*</span>
@@ -783,6 +815,57 @@ export default function CampaignsPage() {
           </div>
         );
       })()}
+      <Dialog
+        open={showBrandsModal}
+        onClose={() => setShowBrandsModal(false)}
+        title="Unique Brands"
+        footer={
+          <Button variant="primary" onClick={() => setShowBrandsModal(false)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-2">
+          {(() => {
+            const uniqueBrands = new Set<string>();
+            items.forEach(campaign => {
+              if (campaign.brandName && campaign.brandName.trim()) {
+                uniqueBrands.add(campaign.brandName.trim());
+              }
+            });
+            const sortedBrands = Array.from(uniqueBrands).sort();
+            
+            if (sortedBrands.length === 0) {
+              return (
+                <p style={{ color: 'var(--text-tertiary)' }}>No brands found in campaigns.</p>
+              );
+            }
+            
+            return (
+              <div className="space-y-2">
+                <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+                  Total unique brands: <strong>{sortedBrands.length}</strong>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {sortedBrands.map((brand, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-3 py-1.5 rounded-md text-sm border"
+                      style={{ 
+                        color: '#2563eb', 
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)', 
+                        borderColor: '#93c5fd' 
+                      }}
+                    >
+                      {brand}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </Dialog>
     </div>
   );
 }

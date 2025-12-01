@@ -1,4 +1,14 @@
-export default function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`card ${className}`}><div className="card-inner">{children}</div></div>;
+import React from 'react';
+
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  className?: string;
+};
+
+export default function Card({ children, className = '', ...rest }: CardProps) {
+  return (
+    <div className={`card ${className}`} {...rest}>
+      <div className="card-inner">{children}</div>
+    </div>
+  );
 }
 
