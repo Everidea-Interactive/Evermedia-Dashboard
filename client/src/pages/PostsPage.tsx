@@ -492,7 +492,9 @@ export default function PostsPage() {
 
   const renderSortableHeader = (label: string, key: SortKey, className?: string) => {
     const isActive = sortConfig.key === key;
-    const indicator = isActive ? (sortConfig.direction === 'asc' ? '^' : 'v') : '^v';
+    const indicator = isActive 
+      ? (sortConfig.direction === 'asc' ? '▲' : '▼')
+      : '↕';
 
     return (
       <TH className={className}>
@@ -502,7 +504,7 @@ export default function PostsPage() {
           className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
         >
           <span className="truncate">{label}</span>
-          <span className={`text-[10px] leading-none ${isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+          <span className={`text-xs ${isActive ? 'text-emerald-600' : 'opacity-40'}`}>
             {indicator}
           </span>
         </button>

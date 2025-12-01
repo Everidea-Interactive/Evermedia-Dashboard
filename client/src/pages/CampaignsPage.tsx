@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
@@ -99,12 +99,75 @@ export default function CampaignsPage() {
   const [hoveredCampaignId, setHoveredCampaignId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
   const [showBrandsModal, setShowBrandsModal] = useState(false);
+  type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
 
   const fetchCampaigns = () => {
     setLoading(true);
     api(`/campaigns?status=${encodeURIComponent(status)}`, { token })
       .then(setItems)
       .finally(() => setLoading(false));
+  };
+
+  const handleSort = (key: SortKey) => {
+    setSortConfig((prev) => {
+      if (prev && prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      // Default direction: ascending for text fields, descending for dates
+      if (key === 'startDate' || key === 'endDate') {
+        return { key, direction: 'desc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const sortedItems = useMemo(() => {
+    if (!sortConfig) return items;
+    const { key, direction } = sortConfig;
+    const multiplier = direction === 'asc' ? 1 : -1;
+
+    return [...items].sort((a, b) => {
+      let aValue: string = '';
+      let bValue: string = '';
+
+      if (key === 'name') {
+        aValue = a.name || '';
+        bValue = b.name || '';
+      } else if (key === 'status') {
+        aValue = a.status || '';
+        bValue = b.status || '';
+      } else if (key === 'startDate') {
+        aValue = a.startDate || '';
+        bValue = b.startDate || '';
+      } else if (key === 'endDate') {
+        aValue = a.endDate || '';
+        bValue = b.endDate || '';
+      }
+
+      // For dates, compare by timestamp when possible
+      if (key === 'startDate' || key === 'endDate') {
+        const aTime = aValue ? new Date(aValue).getTime() : 0;
+        const bTime = bValue ? new Date(bValue).getTime() : 0;
+        if (aTime === bTime) return 0;
+        return aTime > bTime ? multiplier : -multiplier;
+      }
+
+      return aValue.localeCompare(bValue, undefined, { sensitivity: 'base' }) * multiplier;
+    });
+  }, [items, sortConfig]);
+
+  const renderSortIndicator = (key: SortKey) => {
+    const isActive = !!sortConfig && sortConfig.key === key;
+    const indicator = isActive
+      ? (sortConfig!.direction === 'asc' ? '▲' : '▼')
+      : '↕';
+
+    return (
+      <span className={`text-xs ${isActive ? 'text-emerald-600' : 'opacity-40'}`}>
+        {indicator}
+      </span>
+    );
   };
 
   useEffect(() => {
@@ -644,16 +707,52 @@ export default function CampaignsPage() {
             <Table>
               <THead>
                 <TR>
-                  <TH>Name</TH>
+                  <TH>
+                    <button
+                      type="button"
+                      onClick={() => handleSort('name')}
+                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                    >
+                      <span>Name</span>
+                      {renderSortIndicator('name')}
+                    </button>
+                  </TH>
                   <TH>Category</TH>
-                  <TH>Start</TH>
-                  <TH>End</TH>
-                  <TH>Status</TH>
+                  <TH>
+                    <button
+                      type="button"
+                      onClick={() => handleSort('startDate')}
+                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                    >
+                      <span>Start</span>
+                      {renderSortIndicator('startDate')}
+                    </button>
+                  </TH>
+                  <TH>
+                    <button
+                      type="button"
+                      onClick={() => handleSort('endDate')}
+                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                    >
+                      <span>End</span>
+                      {renderSortIndicator('endDate')}
+                    </button>
+                  </TH>
+                  <TH>
+                    <button
+                      type="button"
+                      onClick={() => handleSort('status')}
+                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                    >
+                      <span>Status</span>
+                      {renderSortIndicator('status')}
+                    </button>
+                  </TH>
                   <TH className="!text-center">Actions</TH>
                 </TR>
               </THead>
               <tbody>
-                {items.map((c) => {
+                {sortedItems.map((c) => {
                   const categories = Array.isArray(c.categories) ? c.categories : [];
                   const maxVisible = 2;
                   const visibleCategories = categories.slice(0, maxVisible);

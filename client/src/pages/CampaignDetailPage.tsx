@@ -105,6 +105,34 @@ export default function CampaignDetailPage() {
   const [engagementUpdateResult, setEngagementUpdateResult] = useState<EngagementUpdateResult | null>(null);
   const [retryingUpdateRows, setRetryingUpdateRows] = useState<Record<string, boolean>>({});
 
+  type SortKey =
+    | 'postDate'
+    | 'account'
+    | 'postTitle'
+    | 'totalView'
+    | 'totalLike'
+    | 'totalComment'
+    | 'totalShare'
+    | 'totalSaved'
+    | 'contentType'
+    | 'contentCategory'
+    | 'campaignCategory'
+    | 'status'
+    | 'picTalent'
+    | 'picEditor'
+    | 'picPosting'
+    | 'adsOnMusic'
+    | 'yellowCart'
+    | 'engagementRate';
+
+  type SortConfig = {
+    key: SortKey;
+    direction: 'asc' | 'desc';
+  };
+
+  const DESC_SORT_KEYS: SortKey[] = ['postDate', 'totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved', 'engagementRate', 'adsOnMusic', 'yellowCart'];
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
+
   const refreshDashboardMetrics = useCallback(async () => {
     if (!id) return;
     const [kpisResult, engagementResult, categoriesResult] = await Promise.allSettled([
@@ -192,6 +220,126 @@ export default function CampaignDetailPage() {
       dateTo: '',
     });
     setPostPagination((prev) => ({ ...prev, offset: 0 }));
+  };
+
+  const accountNameMap = useMemo(() => new Map(accounts.map((account: any) => [account.id, account.name || ''])), [accounts]);
+  const picNameMap = useMemo(() => new Map(pics.map((pic: any) => [pic.id, pic.name || ''])), [pics]);
+
+  const getAccountName = useCallback((post: any) => {
+    if (post.account?.name) return post.account.name;
+    if (post.accountId) {
+      return accountNameMap.get(post.accountId) || '';
+    }
+    return '';
+  }, [accountNameMap]);
+
+  const getPicName = useCallback((id?: string, pic?: { id: string; name: string } | null) => {
+    if (pic?.name) return pic.name;
+    if (id) {
+      return picNameMap.get(id) || '';
+    }
+    return '';
+  }, [picNameMap]);
+
+  const sortedPosts = useMemo(() => {
+    const toTimestamp = (value?: string) => {
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    const normalize = (value: string) => value.toLowerCase();
+
+    const getSortValue = (post: any, key: SortKey): string | number => {
+      switch (key) {
+        case 'postDate':
+          return toTimestamp(post.postDate);
+        case 'account':
+          return normalize(getAccountName(post));
+        case 'postTitle':
+          return normalize(post.postTitle || '');
+        case 'totalView':
+          return post.totalView ?? 0;
+        case 'totalLike':
+          return post.totalLike ?? 0;
+        case 'totalComment':
+          return post.totalComment ?? 0;
+        case 'totalShare':
+          return post.totalShare ?? 0;
+        case 'totalSaved':
+          return post.totalSaved ?? 0;
+        case 'contentType':
+          return normalize(post.contentType || '');
+        case 'contentCategory':
+          return normalize(post.contentCategory || '');
+        case 'campaignCategory':
+          return normalize(post.campaignCategory || '');
+        case 'status':
+          return normalize(post.status || '');
+        case 'picTalent':
+          return normalize(getPicName(post.picTalentId, post.picTalent));
+        case 'picEditor':
+          return normalize(getPicName(post.picEditorId, post.picEditor));
+        case 'picPosting':
+          return normalize(getPicName(post.picPostingId, post.picPosting));
+        case 'adsOnMusic':
+          return post.adsOnMusic ? 1 : 0;
+        case 'yellowCart':
+          return post.yellowCart ? 1 : 0;
+        case 'engagementRate':
+          return post.engagementRate ?? 0;
+        default:
+          return '';
+      }
+    };
+
+    const compareValues = (a: string | number, b: string | number) => {
+      if (typeof a === 'number' && typeof b === 'number') {
+        return a - b;
+      }
+      return a.toString().localeCompare(b.toString(), undefined, { sensitivity: 'base', numeric: true });
+    };
+
+    const nextPosts = [...posts];
+    nextPosts.sort((a, b) => {
+      const aValue = getSortValue(a, sortConfig.key);
+      const bValue = getSortValue(b, sortConfig.key);
+      const comparison = compareValues(aValue, bValue);
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+    return nextPosts;
+  }, [posts, sortConfig, getAccountName, getPicName]);
+
+  const handleSortToggle = (key: SortKey) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDirection = DESC_SORT_KEYS.includes(key) ? 'desc' : 'asc';
+      return { key, direction: defaultDirection };
+    });
+  };
+
+  const renderSortableHeader = (label: string, key: SortKey, className?: string) => {
+    const isActive = sortConfig.key === key;
+    const indicator = isActive 
+      ? (sortConfig.direction === 'asc' ? '▲' : '▼')
+      : '↕';
+
+    return (
+      <TH className={className}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(key)}
+          className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-xs ${isActive ? 'text-emerald-600' : 'opacity-40'}`}>
+            {indicator}
+          </span>
+        </button>
+      </TH>
+    );
   };
 
   // Define the order of editable columns
@@ -1262,30 +1410,30 @@ export default function CampaignDetailPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
-                        <TH>Account</TH>
-                        <TH>Post Date</TH>
-                        <TH className="w-48">Title</TH>
+                        {renderSortableHeader('Account', 'account')}
+                        {renderSortableHeader('Post Date', 'postDate')}
+                        {renderSortableHeader('Title', 'postTitle', 'w-48')}
                         <TH>Link</TH>
-                        <TH>Views</TH>
-                        <TH>Likes</TH>
-                        <TH>Comments</TH>
-                        <TH>Shares</TH>
-                        <TH>Saved</TH>
-                        <TH>Type</TH>
-                        <TH>Content Category</TH>
-                        <TH>Campaign Category</TH>
-                        <TH>PIC Talent</TH>
-                        <TH>PIC Editor</TH>
-                        <TH>PIC Posting</TH>
-                        <TH>Ads on Music</TH>
-                        <TH>Yellow Cart</TH>
-                        <TH>Status</TH>
-                        <TH>Engagement</TH>
-                        <TH>Actions</TH>
+                        {renderSortableHeader('Views', 'totalView')}
+                        {renderSortableHeader('Likes', 'totalLike')}
+                        {renderSortableHeader('Comments', 'totalComment')}
+                        {renderSortableHeader('Shares', 'totalShare')}
+                        {renderSortableHeader('Saved', 'totalSaved')}
+                        {renderSortableHeader('Type', 'contentType')}
+                        {renderSortableHeader('Content Category', 'contentCategory')}
+                        {renderSortableHeader('Campaign Category', 'campaignCategory')}
+                        {renderSortableHeader('PIC Talent', 'picTalent')}
+                        {renderSortableHeader('PIC Editor', 'picEditor')}
+                        {renderSortableHeader('PIC Posting', 'picPosting')}
+                        {renderSortableHeader('Ads on Music', 'adsOnMusic')}
+                        {renderSortableHeader('Yellow Cart', 'yellowCart')}
+                        {renderSortableHeader('Status', 'status')}
+                        {renderSortableHeader('Engagement', 'engagementRate')}
+                        <TH className="!text-center">Actions</TH>
                       </TR>
                     </THead>
                     <tbody>
-                      {posts.map((p: any, index) => {
+                      {sortedPosts.map((p: any, index) => {
                         const isEditing = editingCell?.postId === p.id;
                         const isSaving = savingCell?.startsWith(`${p.id}-`);
                         const postCampaignCategoryOptions = Array.isArray(campaign?.categories) 
