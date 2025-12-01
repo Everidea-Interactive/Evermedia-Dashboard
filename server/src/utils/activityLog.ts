@@ -130,6 +130,7 @@ function formatFieldName(field: string): string {
     adsOnMusic: 'Ads on Music',
     yellowCart: 'Yellow Cart',
     targetViewsForFYP: 'Target Views for FYP',
+    quotationNumber: 'Quotation Number',
     accountIds: 'Accounts',
     campaignIds: 'Campaigns',
     category: 'Category',
@@ -208,6 +209,7 @@ export function generateChangeDescription(
       if (newValues.status) createFields.push(`status: ${newValues.status}`);
       if (newValues.startDate) createFields.push(`start date: ${formatDate(newValues.startDate)}`);
       if (newValues.endDate) createFields.push(`end date: ${formatDate(newValues.endDate)}`);
+      if (newValues.quotationNumber) createFields.push(`quotation number: ${newValues.quotationNumber}`);
       if (newValues.targetViewsForFYP !== undefined && newValues.targetViewsForFYP !== null) {
         createFields.push(`target views for FYP: ${newValues.targetViewsForFYP}`);
       }
@@ -360,4 +362,3 @@ export function generateChangeDescription(
       return `${action} ${entityType}${entityName ? ` "${entityName}"` : ''}`;
   }
 }
-

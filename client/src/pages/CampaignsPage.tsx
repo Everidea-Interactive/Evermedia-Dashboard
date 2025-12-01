@@ -37,6 +37,7 @@ type Campaign = {
   startDate: string;
   endDate: string;
   status: string;
+  quotationNumber?: string | null;
 };
 
 type Account = {
@@ -82,6 +83,7 @@ export default function CampaignsPage() {
     description: '',
     accountIds: [] as string[],
     targetViewsForFYP: '',
+    quotationNumber: '',
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -136,6 +138,7 @@ export default function CampaignsPage() {
       description: '',
       accountIds: [],
       targetViewsForFYP: '',
+      quotationNumber: '',
     });
     setSelectedAccount('');
     setNewCategory('');
@@ -187,6 +190,7 @@ export default function CampaignsPage() {
           description: form.description || undefined,
           accountIds: form.accountIds.length > 0 ? form.accountIds : undefined,
           targetViewsForFYP: Number(form.targetViewsForFYP),
+          quotationNumber: form.quotationNumber.trim() || null,
         },
       });
 
@@ -454,17 +458,25 @@ export default function CampaignsPage() {
                 required
               />
             </div>
-            <Select
-              label="Status"
-              value={form.status}
-              onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
-              required
-            >
-              <option value="PLANNED">PLANNED</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="PAUSED">PAUSED</option>
-              <option value="COMPLETED">COMPLETED</option>
-            </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select
+                label="Status"
+                value={form.status}
+                onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
+                required
+              >
+                <option value="PLANNED">PLANNED</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="PAUSED">PAUSED</option>
+                <option value="COMPLETED">COMPLETED</option>
+              </Select>
+              <Input
+                label="Quotation number"
+                value={form.quotationNumber}
+                onChange={e => setForm(prev => ({ ...prev, quotationNumber: e.target.value }))}
+                placeholder="Optional"
+              />
+            </div>
             <Input
               label="Target Views for FYP"
               type="number"

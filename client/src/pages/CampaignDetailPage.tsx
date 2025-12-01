@@ -865,6 +865,16 @@ export default function CampaignDetailPage() {
             >
               {campaign.status}
             </span>
+            <span
+              className="badge border text-xs sm:text-sm"
+              style={{
+                backgroundColor: 'var(--bg-tertiary)',
+                borderColor: 'var(--border-color)',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              Quotation: {campaign.quotationNumber || '—'}
+            </span>
           </div>
         }
         meta={headerMeta}

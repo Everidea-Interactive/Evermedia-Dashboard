@@ -4,6 +4,13 @@ import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
 import { recalculateKPIs } from '../utils/kpiRecalculation.js';
 import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
+const normalizeQuotationNumber = (value: any): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const asString = String(value).trim();
+  return asString === '' ? null : asString;
+};
+
 const router = Router();
 router.use(requireAuth);
 
@@ -21,10 +28,12 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
-  const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
+  const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP, quotationNumber } = req.body as any;
   if (!name || !categories || !Array.isArray(categories) || categories.length === 0 || !startDate || !endDate || !status) {
     return res.status(400).json({ error: 'Missing fields: name, categories (array), startDate, endDate, and status are required' });
   }
+
+  const normalizedQuotationNumber = normalizeQuotationNumber(quotationNumber);
   
   const { data: campaign, error } = await supabase
     .from('Campaign')
@@ -35,6 +44,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequ
       endDate: new Date(endDate).toISOString(),
       status,
       description,
+      quotationNumber: normalizedQuotationNumber ?? null,
       targetViewsForFYP: targetViewsForFYP !== undefined ? Number(targetViewsForFYP) : null,
     })
     .select()
@@ -65,6 +75,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequ
       endDate: campaign.endDate,
       status: campaign.status,
       description: campaign.description,
+      quotationNumber: campaign.quotationNumber,
       targetViewsForFYP: campaign.targetViewsForFYP,
       accountIds: accountIds || [],
     };
@@ -107,7 +118,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
-  const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP } = req.body as any;
+  const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP, quotationNumber } = req.body as any;
   
   // Get old campaign data for logging
   const { data: oldCampaign } = await supabase
@@ -124,6 +135,9 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRe
   if (status !== undefined) updateData.status = status;
   if (description !== undefined) updateData.description = description;
   if (targetViewsForFYP !== undefined) updateData.targetViewsForFYP = targetViewsForFYP !== null && targetViewsForFYP !== '' ? Number(targetViewsForFYP) : null;
+  if (quotationNumber !== undefined) {
+    updateData.quotationNumber = normalizeQuotationNumber(quotationNumber);
+  }
   
   const { data: campaign, error } = await supabase
     .from('Campaign')
@@ -279,6 +293,7 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
     endDate: campaign.endDate,
     status: campaign.status,
     description: campaign.description,
+    quotationNumber: campaign.quotationNumber,
     targetViewsForFYP: campaign.targetViewsForFYP,
   };
   

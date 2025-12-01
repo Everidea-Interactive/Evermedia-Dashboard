@@ -44,6 +44,7 @@ export default function CampaignEditPage() {
     endDate: '',
     accountIds: [] as string[],
     targetViewsForFYP: '',
+    quotationNumber: '',
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -75,6 +76,7 @@ export default function CampaignEditPage() {
       endDate: campaign.endDate ? campaign.endDate.split('T')[0] : '',
       accountIds: (campaign.accounts || []).map((a: any) => a.id),
       targetViewsForFYP: campaign.targetViewsForFYP ? String(campaign.targetViewsForFYP) : '',
+      quotationNumber: campaign.quotationNumber || '',
     });
   }, [campaign]);
 
@@ -163,6 +165,7 @@ export default function CampaignEditPage() {
         endDate: form.endDate,
         accountIds: form.accountIds,
         targetViewsForFYP: Number(form.targetViewsForFYP),
+        quotationNumber: form.quotationNumber.trim() || null,
       };
       const updated = await api(`/campaigns/${id}`, { method: 'PUT', body: payload, token });
       setCampaign(updated);
@@ -395,11 +398,19 @@ export default function CampaignEditPage() {
               <Input label="Start date" type="date" value={form.startDate} onChange={(e) => handleFormChange('startDate', e.target.value)} required />
               <Input label="End date" type="date" value={form.endDate} onChange={(e) => handleFormChange('endDate', e.target.value)} required />
             </div>
-            <Select label="Status" value={form.status} onChange={(e) => handleFormChange('status', e.target.value)} required>
-              {statusOptions.map((status) => (
-                <option key={status}>{status}</option>
-              ))}
-            </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select label="Status" value={form.status} onChange={(e) => handleFormChange('status', e.target.value)} required>
+                {statusOptions.map((status) => (
+                  <option key={status}>{status}</option>
+                ))}
+              </Select>
+              <Input
+                label="Quotation number"
+                value={form.quotationNumber}
+                onChange={(e) => handleFormChange('quotationNumber', e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
             <Input 
               label="Target Views for FYP" 
               type="number" 
