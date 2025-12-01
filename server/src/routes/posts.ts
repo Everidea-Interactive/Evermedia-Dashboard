@@ -53,14 +53,20 @@ router.get('/all', async (req, res) => {
   const { data: posts, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   
-  // Fetch related data
+  // Fetch related data - parallelize independent queries
   const accountIds = [...new Set((posts || []).map((p: any) => p.accountId))];
   const picIds = [...new Set((posts || []).flatMap((p: any) => [p.picTalentId, p.picEditorId, p.picPostingId]).filter(Boolean))];
   const campaignIds = [...new Set((posts || []).map((p: any) => p.campaignId))];
   
-  const { data: accounts } = await supabase.from('Account').select('id, name').in('id', accountIds);
-  const { data: pics } = await supabase.from('PIC').select('id, name').in('id', picIds);
-  const { data: campaigns } = await supabase.from('Campaign').select('id, name').in('id', campaignIds);
+  const [accountsResult, picsResult, campaignsResult] = await Promise.all([
+    supabase.from('Account').select('id, name').in('id', accountIds),
+    supabase.from('PIC').select('id, name').in('id', picIds),
+    supabase.from('Campaign').select('id, name').in('id', campaignIds),
+  ]);
+  
+  const accounts = accountsResult.data || [];
+  const pics = picsResult.data || [];
+  const campaigns = campaignsResult.data || [];
   
   const accountMap = new Map((accounts || []).map((a: any) => [a.id, a]));
   const picMap = new Map((pics || []).map((p: any) => [p.id, p]));

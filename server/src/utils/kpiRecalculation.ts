@@ -51,15 +51,27 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
     }
   });
   
-  // Update each KPI's actual value
+  // Batch update KPIs by category for better performance
+  // Group KPIs by category and update in batches
+  const updatesByCategory = new Map<string, string[]>();
+  
   for (const kpi of kpis) {
     const category = kpi.category;
     if (category in totals) {
-      const newActual = totals[category];
+      if (!updatesByCategory.has(category)) {
+        updatesByCategory.set(category, []);
+      }
+      updatesByCategory.get(category)!.push(kpi.id);
+    }
+  }
+  
+  // Batch update all KPIs of the same category at once
+  for (const [category, kpiIds] of updatesByCategory) {
+    if (kpiIds.length > 0 && category in totals) {
       await supabase
         .from('KPI')
-        .update({ actual: newActual })
-        .eq('id', kpi.id);
+        .update({ actual: totals[category] })
+        .in('id', kpiIds);
     }
   }
 }
@@ -114,15 +126,27 @@ export async function recalculateCampaignKPIs(campaignId: string) {
     }
   });
   
-  // Update each KPI's actual value
+  // Batch update KPIs by category for better performance
+  // Group KPIs by category and update in batches
+  const updatesByCategory = new Map<string, string[]>();
+  
   for (const kpi of kpis) {
     const category = kpi.category;
     if (category in totals) {
-      const newActual = totals[category];
+      if (!updatesByCategory.has(category)) {
+        updatesByCategory.set(category, []);
+      }
+      updatesByCategory.get(category)!.push(kpi.id);
+    }
+  }
+  
+  // Batch update all KPIs of the same category at once
+  for (const [category, kpiIds] of updatesByCategory) {
+    if (kpiIds.length > 0 && category in totals) {
       await supabase
         .from('KPI')
-        .update({ actual: newActual })
-        .eq('id', kpi.id);
+        .update({ actual: totals[category] })
+        .in('id', kpiIds);
     }
   }
 }
@@ -144,27 +168,28 @@ export async function initializeAccountKPIs(campaignId: string, accountId: strin
   
   const existingCategories = new Set((existingKPIs || []).map((k: any) => k.category));
   
-  // Reset existing KPIs to target=0, actual=0
-  for (const kpi of existingKPIs || []) {
+  // Batch reset existing KPIs to target=0, actual=0
+  if (existingKPIs && existingKPIs.length > 0) {
+    const existingKpiIds = existingKPIs.map((k: any) => k.id);
     await supabase
       .from('KPI')
       .update({ target: 0, actual: 0 })
-      .eq('id', kpi.id);
+      .in('id', existingKpiIds);
   }
   
-  // Create missing KPIs with target=0, actual=0
-  for (const category of categories) {
-    if (!existingCategories.has(category)) {
-      await supabase
-        .from('KPI')
-        .insert({
-          campaignId,
-          accountId,
-          category,
-          target: 0,
-          actual: 0,
-        });
-    }
+  // Batch create missing KPIs with target=0, actual=0
+  const missingKPIs = categories
+    .filter(category => !existingCategories.has(category))
+    .map(category => ({
+      campaignId,
+      accountId,
+      category,
+      target: 0,
+      actual: 0,
+    }));
+  
+  if (missingKPIs.length > 0) {
+    await supabase.from('KPI').insert(missingKPIs);
   }
 }
 

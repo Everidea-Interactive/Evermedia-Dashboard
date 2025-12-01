@@ -248,16 +248,26 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
     return res.status(404).json({ error: 'Campaign not found' });
   }
   
-  // Delete related data: posts
-  await supabase.from('Post').delete().eq('campaignId', campaignId);
+  // Delete related data in parallel (independent operations)
+  // Note: Campaign deletion must happen last due to foreign key constraints
+  const [postsDeleteResult, linksDeleteResult, kpisDeleteResult] = await Promise.all([
+    supabase.from('Post').delete().eq('campaignId', campaignId),
+    supabase.from('_CampaignToAccount').delete().eq('A', campaignId),
+    supabase.from('KPI').delete().eq('campaignId', campaignId),
+  ]);
   
-  // Sever campaign-to-account links (accounts themselves are not deleted)
-  await supabase.from('_CampaignToAccount').delete().eq('A', campaignId);
+  // Check for errors in parallel deletions
+  if (postsDeleteResult.error) {
+    return res.status(500).json({ error: `Failed to delete posts: ${postsDeleteResult.error.message}` });
+  }
+  if (linksDeleteResult.error) {
+    return res.status(500).json({ error: `Failed to delete campaign links: ${linksDeleteResult.error.message}` });
+  }
+  if (kpisDeleteResult.error) {
+    return res.status(500).json({ error: `Failed to delete KPIs: ${kpisDeleteResult.error.message}` });
+  }
   
-  // Delete related KPIs
-  await supabase.from('KPI').delete().eq('campaignId', campaignId);
-  
-  // Delete the campaign
+  // Delete the campaign (must be last due to foreign key constraints)
   const { error } = await supabase.from('Campaign').delete().eq('id', campaignId);
   if (error) return res.status(500).json({ error: error.message });
   
@@ -358,16 +368,22 @@ router.get('/:id/posts', async (req, res) => {
   const { data: posts, error } = await query.order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   
-  // Fetch related data
+  // Fetch related data - parallelize independent queries
   const accountIds = [...new Set((posts || []).map((p: any) => p.accountId))];
   const picIds = [...new Set((posts || []).flatMap((p: any) => [p.picTalentId, p.picEditorId, p.picPostingId]).filter(Boolean))];
   
-  const { data: accounts } = await supabase.from('Account').select('id, name').in('id', accountIds);
-  const { data: pics } = await supabase.from('PIC').select('id, name').in('id', picIds);
-  const { data: campaign } = await supabase.from('Campaign').select('id, name').eq('id', id).single();
+  const [accountsResult, picsResult, campaignResult] = await Promise.all([
+    supabase.from('Account').select('id, name').in('id', accountIds),
+    supabase.from('PIC').select('id, name').in('id', picIds),
+    supabase.from('Campaign').select('id, name').eq('id', id).single(),
+  ]);
   
-  const accountMap = new Map((accounts || []).map((a: any) => [a.id, a]));
-  const picMap = new Map((pics || []).map((p: any) => [p.id, p]));
+  const accounts = accountsResult.data || [];
+  const pics = picsResult.data || [];
+  const campaign = campaignResult.data || null;
+  
+  const accountMap = new Map(accounts.map((a: any) => [a.id, a]));
+  const picMap = new Map(pics.map((p: any) => [p.id, p]));
   
   const mapped = (posts || []).map((p: any) => {
     const views = p.totalView || 0, likes = p.totalLike || 0, comments = p.totalComment || 0, shares = p.totalShare || 0, saves = p.totalSaved || 0;

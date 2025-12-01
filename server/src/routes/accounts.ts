@@ -123,20 +123,16 @@ router.get('/', async (req, res) => {
   // Get campaign counts and post/kpi counts for each account
   const accountIds = (accounts || []).map((a: any) => a.id);
   
-  const { data: campaignLinks } = await supabase
-    .from('_CampaignToAccount')
-    .select('B')
-    .in('B', accountIds);
+  // Parallelize independent queries for better performance
+  const [campaignLinksResult, postsResult, kpisResult] = await Promise.all([
+    supabase.from('_CampaignToAccount').select('B').in('B', accountIds),
+    supabase.from('Post').select('accountId').in('accountId', accountIds),
+    supabase.from('KPI').select('accountId').in('accountId', accountIds),
+  ]);
   
-  const { data: posts } = await supabase
-    .from('Post')
-    .select('accountId')
-    .in('accountId', accountIds);
-  
-  const { data: kpis } = await supabase
-    .from('KPI')
-    .select('accountId')
-    .in('accountId', accountIds);
+  const campaignLinks = campaignLinksResult.data || [];
+  const posts = postsResult.data || [];
+  const kpis = kpisResult.data || [];
   
   const campaignCounts = new Map<string, number>();
   (campaignLinks || []).forEach((link: any) => {
@@ -155,22 +151,22 @@ router.get('/', async (req, res) => {
     }
   });
   
-  // Get campaigns for each account
-  const { data: allCampaignLinks } = await supabase
-    .from('_CampaignToAccount')
-    .select('A, B');
+  // Get campaigns for each account - parallelize queries
+  const [allCampaignLinksResult, allCampaignsResult] = await Promise.all([
+    supabase.from('_CampaignToAccount').select('A, B'),
+    supabase.from('Campaign').select('id, name, categories'),
+  ]);
+  
+  const allCampaignLinks = allCampaignLinksResult.data || [];
+  const allCampaigns = allCampaignsResult.data || [];
   
   const accountCampaignMap = new Map<string, string[]>();
-  (allCampaignLinks || []).forEach((link: any) => {
+  allCampaignLinks.forEach((link: any) => {
     if (!accountCampaignMap.has(link.B)) {
       accountCampaignMap.set(link.B, []);
     }
     accountCampaignMap.get(link.B)!.push(link.A);
   });
-  
-  const { data: allCampaigns } = await supabase
-    .from('Campaign')
-    .select('id, name, categories');
   
   const campaignMap = new Map((allCampaigns || []).map((c: any) => [c.id, c]));
   
