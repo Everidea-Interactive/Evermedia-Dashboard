@@ -1141,26 +1141,26 @@ export default function AllPostsPage() {
                   <THead>
                     <TR>
                       <TH>NO</TH>
+                      <TH>Account</TH>
+                      <TH>Post Date</TH>
+                      <TH className="w-48">Title</TH>
+                      <TH>Link</TH>
+                      <TH>Views</TH>
+                      <TH>Likes</TH>
+                      <TH>Comments</TH>
+                      <TH>Shares</TH>
+                      <TH>Saved</TH>
                       <TH>Campaign</TH>
                       <TH>Campaign Category</TH>
-                      <TH>Account</TH>
                       <TH>Post Day</TH>
-                      <TH>Post Date</TH>
-                      <TH>Title</TH>
                       <TH>Type</TH>
                       <TH>Content Category</TH>
                       <TH>Status</TH>
                       <TH>PIC Talent</TH>
                       <TH>PIC Editor</TH>
                       <TH>PIC Posting</TH>
-                      <TH>Content Link</TH>
                       <TH>Ads on Music</TH>
                       <TH>Yellow Cart</TH>
-                      <TH>TOTAL VIEW</TH>
-                      <TH>LIKE</TH>
-                      <TH>COMMENT</TH>
-                      <TH>SHARE</TH>
-                      <TH>SAVED</TH>
                       <TH>Engagement Rate</TH>
                       <TH className="!text-center">Actions</TH>
                     </TR>
@@ -1180,716 +1180,717 @@ export default function AllPostsPage() {
                         : [];
                       
                       return (
-                        <TR key={p.id}>
-                          <TD>{i + 1}</TD>
-                          <TD>
+                          <TR key={p.id}>
+                            <TD>{i + 1}</TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'campaignId', p.campaignId)}
-                            >
-                              {isEditing && editingCell?.field === 'campaignId' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'accountId', p.accountId)}
+                              >
+                                {isEditing && editingCell?.field === 'accountId' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-campaignId`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'campaignId', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-campaignId`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'campaignId');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignId')}
-                                  autoFocus
-                                >
-                                  {campaigns.map((campaign) => (
-                                    <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-campaignId') ? 'opacity-50' : ''}>
-                                  {campaignName !== '—' ? (
-                                    <Link to={`/campaigns/${p.campaignId}`} className="hover:underline text-blue-600 dark:text-blue-400" style={{ color: '#2563eb' }}>
-                                      {campaignName}
-                                    </Link>
-                                  ) : (
-                                    campaignName
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-accountId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'accountId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-accountId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'accountId');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'accountId')}
+                                    autoFocus
+                                  >
+                                    {accounts.map((account) => (
+                                      <option key={account.id} value={account.id}>{account.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-accountId') ? 'opacity-50' : ''}>
+                                    {accountName}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'campaignCategory', p.campaignCategory || '')}
-                            >
-                              {isEditing && editingCell?.field === 'campaignCategory' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'postDate', p.postDate)}
+                              >
+                                {isEditing && editingCell?.field === 'postDate' ? (
+                                  <input
+                                    type="date"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-campaignCategory`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'campaignCategory', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-campaignCategory`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'campaignCategory');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignCategory')}
-                                  autoFocus
-                                >
-                                  {postCampaignCategoryOptions.map((cat) => (
-                                    <option key={cat} value={cat}>{cat}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-campaignCategory') ? 'opacity-50' : ''}>
-                                  {p.campaignCategory || '—'}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'postDate')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'postDate')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-postDate') ? 'opacity-50' : ''}>
+                                    {formatDate(p.postDate)}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-[12rem] overflow-hidden whitespace-nowrap rounded-md transition-colors duration-150 px-1 -mx-1"
+                                onClick={() => handleCellClick(p.id, 'postTitle', p.postTitle)}
+                                title={p.postTitle}
+                              >
+                                {isEditing && editingCell?.field === 'postTitle' ? (
+                                  <input
+                                    type="text"
+                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'postTitle')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'postTitle')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-postTitle') ? 'opacity-50' : ''}>
+                                    {p.postTitle}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'accountId', p.accountId)}
-                            >
-                              {isEditing && editingCell?.field === 'accountId' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'contentLink', p.contentLink || '')}
+                              >
+                                {isEditing && editingCell?.field === 'contentLink' ? (
+                                  <input
+                                    type="text"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-accountId`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'accountId', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-accountId`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'accountId');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'accountId')}
-                                  autoFocus
-                                >
-                                  {accounts.map((account) => (
-                                    <option key={account.id} value={account.id}>{account.name}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-accountId') ? 'opacity-50' : ''}>
-                                  {accountName}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>{p.postDay}</TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(e.target.value)}
+                                    onBlur={() => handleCellBlur(p.id, 'contentLink')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentLink')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-contentLink') ? 'opacity-50' : ''}>
+                                    {p.contentLink ? (
+                                      <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400" style={{ color: '#2563eb' }}>
+                                        Link
+                                      </a>
+                                    ) : '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'postDate', p.postDate)}
-                            >
-                              {isEditing && editingCell?.field === 'postDate' ? (
-                                <input
-                                  type="date"
+                                onClick={() => handleCellClick(p.id, 'totalView', p.totalView)}
+                              >
+                                {isEditing && editingCell?.field === 'totalView' ? (
+                                  <input
+                                    type="number"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(e.target.value)}
-                                  onBlur={() => handleCellBlur(p.id, 'postDate')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'postDate')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-postDate') ? 'opacity-50' : ''}>
-                                  {formatDate(p.postDate)}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalView')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalView')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalView') ? 'opacity-50' : ''}>
+                                    {p.totalView}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'postTitle', p.postTitle)}
-                            >
-                              {isEditing && editingCell?.field === 'postTitle' ? (
-                                <input
-                                  type="text"
+                                onClick={() => handleCellClick(p.id, 'totalLike', p.totalLike)}
+                              >
+                                {isEditing && editingCell?.field === 'totalLike' ? (
+                                  <input
+                                    type="number"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(e.target.value)}
-                                  onBlur={() => handleCellBlur(p.id, 'postTitle')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'postTitle')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-postTitle') ? 'opacity-50' : ''}>
-                                  {p.postTitle}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalLike')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalLike')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalLike') ? 'opacity-50' : ''}>
+                                    {p.totalLike}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'contentType', p.contentType)}
-                            >
-                              {isEditing && editingCell?.field === 'contentType' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'totalComment', p.totalComment)}
+                              >
+                                {isEditing && editingCell?.field === 'totalComment' ? (
+                                  <input
+                                    type="number"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-contentType`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'contentType', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-contentType`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'contentType');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentType')}
-                                  autoFocus
-                                >
-                                  {CONTENT_TYPE_OPTIONS.map((type) => (
-                                    <option key={type} value={type}>{type}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-contentType') ? 'opacity-50' : ''}>
-                                  {p.contentType}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalComment')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalComment')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalComment') ? 'opacity-50' : ''}>
+                                    {p.totalComment}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'contentCategory', p.contentCategory)}
-                            >
-                              {isEditing && editingCell?.field === 'contentCategory' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'totalShare', p.totalShare)}
+                              >
+                                {isEditing && editingCell?.field === 'totalShare' ? (
+                                  <input
+                                    type="number"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-contentCategory`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'contentCategory', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-contentCategory`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'contentCategory');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentCategory')}
-                                  autoFocus
-                                >
-                                  {CONTENT_CATEGORY_OPTIONS.map((cat) => (
-                                    <option key={cat} value={cat}>{cat}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-contentCategory') ? 'opacity-50' : ''}>
-                                  {p.contentCategory}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalShare')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalShare')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalShare') ? 'opacity-50' : ''}>
+                                    {p.totalShare}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'status', p.status)}
-                            >
-                              {isEditing && editingCell?.field === 'status' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'totalSaved', p.totalSaved)}
+                              >
+                                {isEditing && editingCell?.field === 'totalSaved' ? (
+                                  <input
+                                    type="number"
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-status`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'status', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-status`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'status');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'status')}
-                                  autoFocus
-                                >
-                                  {STATUS_OPTIONS.map((status) => (
-                                    <option key={status} value={status}>{status}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={`badge ${isSaving && savingCell?.endsWith('-status') ? 'opacity-50' : ''}`}>
-                                  {p.status}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
+                                    onBlur={() => handleCellBlur(p.id, 'totalSaved')}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalSaved')}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-totalSaved') ? 'opacity-50' : ''}>
+                                    {p.totalSaved}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'picTalentId', p.picTalentId || '')}
-                            >
-                              {isEditing && editingCell?.field === 'picTalentId' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'campaignId', p.campaignId)}
+                              >
+                                {isEditing && editingCell?.field === 'campaignId' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-picTalentId`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'picTalentId', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-picTalentId`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'picTalentId');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picTalentId')}
-                                  autoFocus
-                                >
-                                  {talentPics.map((pic) => (
-                                    <option key={pic.id} value={pic.id}>{pic.name}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-picTalentId') ? 'opacity-50' : ''}>
-                                  {picTalentName}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-campaignId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'campaignId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-campaignId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'campaignId');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignId')}
+                                    autoFocus
+                                  >
+                                    {campaigns.map((campaign) => (
+                                      <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-campaignId') ? 'opacity-50' : ''}>
+                                    {campaignName !== '—' ? (
+                                      <Link to={`/campaigns/${p.campaignId}`} className="hover:underline text-blue-600 dark:text-blue-400" style={{ color: '#2563eb' }}>
+                                        {campaignName}
+                                      </Link>
+                                    ) : (
+                                      campaignName
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'picEditorId', p.picEditorId || '')}
-                            >
-                              {isEditing && editingCell?.field === 'picEditorId' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'campaignCategory', p.campaignCategory || '')}
+                              >
+                                {isEditing && editingCell?.field === 'campaignCategory' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-picEditorId`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'picEditorId', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-picEditorId`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'picEditorId');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picEditorId')}
-                                  autoFocus
-                                >
-                                  {editorPics.map((pic) => (
-                                    <option key={pic.id} value={pic.id}>{pic.name}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-picEditorId') ? 'opacity-50' : ''}>
-                                  {picEditorName}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-campaignCategory`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'campaignCategory', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-campaignCategory`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'campaignCategory');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'campaignCategory')}
+                                    autoFocus
+                                  >
+                                    {postCampaignCategoryOptions.map((cat) => (
+                                      <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-campaignCategory') ? 'opacity-50' : ''}>
+                                    {p.campaignCategory || '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>{p.postDay}</TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'picPostingId', p.picPostingId || '')}
-                            >
-                              {isEditing && editingCell?.field === 'picPostingId' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'contentType', p.contentType)}
+                              >
+                                {isEditing && editingCell?.field === 'contentType' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-picPostingId`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'picPostingId', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-picPostingId`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'picPostingId');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picPostingId')}
-                                  autoFocus
-                                >
-                                  {postingPics.map((pic) => (
-                                    <option key={pic.id} value={pic.id}>{pic.name}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-picPostingId') ? 'opacity-50' : ''}>
-                                  {picPostingName}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-contentType`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'contentType', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-contentType`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'contentType');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentType')}
+                                    autoFocus
+                                  >
+                                    {CONTENT_TYPE_OPTIONS.map((type) => (
+                                      <option key={type} value={type}>{type}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-contentType') ? 'opacity-50' : ''}>
+                                    {p.contentType}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'contentLink', p.contentLink || '')}
-                            >
-                              {isEditing && editingCell?.field === 'contentLink' ? (
-                                <input
-                                  type="text"
+                                onClick={() => handleCellClick(p.id, 'contentCategory', p.contentCategory)}
+                              >
+                                {isEditing && editingCell?.field === 'contentCategory' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(e.target.value)}
-                                  onBlur={() => handleCellBlur(p.id, 'contentLink')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentLink')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-contentLink') ? 'opacity-50' : ''}>
-                                  {p.contentLink ? (
-                                    <a href={p.contentLink} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400" style={{ color: '#2563eb' }}>
-                                      Link
-                                    </a>
-                                  ) : '—'}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-contentCategory`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'contentCategory', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-contentCategory`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'contentCategory');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'contentCategory')}
+                                    autoFocus
+                                  >
+                                    {CONTENT_CATEGORY_OPTIONS.map((cat) => (
+                                      <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-contentCategory') ? 'opacity-50' : ''}>
+                                    {p.contentCategory}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'adsOnMusic', p.adsOnMusic)}
-                            >
-                              {isEditing && editingCell?.field === 'adsOnMusic' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'status', p.status)}
+                              >
+                                {isEditing && editingCell?.field === 'status' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-adsOnMusic`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'adsOnMusic', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-adsOnMusic`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'adsOnMusic');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'adsOnMusic')}
-                                  autoFocus
-                                >
-                                  <option value="false">No</option>
-                                  <option value="true">Yes</option>
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-adsOnMusic') ? 'opacity-50' : ''}>
-                                  {p.adsOnMusic ? 'Yes' : 'No'}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-status`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'status', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-status`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'status');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'status')}
+                                    autoFocus
+                                  >
+                                    {STATUS_OPTIONS.map((status) => (
+                                      <option key={status} value={status}>{status}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={`badge ${isSaving && savingCell?.endsWith('-status') ? 'opacity-50' : ''}`}>
+                                    {p.status}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'yellowCart', p.yellowCart)}
-                            >
-                              {isEditing && editingCell?.field === 'yellowCart' ? (
-                                <select
+                                onClick={() => handleCellClick(p.id, 'picTalentId', p.picTalentId || '')}
+                              >
+                                {isEditing && editingCell?.field === 'picTalentId' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setCellEditValue(newValue);
-                                    const changeKey = `${p.id}-yellowCart`;
-                                    selectChangeInProgressRef.current = changeKey;
-                                    setEditingCell(null);
-                                    void handleCellBlur(p.id, 'yellowCart', true, newValue).finally(() => {
-                                      setTimeout(() => {
-                                        selectChangeInProgressRef.current = null;
-                                      }, 100);
-                                    });
-                                  }}
-                                  onBlur={(e) => {
-                                    const changeKey = `${p.id}-yellowCart`;
-                                    if (selectChangeInProgressRef.current === changeKey) {
-                                      return;
-                                    }
-                                    const currentSelectValue = (e.target as HTMLSelectElement).value;
-                                    if (currentSelectValue !== initialCellValueRef.current) {
-                                      return;
-                                    }
-                                    void handleCellBlur(p.id, 'yellowCart');
-                                  }}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'yellowCart')}
-                                  autoFocus
-                                >
-                                  <option value="false">No</option>
-                                  <option value="true">Yes</option>
-                                </select>
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-yellowCart') ? 'opacity-50' : ''}>
-                                  {p.yellowCart ? 'Yes' : 'No'}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-picTalentId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'picTalentId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-picTalentId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'picTalentId');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picTalentId')}
+                                    autoFocus
+                                  >
+                                    {talentPics.map((pic) => (
+                                      <option key={pic.id} value={pic.id}>{pic.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-picTalentId') ? 'opacity-50' : ''}>
+                                    {picTalentName}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'totalView', p.totalView)}
-                            >
-                              {isEditing && editingCell?.field === 'totalView' ? (
-                                <input
-                                  type="number"
+                                onClick={() => handleCellClick(p.id, 'picEditorId', p.picEditorId || '')}
+                              >
+                                {isEditing && editingCell?.field === 'picEditorId' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
-                                  onBlur={() => handleCellBlur(p.id, 'totalView')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalView')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-totalView') ? 'opacity-50' : ''}>
-                                  {p.totalView}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-picEditorId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'picEditorId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-picEditorId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'picEditorId');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picEditorId')}
+                                    autoFocus
+                                  >
+                                    {editorPics.map((pic) => (
+                                      <option key={pic.id} value={pic.id}>{pic.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-picEditorId') ? 'opacity-50' : ''}>
+                                    {picEditorName}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'totalLike', p.totalLike)}
-                            >
-                              {isEditing && editingCell?.field === 'totalLike' ? (
-                                <input
-                                  type="number"
+                                onClick={() => handleCellClick(p.id, 'picPostingId', p.picPostingId || '')}
+                              >
+                                {isEditing && editingCell?.field === 'picPostingId' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
-                                  onBlur={() => handleCellBlur(p.id, 'totalLike')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalLike')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-totalLike') ? 'opacity-50' : ''}>
-                                  {p.totalLike}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-picPostingId`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'picPostingId', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-picPostingId`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'picPostingId');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'picPostingId')}
+                                    autoFocus
+                                  >
+                                    {postingPics.map((pic) => (
+                                      <option key={pic.id} value={pic.id}>{pic.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-picPostingId') ? 'opacity-50' : ''}>
+                                    {picPostingName}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'totalComment', p.totalComment)}
-                            >
-                              {isEditing && editingCell?.field === 'totalComment' ? (
-                                <input
-                                  type="number"
+                                onClick={() => handleCellClick(p.id, 'adsOnMusic', p.adsOnMusic)}
+                              >
+                                {isEditing && editingCell?.field === 'adsOnMusic' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
-                                  onBlur={() => handleCellBlur(p.id, 'totalComment')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalComment')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-totalComment') ? 'opacity-50' : ''}>
-                                  {p.totalComment}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-adsOnMusic`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'adsOnMusic', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-adsOnMusic`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'adsOnMusic');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'adsOnMusic')}
+                                    autoFocus
+                                  >
+                                    <option value="false">No</option>
+                                    <option value="true">Yes</option>
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-adsOnMusic') ? 'opacity-50' : ''}>
+                                    {p.adsOnMusic ? 'Yes' : 'No'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'totalShare', p.totalShare)}
-                            >
-                              {isEditing && editingCell?.field === 'totalShare' ? (
-                                <input
-                                  type="number"
+                                onClick={() => handleCellClick(p.id, 'yellowCart', p.yellowCart)}
+                              >
+                                {isEditing && editingCell?.field === 'yellowCart' ? (
+                                  <select
                                     className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
-                                  onBlur={() => handleCellBlur(p.id, 'totalShare')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalShare')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-totalShare') ? 'opacity-50' : ''}>
-                                  {p.totalShare}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>
-                              <div 
-                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"
-                              onClick={() => handleCellClick(p.id, 'totalSaved', p.totalSaved)}
-                            >
-                              {isEditing && editingCell?.field === 'totalSaved' ? (
-                                <input
-                                  type="number"
-                                    className="w-full border-none bg-transparent p-1 text-sm text-inherit dark:text-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded min-w-0"
-                                  value={cellEditValue}
-                                  onChange={(e) => setCellEditValue(sanitizeNumberInput(e.target.value))}
-                                  onBlur={() => handleCellBlur(p.id, 'totalSaved')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, p.id, 'totalSaved')}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className={isSaving && savingCell?.endsWith('-totalSaved') ? 'opacity-50' : ''}>
-                                  {p.totalSaved}
-                                </span>
-                              )}
-                            </div>
-                          </TD>
-                          <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
-                          <TD>
-                            <div className="flex gap-1.5 justify-center">
-                              <RequirePermission permission={canDeletePost}>
-                                <Button
-                                  onClick={() => handleDeleteClick(p)}
-                                  variant="ghost"
-                                  color="red"
-                                  className="text-xs px-2 py-1"
-                                  type="button"
-                                >
-                                  Delete
-                                </Button>
-                              </RequirePermission>
-                            </div>
-                          </TD>
-                        </TR>
+                                    value={cellEditValue}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setCellEditValue(newValue);
+                                      const changeKey = `${p.id}-yellowCart`;
+                                      selectChangeInProgressRef.current = changeKey;
+                                      setEditingCell(null);
+                                      void handleCellBlur(p.id, 'yellowCart', true, newValue).finally(() => {
+                                        setTimeout(() => {
+                                          selectChangeInProgressRef.current = null;
+                                        }, 100);
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const changeKey = `${p.id}-yellowCart`;
+                                      if (selectChangeInProgressRef.current === changeKey) {
+                                        return;
+                                      }
+                                      const currentSelectValue = (e.target as HTMLSelectElement).value;
+                                      if (currentSelectValue !== initialCellValueRef.current) {
+                                        return;
+                                      }
+                                      void handleCellBlur(p.id, 'yellowCart');
+                                    }}
+                                    onKeyDown={(e) => handleCellKeyDown(e, p.id, 'yellowCart')}
+                                    autoFocus
+                                  >
+                                    <option value="false">No</option>
+                                    <option value="true">Yes</option>
+                                  </select>
+                                ) : (
+                                  <span className={isSaving && savingCell?.endsWith('-yellowCart') ? 'opacity-50' : ''}>
+                                    {p.yellowCart ? 'Yes' : 'No'}
+                                  </span>
+                                )}
+                              </div>
+                            </TD>
+                            <TD>{(p.engagementRate * 100).toFixed(2)}%</TD>
+                            <TD>
+                              <div className="flex gap-1.5 justify-center">
+                                <RequirePermission permission={canDeletePost}>
+                                  <Button
+                                    onClick={() => handleDeleteClick(p)}
+                                    variant="ghost"
+                                    color="red"
+                                    className="text-xs px-2 py-1"
+                                    type="button"
+                                  >
+                                    Delete
+                                  </Button>
+                                </RequirePermission>
+                              </div>
+                            </TD>
+                          </TR>
                       );
                     })}
                   </tbody>
@@ -2035,4 +2036,3 @@ export default function AllPostsPage() {
     </div>
   );
 }
-

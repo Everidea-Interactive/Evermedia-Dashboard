@@ -28,13 +28,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Main header bar */}
           <div className="h-16 flex items-center justify-between">
             {/* Logo and brand */}
-            <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3 rounded-lg px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+            >
               <div className="h-9 w-9 rounded-lg grid place-items-center font-semibold" style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' }}>TK</div>
               <div className="hidden sm:block">
                 <div className="font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>TikTok Dashboard</div>
                 <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Proxy Accounts</div>
               </div>
-            </div>
+            </Link>
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-1">
