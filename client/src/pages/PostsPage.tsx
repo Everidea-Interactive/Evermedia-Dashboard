@@ -107,6 +107,42 @@ type EngagementUpdateResult = {
   type: 'success' | 'error' | 'partial';
 };
 
+type SortKey =
+  | 'postDate'
+  | 'account'
+  | 'postTitle'
+  | 'totalView'
+  | 'totalLike'
+  | 'totalComment'
+  | 'totalShare'
+  | 'totalSaved'
+  | 'campaign'
+  | 'campaignCategory'
+  | 'postDay'
+  | 'contentType'
+  | 'contentCategory'
+  | 'status'
+  | 'picTalent'
+  | 'picEditor'
+  | 'picPosting'
+  | 'adsOnMusic'
+  | 'yellowCart'
+  | 'engagementRate';
+
+type SortConfig = {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+};
+
+type PostFilters = {
+  accountId: string;
+  status: string;
+  contentType: string;
+  contentCategory: string;
+  dateFrom: string;
+  dateTo: string;
+};
+
 const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Event', 'Topik Sensitive', 'Sosok/Quotes/Film', 'Storytell', 'Edukasi Product'];
 const CONTENT_TYPE_OPTIONS = ['Slide', 'Video'];
 const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
@@ -140,6 +176,16 @@ const CSV_EXPORT_COLUMNS = [
 
 const ACCOUNT_TYPES: AccountOption['accountType'][] = ['CROSSBRAND', 'NEW_PERSONA', 'KOL', 'PROXY'];
 const CSV_REQUIRED_IMPORT_HEADERS = ['TANGGAL POSTING', 'AKUN POSTING', 'JUDUL', 'JENIS', 'KATEGORI KONTEN', 'STATUS', 'CATEGORY'];
+const DESC_SORT_KEYS: SortKey[] = ['postDate', 'totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved', 'engagementRate', 'adsOnMusic', 'yellowCart'];
+
+const createDefaultPostFilters = (): PostFilters => ({
+  accountId: '',
+  status: '',
+  contentType: '',
+  contentCategory: '',
+  dateFrom: '',
+  dateTo: '',
+});
 
 const normalizeCsvHeader = (value?: string) => (value ? value.trim().toUpperCase().replace(/\s+/g, ' ') : '');
 const getCsvValue = (row: CsvRow, headerMap: Map<string, string>, headerName: string) => {
@@ -196,6 +242,8 @@ export default function PostsPage() {
     errors: Array<{ row: number; error: string }>;
     type: 'success' | 'error' | 'partial';
   } | null>(null);
+  const [postFilters, setPostFilters] = useState<PostFilters>(createDefaultPostFilters);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
   const [form, setForm] = useState<FormState>({
     campaignId: id ?? '',
     campaignCategory: '',
@@ -276,6 +324,34 @@ export default function PostsPage() {
     api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [token]);
 
+  const accountNameMap = useMemo(() => new Map(accounts.map((account) => [account.id, account.name || ''])), [accounts]);
+  const campaignNameMap = useMemo(() => new Map(campaigns.map((campaign) => [campaign.id, campaign.name || ''])), [campaigns]);
+  const picNameMap = useMemo(() => new Map(pics.map((pic) => [pic.id, pic.name || ''])), [pics]);
+
+  const getAccountName = useCallback((post: Post) => {
+    if (post.account?.name) return post.account.name;
+    if (post.accountId) {
+      return accountNameMap.get(post.accountId) || '';
+    }
+    return '';
+  }, [accountNameMap]);
+
+  const getCampaignName = useCallback((post: Post) => {
+    if (post.campaign?.name) return post.campaign.name;
+    if (post.campaignId) {
+      return campaignNameMap.get(post.campaignId) || '';
+    }
+    return '';
+  }, [campaignNameMap]);
+
+  const getPicName = useCallback((id?: string, pic?: { id: string; name: string } | null) => {
+    if (pic?.name) return pic.name;
+    if (id) {
+      return picNameMap.get(id) || '';
+    }
+    return '';
+  }, [picNameMap]);
+
   useEffect(() => {
     if (!routeCampaignId) return;
     setForm((prev) => {
@@ -294,9 +370,145 @@ export default function PostsPage() {
     });
   }, [routeCampaignId, campaigns]);
 
+  useEffect(() => {
+    setPostFilters((prev) => {
+      const next = createDefaultPostFilters();
+      const hasChanges = Object.keys(next).some(
+        (key) => prev[key as keyof PostFilters] !== next[key as keyof PostFilters],
+      );
+      return hasChanges ? next : prev;
+    });
+  }, [routeCampaignId]);
+
   const talentPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'TALENT')), [pics]);
   const editorPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'EDITOR')), [pics]);
   const postingPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'POSTING')), [pics]);
+
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      if (postFilters.accountId && post.accountId !== postFilters.accountId) return false;
+      if (postFilters.status && post.status !== postFilters.status) return false;
+      if (postFilters.contentType && post.contentType !== postFilters.contentType) return false;
+      if (postFilters.contentCategory && post.contentCategory !== postFilters.contentCategory) return false;
+
+      if (postFilters.dateFrom) {
+        const postDate = post.postDate ? new Date(post.postDate).getTime() : 0;
+        const from = new Date(postFilters.dateFrom).getTime();
+        if (postDate < from) return false;
+      }
+
+      if (postFilters.dateTo) {
+        const postDate = post.postDate ? new Date(post.postDate).getTime() : 0;
+        const to = new Date(postFilters.dateTo).getTime();
+        if (postDate > to) return false;
+      }
+
+      return true;
+    });
+  }, [posts, postFilters]);
+
+  const sortedPosts = useMemo(() => {
+    const toTimestamp = (value?: string) => {
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    const normalize = (value: string) => value.toLowerCase();
+
+    const getSortValue = (post: Post, key: SortKey): string | number => {
+      switch (key) {
+        case 'postDate':
+          return toTimestamp(post.postDate);
+        case 'account':
+          return normalize(getAccountName(post));
+        case 'postTitle':
+          return normalize(post.postTitle || '');
+        case 'totalView':
+          return post.totalView ?? 0;
+        case 'totalLike':
+          return post.totalLike ?? 0;
+        case 'totalComment':
+          return post.totalComment ?? 0;
+        case 'totalShare':
+          return post.totalShare ?? 0;
+        case 'totalSaved':
+          return post.totalSaved ?? 0;
+        case 'campaign':
+          return normalize(getCampaignName(post));
+        case 'campaignCategory':
+          return normalize(post.campaignCategory || '');
+        case 'postDay':
+          return normalize(post.postDay || '');
+        case 'contentType':
+          return normalize(post.contentType || '');
+        case 'contentCategory':
+          return normalize(post.contentCategory || '');
+        case 'status':
+          return normalize(post.status || '');
+        case 'picTalent':
+          return normalize(getPicName(post.picTalentId, post.picTalent));
+        case 'picEditor':
+          return normalize(getPicName(post.picEditorId, post.picEditor));
+        case 'picPosting':
+          return normalize(getPicName(post.picPostingId, post.picPosting));
+        case 'adsOnMusic':
+          return post.adsOnMusic ? 1 : 0;
+        case 'yellowCart':
+          return post.yellowCart ? 1 : 0;
+        case 'engagementRate':
+          return post.engagementRate ?? 0;
+        default:
+          return '';
+      }
+    };
+
+    const compareValues = (a: string | number, b: string | number) => {
+      if (typeof a === 'number' && typeof b === 'number') {
+        return a - b;
+      }
+      return a.toString().localeCompare(b.toString(), undefined, { sensitivity: 'base', numeric: true });
+    };
+
+    const nextPosts = [...filteredPosts];
+    nextPosts.sort((a, b) => {
+      const aValue = getSortValue(a, sortConfig.key);
+      const bValue = getSortValue(b, sortConfig.key);
+      const comparison = compareValues(aValue, bValue);
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+    return nextPosts;
+  }, [filteredPosts, sortConfig, getAccountName, getCampaignName, getPicName]);
+
+  const handleSortToggle = (key: SortKey) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDirection = DESC_SORT_KEYS.includes(key) ? 'desc' : 'asc';
+      return { key, direction: defaultDirection };
+    });
+  };
+
+  const renderSortableHeader = (label: string, key: SortKey, className?: string) => {
+    const isActive = sortConfig.key === key;
+    const indicator = isActive ? (sortConfig.direction === 'asc' ? '^' : 'v') : '^v';
+
+    return (
+      <TH className={className}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(key)}
+          className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-[10px] leading-none ${isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+            {indicator}
+          </span>
+        </button>
+      </TH>
+    );
+  };
 
   const handleCampaignChange = (value: string) => {
     const selected = campaigns.find((c) => c.id === value);
@@ -318,10 +530,18 @@ export default function PostsPage() {
     }
   };
 
+  const handleFilterChange = (key: keyof PostFilters, value: string) => {
+    setPostFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleResetFilters = () => {
+    setPostFilters(createDefaultPostFilters());
+  };
+
   const handleExportCsv = useCallback(() => {
     if (!campaignIdForPosts) return;
     const campaign = campaigns.find((c) => c.id === campaignIdForPosts);
-    const csvRows = posts.map((post, index) => {
+    const csvRows = filteredPosts.map((post, index) => {
       const picTalentName = post.picTalent?.name || (post.picTalentId ? pics.find((pic) => pic.id === post.picTalentId)?.name : '') || '';
       const picEditorName = post.picEditor?.name || (post.picEditorId ? pics.find((pic) => pic.id === post.picEditorId)?.name : '') || '';
       const picPostingName = post.picPosting?.name || (post.picPostingId ? pics.find((pic) => pic.id === post.picPostingId)?.name : '') || '';
@@ -374,7 +594,7 @@ export default function PostsPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [campaignIdForPosts, campaigns, posts, accounts, pics]);
+  }, [campaignIdForPosts, campaigns, filteredPosts, accounts, pics]);
 
   const triggerCsvImport = () => {
     fileInputRef.current?.click();
@@ -1066,7 +1286,7 @@ export default function PostsPage() {
         return { postIndex: currentPostIndex, field: EDITABLE_FIELDS[currentFieldIndex + 1] };
       }
       // Move to first field of next row
-      if (currentPostIndex < posts.length - 1) {
+      if (currentPostIndex < sortedPosts.length - 1) {
         return { postIndex: currentPostIndex + 1, field: EDITABLE_FIELDS[0] };
       }
     } else {
@@ -1096,7 +1316,7 @@ export default function PostsPage() {
       void handleCellBlur(postId, field, true);
       
       // Navigate immediately using current data
-      const currentPostIndex = posts.findIndex(p => p.id === postId);
+      const currentPostIndex = sortedPosts.findIndex(p => p.id === postId);
       
       if (currentPostIndex === -1) {
         setEditingCell(null);
@@ -1104,7 +1324,7 @@ export default function PostsPage() {
       }
       
       // Optimistically update the current post with the edited value for navigation
-      const post = posts.find(p => p.id === postId);
+      const post = sortedPosts.find(p => p.id === postId);
       if (!post) {
         setEditingCell(null);
         return;
@@ -1130,7 +1350,7 @@ export default function PostsPage() {
         (optimisticPost as any)[field] = parseInt(cellEditValue || '0', 10) || 0;
       }
       
-      const optimisticPosts = posts.map(p => p.id === postId ? optimisticPost : p);
+      const optimisticPosts = sortedPosts.map(p => p.id === postId ? optimisticPost : p);
       
       const direction = e.shiftKey ? 'prev' : 'next';
       const nextCell = findNextEditableCell(currentPostIndex, field, direction);
@@ -1818,42 +2038,115 @@ export default function PostsPage() {
                   </Button>
                 </div>
               </div>
+              <div className="mb-4 px-2 sm:px-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
+                  <Select
+                    label="Account"
+                    value={postFilters.accountId}
+                    onChange={(e) => handleFilterChange('accountId', e.target.value)}
+                  >
+                    <option value="">All Accounts</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label="Status"
+                    value={postFilters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                  >
+                    <option value="">All Status</option>
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label="Content Type"
+                    value={postFilters.contentType}
+                    onChange={(e) => handleFilterChange('contentType', e.target.value)}
+                  >
+                    <option value="">All Types</option>
+                    {CONTENT_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label="Content Category"
+                    value={postFilters.contentCategory}
+                    onChange={(e) => handleFilterChange('contentCategory', e.target.value)}
+                  >
+                    <option value="">All Categories</option>
+                    {CONTENT_CATEGORY_OPTIONS.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    label="Date From"
+                    type="date"
+                    value={postFilters.dateFrom}
+                    onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                  />
+                  <Input
+                    label="Date To"
+                    type="date"
+                    value={postFilters.dateTo}
+                    onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    onClick={handleResetFilters}
+                    className="text-xs sm:text-sm"
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              </div>
               <TableWrap>
                   <Table>
                     <THead>
                       <TR>
                         <TH>NO</TH>
-                        <TH>Account</TH>
-                        <TH>Post Date</TH>
-                        <TH className="w-48">Title</TH>
+                        {renderSortableHeader('Account', 'account')}
+                        {renderSortableHeader('Post Date', 'postDate')}
+                        {renderSortableHeader('Title', 'postTitle', 'w-48')}
                         <TH>Link</TH>
-                        <TH>Views</TH>
-                        <TH>Likes</TH>
-                        <TH>Comments</TH>
-                        <TH>Shares</TH>
-                        <TH>Saved</TH>
-                        <TH>Campaign</TH>
-                        <TH>Campaign Category</TH>
-                        <TH>Post Day</TH>
-                        <TH>Type</TH>
-                        <TH>Content Category</TH>
-                        <TH>Status</TH>
-                        <TH>PIC Talent</TH>
-                        <TH>PIC Editor</TH>
-                        <TH>PIC Posting</TH>
-                        <TH>Ads on Music</TH>
-                        <TH>Yellow Cart</TH>
-                        <TH>Engagement Rate</TH>
+                        {renderSortableHeader('Views', 'totalView')}
+                        {renderSortableHeader('Likes', 'totalLike')}
+                        {renderSortableHeader('Comments', 'totalComment')}
+                        {renderSortableHeader('Shares', 'totalShare')}
+                        {renderSortableHeader('Saved', 'totalSaved')}
+                        {renderSortableHeader('Campaign', 'campaign')}
+                        {renderSortableHeader('Campaign Category', 'campaignCategory')}
+                        {renderSortableHeader('Post Day', 'postDay')}
+                        {renderSortableHeader('Type', 'contentType')}
+                        {renderSortableHeader('Content Category', 'contentCategory')}
+                        {renderSortableHeader('Status', 'status')}
+                        {renderSortableHeader('PIC Talent', 'picTalent')}
+                        {renderSortableHeader('PIC Editor', 'picEditor')}
+                        {renderSortableHeader('PIC Posting', 'picPosting')}
+                        {renderSortableHeader('Ads on Music', 'adsOnMusic')}
+                        {renderSortableHeader('Yellow Cart', 'yellowCart')}
+                        {renderSortableHeader('Engagement Rate', 'engagementRate')}
                         <TH className="!text-center">Actions</TH>
                       </TR>
                     </THead>
                     <tbody>
-                      {posts.map((p, i) => {
-                        const picTalentName = p.picTalent?.name || (p.picTalentId ? pics.find(pic => pic.id === p.picTalentId)?.name : null) || '—';
-                        const picEditorName = p.picEditor?.name || (p.picEditorId ? pics.find(pic => pic.id === p.picEditorId)?.name : null) || '—';
-                        const picPostingName = p.picPosting?.name || (p.picPostingId ? pics.find(pic => pic.id === p.picPostingId)?.name : null) || '—';
-                        const accountName = p.account?.name || (p.accountId ? accounts.find(acc => acc.id === p.accountId)?.name : null) || '—';
-                        const campaignName = p.campaign?.name || (p.campaignId ? campaigns.find(c => c.id === p.campaignId)?.name : null) || '—';
+                      {sortedPosts.map((p, i) => {
+                        const picTalentName = getPicName(p.picTalentId, p.picTalent) || '—';
+                        const picEditorName = getPicName(p.picEditorId, p.picEditor) || '—';
+                        const picPostingName = getPicName(p.picPostingId, p.picPosting) || '—';
+                        const accountName = getAccountName(p) || '—';
+                        const campaignName = getCampaignName(p) || '—';
                         const isEditing = editingCell?.postId === p.id;
                         const isSaving = savingCell?.startsWith(`${p.id}-`);
                         const selectedCampaign = campaigns.find((c) => c.id === p.campaignId);

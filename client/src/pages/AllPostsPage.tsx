@@ -75,6 +75,33 @@ type FilterState = {
   picPostingId: string;
 };
 
+type SortKey =
+  | 'postDate'
+  | 'account'
+  | 'postTitle'
+  | 'totalView'
+  | 'totalLike'
+  | 'totalComment'
+  | 'totalShare'
+  | 'totalSaved'
+  | 'campaign'
+  | 'campaignCategory'
+  | 'postDay'
+  | 'contentType'
+  | 'contentCategory'
+  | 'status'
+  | 'picTalent'
+  | 'picEditor'
+  | 'picPosting'
+  | 'adsOnMusic'
+  | 'yellowCart'
+  | 'engagementRate';
+
+type SortConfig = {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+};
+
 const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Event', 'Topik Sensitive', 'Sosok/Quotes/Film', 'Storytell', 'Edukasi Product'];
 const CONTENT_TYPE_OPTIONS = ['Slide', 'Video'];
 const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
@@ -108,6 +135,7 @@ const CSV_EXPORT_COLUMNS = [
 
 const ACCOUNT_TYPES: AccountOption['accountType'][] = ['CROSSBRAND', 'NEW_PERSONA', 'KOL', 'PROXY'];
 const CSV_REQUIRED_IMPORT_HEADERS = ['TANGGAL POSTING', 'AKUN POSTING', 'JUDUL', 'JENIS', 'KATEGORI KONTEN', 'STATUS', 'CATEGORY', 'CAMPAIGN'];
+const DESC_SORT_KEYS: SortKey[] = ['postDate', 'totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved', 'engagementRate', 'adsOnMusic', 'yellowCart'];
 
 const normalizeCsvHeader = (value?: string) => (value ? value.trim().toUpperCase().replace(/\s+/g, ' ') : '');
 const getCsvValue = (row: CsvRow, headerMap: Map<string, string>, headerName: string) => {
@@ -161,6 +189,7 @@ export default function AllPostsPage() {
     errors: Array<{ row: number; error: string }>;
     type: 'success' | 'error' | 'partial';
   } | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectChangeInProgressRef = useRef<string | null>(null);
   const initialCellValueRef = useRef<string>('');
@@ -181,20 +210,7 @@ export default function AllPostsPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.campaignId) params.append('campaignId', filters.campaignId);
-      if (filters.accountId) params.append('accountId', filters.accountId);
-      if (filters.status) params.append('status', filters.status);
-      if (filters.category) params.append('category', filters.category);
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
-      if (filters.dateTo) params.append('dateTo', filters.dateTo);
-      if (filters.picTalentId) params.append('picTalentId', filters.picTalentId);
-      if (filters.picEditorId) params.append('picEditorId', filters.picEditorId);
-      if (filters.picPostingId) params.append('picPostingId', filters.picPostingId);
-
-      const queryString = params.toString();
-      const url = `/posts/all${queryString ? `?${queryString}` : ''}`;
-      const data = await api(url, { token });
+      const data = await api('/posts/all', { token });
       setPosts(data as Post[]);
     } catch (error) {
       console.error('Failed to fetch posts:', error);
@@ -202,7 +218,7 @@ export default function AllPostsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, filters]);
+  }, [token]);
 
   useEffect(() => {
     void fetchPosts();
@@ -215,9 +231,166 @@ export default function AllPostsPage() {
     api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [token]);
 
+  const accountNameMap = useMemo(() => new Map(accounts.map((account) => [account.id, account.name || ''])), [accounts]);
+  const campaignNameMap = useMemo(() => new Map(campaigns.map((campaign) => [campaign.id, campaign.name || ''])), [campaigns]);
+  const picNameMap = useMemo(() => new Map(pics.map((pic) => [pic.id, pic.name || ''])), [pics]);
+
+  const getAccountName = useCallback((post: Post) => {
+    if (post.account?.name) return post.account.name;
+    if (post.accountId) {
+      return accountNameMap.get(post.accountId) || '';
+    }
+    return '';
+  }, [accountNameMap]);
+
+  const getCampaignName = useCallback((post: Post) => {
+    if (post.campaign?.name) return post.campaign.name;
+    if (post.campaignId) {
+      return campaignNameMap.get(post.campaignId) || '';
+    }
+    return '';
+  }, [campaignNameMap]);
+
+  const getPicName = useCallback((id?: string, pic?: { id: string; name: string } | null) => {
+    if (pic?.name) return pic.name;
+    if (id) {
+      return picNameMap.get(id) || '';
+    }
+    return '';
+  }, [picNameMap]);
+
   const talentPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'TALENT')), [pics]);
   const editorPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'EDITOR')), [pics]);
   const postingPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'POSTING')), [pics]);
+
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      if (filters.campaignId && post.campaignId !== filters.campaignId) return false;
+      if (filters.accountId && post.accountId !== filters.accountId) return false;
+      if (filters.status && post.status !== filters.status) return false;
+      if (filters.category && post.contentCategory !== filters.category) return false;
+      if (filters.picTalentId && post.picTalentId !== filters.picTalentId) return false;
+      if (filters.picEditorId && post.picEditorId !== filters.picEditorId) return false;
+      if (filters.picPostingId && post.picPostingId !== filters.picPostingId) return false;
+
+      if (filters.dateFrom) {
+        const postDate = post.postDate ? new Date(post.postDate).getTime() : 0;
+        const from = new Date(filters.dateFrom).getTime();
+        if (postDate < from) return false;
+      }
+
+      if (filters.dateTo) {
+        const postDate = post.postDate ? new Date(post.postDate).getTime() : 0;
+        const to = new Date(filters.dateTo).getTime();
+        if (postDate > to) return false;
+      }
+
+      return true;
+    });
+  }, [posts, filters]);
+
+  const sortedPosts = useMemo(() => {
+    const toTimestamp = (value?: string) => {
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    const normalize = (value: string) => value.toLowerCase();
+
+    const getSortValue = (post: Post, key: SortKey): string | number => {
+      switch (key) {
+        case 'postDate':
+          return toTimestamp(post.postDate);
+        case 'account':
+          return normalize(getAccountName(post));
+        case 'postTitle':
+          return normalize(post.postTitle || '');
+        case 'totalView':
+          return post.totalView ?? 0;
+        case 'totalLike':
+          return post.totalLike ?? 0;
+        case 'totalComment':
+          return post.totalComment ?? 0;
+        case 'totalShare':
+          return post.totalShare ?? 0;
+        case 'totalSaved':
+          return post.totalSaved ?? 0;
+        case 'campaign':
+          return normalize(getCampaignName(post));
+        case 'campaignCategory':
+          return normalize(post.campaignCategory || '');
+        case 'postDay':
+          return normalize(post.postDay || '');
+        case 'contentType':
+          return normalize(post.contentType || '');
+        case 'contentCategory':
+          return normalize(post.contentCategory || '');
+        case 'status':
+          return normalize(post.status || '');
+        case 'picTalent':
+          return normalize(getPicName(post.picTalentId, post.picTalent));
+        case 'picEditor':
+          return normalize(getPicName(post.picEditorId, post.picEditor));
+        case 'picPosting':
+          return normalize(getPicName(post.picPostingId, post.picPosting));
+        case 'adsOnMusic':
+          return post.adsOnMusic ? 1 : 0;
+        case 'yellowCart':
+          return post.yellowCart ? 1 : 0;
+        case 'engagementRate':
+          return post.engagementRate ?? 0;
+        default:
+          return '';
+      }
+    };
+
+    const compareValues = (a: string | number, b: string | number) => {
+      if (typeof a === 'number' && typeof b === 'number') {
+        return a - b;
+      }
+      return a.toString().localeCompare(b.toString(), undefined, { sensitivity: 'base', numeric: true });
+    };
+
+    const nextPosts = [...filteredPosts];
+    nextPosts.sort((a, b) => {
+      const aValue = getSortValue(a, sortConfig.key);
+      const bValue = getSortValue(b, sortConfig.key);
+      const comparison = compareValues(aValue, bValue);
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+    return nextPosts;
+  }, [filteredPosts, sortConfig, getAccountName, getCampaignName, getPicName]);
+
+  const handleSortToggle = (key: SortKey) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDirection = DESC_SORT_KEYS.includes(key) ? 'desc' : 'asc';
+      return { key, direction: defaultDirection };
+    });
+  };
+
+  const renderSortableHeader = (label: string, key: SortKey, className?: string) => {
+    const isActive = sortConfig.key === key;
+    const indicator = isActive ? (sortConfig.direction === 'asc' ? '^' : 'v') : '^v';
+
+    return (
+      <TH className={className}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(key)}
+          className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-[10px] leading-none ${isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+            {indicator}
+          </span>
+        </button>
+      </TH>
+    );
+  };
 
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
@@ -410,7 +583,7 @@ export default function AllPostsPage() {
         return { postIndex: currentPostIndex, field: EDITABLE_FIELDS[currentFieldIndex + 1] };
       }
       // Move to first field of next row
-      if (currentPostIndex < posts.length - 1) {
+      if (currentPostIndex < sortedPosts.length - 1) {
         return { postIndex: currentPostIndex + 1, field: EDITABLE_FIELDS[0] };
       }
     } else {
@@ -440,7 +613,7 @@ export default function AllPostsPage() {
       void handleCellBlur(postId, field, true);
       
       // Navigate immediately using current data
-      const currentPostIndex = posts.findIndex(p => p.id === postId);
+      const currentPostIndex = sortedPosts.findIndex(p => p.id === postId);
       
       if (currentPostIndex === -1) {
         setEditingCell(null);
@@ -448,7 +621,7 @@ export default function AllPostsPage() {
       }
       
       // Optimistically update the current post with the edited value for navigation
-      const post = posts.find(p => p.id === postId);
+      const post = sortedPosts.find(p => p.id === postId);
       if (!post) {
         setEditingCell(null);
         return;
@@ -474,7 +647,7 @@ export default function AllPostsPage() {
         (optimisticPost as any)[field] = parseInt(cellEditValue || '0', 10) || 0;
       }
       
-      const optimisticPosts = posts.map(p => p.id === postId ? optimisticPost : p);
+      const optimisticPosts = sortedPosts.map(p => p.id === postId ? optimisticPost : p);
       
       const direction = e.shiftKey ? 'prev' : 'next';
       const nextCell = findNextEditableCell(currentPostIndex, field, direction);
@@ -545,7 +718,7 @@ export default function AllPostsPage() {
   }, [toast]);
 
   const handleExportCsv = useCallback(() => {
-    const csvRows = posts.map((post, index) => {
+    const csvRows = filteredPosts.map((post, index) => {
       const picTalentName = post.picTalent?.name || (post.picTalentId ? pics.find((pic) => pic.id === post.picTalentId)?.name : '') || '';
       const picEditorName = post.picEditor?.name || (post.picEditorId ? pics.find((pic) => pic.id === post.picEditorId)?.name : '') || '';
       const picPostingName = post.picPosting?.name || (post.picPostingId ? pics.find((pic) => pic.id === post.picPostingId)?.name : '') || '';
@@ -595,7 +768,7 @@ export default function AllPostsPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [posts, accounts, pics, campaigns]);
+  }, [filteredPosts, accounts, pics, campaigns]);
 
   const triggerCsvImport = () => {
     fileInputRef.current?.click();
@@ -1120,13 +1293,13 @@ export default function AllPostsPage() {
                 <Button
                   onClick={handleExportCsv}
                   variant="outline"
-                  disabled={posts.length === 0}
+                  disabled={filteredPosts.length === 0}
                 >
                   Export CSV
                 </Button>
               </div>
             </div>
-            {posts.length === 0 ? (
+            {sortedPosts.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-gray-500 text-lg">No posts found</p>
                 <p className="text-gray-400 text-sm mt-2">
@@ -1141,37 +1314,37 @@ export default function AllPostsPage() {
                   <THead>
                     <TR>
                       <TH>NO</TH>
-                      <TH>Account</TH>
-                      <TH>Post Date</TH>
-                      <TH className="w-48">Title</TH>
+                      {renderSortableHeader('Account', 'account')}
+                      {renderSortableHeader('Post Date', 'postDate')}
+                      {renderSortableHeader('Title', 'postTitle', 'w-48')}
                       <TH>Link</TH>
-                      <TH>Views</TH>
-                      <TH>Likes</TH>
-                      <TH>Comments</TH>
-                      <TH>Shares</TH>
-                      <TH>Saved</TH>
-                      <TH>Campaign</TH>
-                      <TH>Campaign Category</TH>
-                      <TH>Post Day</TH>
-                      <TH>Type</TH>
-                      <TH>Content Category</TH>
-                      <TH>Status</TH>
-                      <TH>PIC Talent</TH>
-                      <TH>PIC Editor</TH>
-                      <TH>PIC Posting</TH>
-                      <TH>Ads on Music</TH>
-                      <TH>Yellow Cart</TH>
-                      <TH>Engagement Rate</TH>
+                      {renderSortableHeader('Views', 'totalView')}
+                      {renderSortableHeader('Likes', 'totalLike')}
+                      {renderSortableHeader('Comments', 'totalComment')}
+                      {renderSortableHeader('Shares', 'totalShare')}
+                      {renderSortableHeader('Saved', 'totalSaved')}
+                      {renderSortableHeader('Campaign', 'campaign')}
+                      {renderSortableHeader('Campaign Category', 'campaignCategory')}
+                      {renderSortableHeader('Post Day', 'postDay')}
+                      {renderSortableHeader('Type', 'contentType')}
+                      {renderSortableHeader('Content Category', 'contentCategory')}
+                      {renderSortableHeader('Status', 'status')}
+                      {renderSortableHeader('PIC Talent', 'picTalent')}
+                      {renderSortableHeader('PIC Editor', 'picEditor')}
+                      {renderSortableHeader('PIC Posting', 'picPosting')}
+                      {renderSortableHeader('Ads on Music', 'adsOnMusic')}
+                      {renderSortableHeader('Yellow Cart', 'yellowCart')}
+                      {renderSortableHeader('Engagement Rate', 'engagementRate')}
                       <TH className="!text-center">Actions</TH>
                     </TR>
                   </THead>
                   <tbody>
-                    {posts.map((p, i) => {
-                      const picTalentName = p.picTalent?.name || (p.picTalentId ? pics.find(pic => pic.id === p.picTalentId)?.name : null) || '—';
-                      const picEditorName = p.picEditor?.name || (p.picEditorId ? pics.find(pic => pic.id === p.picEditorId)?.name : null) || '—';
-                      const picPostingName = p.picPosting?.name || (p.picPostingId ? pics.find(pic => pic.id === p.picPostingId)?.name : null) || '—';
-                      const accountName = p.account?.name || (p.accountId ? accounts.find(acc => acc.id === p.accountId)?.name : null) || '—';
-                      const campaignName = p.campaign?.name || (p.campaignId ? campaigns.find(c => c.id === p.campaignId)?.name : null) || '—';
+                    {sortedPosts.map((p, i) => {
+                      const picTalentName = getPicName(p.picTalentId, p.picTalent) || '—';
+                      const picEditorName = getPicName(p.picEditorId, p.picEditor) || '—';
+                      const picPostingName = getPicName(p.picPostingId, p.picPosting) || '—';
+                      const accountName = getAccountName(p) || '—';
+                      const campaignName = getCampaignName(p) || '—';
                       const isEditing = editingCell?.postId === p.id;
                       const isSaving = savingCell?.startsWith(`${p.id}-`);
                       const selectedCampaign = campaigns.find((c) => c.id === p.campaignId);
