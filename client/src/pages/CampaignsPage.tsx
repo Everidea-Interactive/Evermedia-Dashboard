@@ -73,6 +73,7 @@ export default function CampaignsPage() {
     shares: number;
     saves: number;
     engagementRate: number;
+    projectNumbersCount?: number;
   } | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -283,7 +284,11 @@ export default function CampaignsPage() {
       </div>
       
       {/* Engagement Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Project Numbers</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.projectNumbersCount?.toLocaleString() ?? '-'}</div>
+        </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Views</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.views?.toLocaleString() ?? '-'}</div>

@@ -78,7 +78,19 @@ router.get('/campaigns/all/engagement', async (req, res) => {
     },
     { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 }
   );
-  res.json({ ...sum, engagementRate: engagementRate(sum) });
+  
+  // Get total count of all campaigns
+  const { count: campaignsCount, error: campaignsError } = await supabase
+    .from('Campaign')
+    .select('*', { count: 'exact', head: true });
+  
+  if (campaignsError) return res.status(500).json({ error: campaignsError.message });
+  
+  res.json({ 
+    ...sum, 
+    engagementRate: engagementRate(sum),
+    projectNumbersCount: campaignsCount || 0
+  });
 });
 
 router.get('/campaigns/:id/dashboard/kpi', async (req, res) => {
