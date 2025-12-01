@@ -11,6 +11,30 @@ const normalizeQuotationNumber = (value: any): string | null | undefined => {
   return asString === '' ? null : asString;
 };
 
+const normalizeAccountIds = (ids: unknown): string[] => {
+  if (!Array.isArray(ids)) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const id of ids) {
+    if (id === undefined || id === null) continue;
+    const value = String(id);
+    if (seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+  return normalized;
+};
+
+const haveSameAccountSets = (first: string[], second: string[]): boolean => {
+  const firstSet = new Set(first);
+  const secondSet = new Set(second);
+  if (firstSet.size !== secondSet.size) return false;
+  for (const id of firstSet) {
+    if (!secondSet.has(id)) return false;
+  }
+  return true;
+};
+
 const router = Router();
 router.use(requireAuth);
 
@@ -119,6 +143,7 @@ router.get('/:id', async (req, res) => {
 
 router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
   const { name, categories, startDate, endDate, status, description, accountIds, targetViewsForFYP, quotationNumber } = req.body as any;
+  const normalizedRequestedAccountIds = normalizeAccountIds(accountIds);
   
   // Get old campaign data for logging
   const { data: oldCampaign } = await supabase
@@ -157,46 +182,43 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRe
       .eq('A', req.params.id);
     
     oldAccountIds = oldLinks?.map((link: any) => link.B) || [];
-  }
-  
-  // Update account links if provided
-  if (accountIds !== undefined) {
-    // Find accounts that are being removed (in old but not in new)
-    const accountsToRemove = oldAccountIds.filter((id: string) => !accountIds.includes(id));
     
-    // Check if any accounts being removed have posts in this campaign
-    if (accountsToRemove.length > 0) {
-      const { data: posts, error: postsError } = await supabase
-        .from('Post')
-        .select('accountId')
-        .eq('campaignId', req.params.id)
-        .in('accountId', accountsToRemove)
-        .limit(1);
+    const accountLinksChanged = !haveSameAccountSets(oldAccountIds, normalizedRequestedAccountIds);
+    if (accountLinksChanged) {
+      const newAccountIdSet = new Set(normalizedRequestedAccountIds);
+      const accountsToRemove = oldAccountIds.filter((id: string) => !newAccountIdSet.has(id));
       
-      if (postsError) {
-        return res.status(500).json({ error: `Failed to check posts: ${postsError.message}` });
+      // Check if any accounts being removed have posts in this campaign
+      if (accountsToRemove.length > 0) {
+        const { data: posts, error: postsError } = await supabase
+          .from('Post')
+          .select('accountId')
+          .eq('campaignId', req.params.id)
+          .in('accountId', accountsToRemove)
+          .limit(1);
+        
+        if (postsError) {
+          return res.status(500).json({ error: `Failed to check posts: ${postsError.message}` });
+        }
+        
+        if (posts && posts.length > 0) {
+          return res.status(400).json({ 
+            error: `Cannot remove account from campaign: There are existing posts using this account in this campaign` 
+          });
+        }
       }
       
-      if (posts && posts.length > 0) {
-        return res.status(400).json({ 
-          error: `Cannot remove account from campaign: There are existing posts using this account in this campaign` 
-        });
+      await supabase.from('_CampaignToAccount').delete().eq('A', req.params.id);
+      if (normalizedRequestedAccountIds.length > 0) {
+        const links = normalizedRequestedAccountIds.map((accountId: string) => ({
+          A: req.params.id,
+          B: accountId,
+        }));
+        await supabase.from('_CampaignToAccount').insert(links);
       }
-    }
-    
-    await supabase.from('_CampaignToAccount').delete().eq('A', req.params.id);
-    if (accountIds.length > 0) {
-      const links = accountIds.map((accountId: string) => ({
-        A: req.params.id,
-        B: accountId,
-      }));
-      await supabase.from('_CampaignToAccount').insert(links);
-    }
-    
-    // Recalculate KPIs for all affected accounts (both newly linked and unlinked)
-    const allAffectedAccountIds = [...new Set([...oldAccountIds, ...accountIds])];
-    for (const accountId of allAffectedAccountIds) {
-      await recalculateKPIs(req.params.id, accountId);
+      
+      const allAffectedAccountIds = [...new Set([...oldAccountIds, ...normalizedRequestedAccountIds])];
+      await Promise.all(allAffectedAccountIds.map((accountId) => recalculateKPIs(req.params.id, accountId)));
     }
   }
   
@@ -209,14 +231,13 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRe
   
   // Also track account links changes if they were updated
   if (accountIds !== undefined && oldCampaign) {
-    // Compare account IDs arrays
     const oldAccountIdsSorted = [...oldAccountIds].sort().join(',');
-    const newAccountIdsSorted = [...accountIds].sort().join(',');
+    const newAccountIdsSorted = [...normalizedRequestedAccountIds].sort().join(',');
     
     if (oldAccountIdsSorted !== newAccountIdsSorted) {
       changedFields.accountIds = {
         before: oldAccountIds,
-        after: accountIds,
+        after: normalizedRequestedAccountIds,
       };
     }
   }

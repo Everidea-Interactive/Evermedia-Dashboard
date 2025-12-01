@@ -837,9 +837,11 @@ export default function CampaignDetailPage() {
 
   const categoryOverviewRows = useMemo(() => {
     const totals = new Map<string, { posts: number; views: number }>();
-    const campaignCategories = Array.isArray(campaign?.categories) ? campaign.categories.filter(Boolean) : [];
+    const campaignCategories = (Array.isArray(campaign?.categories)
+      ? campaign.categories.filter(Boolean)
+      : []) as string[];
 
-    campaignCategories.forEach((cat) => totals.set(cat, { posts: 0, views: 0 }));
+    campaignCategories.forEach((cat: string) => totals.set(cat, { posts: 0, views: 0 }));
 
     categoryOverview.forEach((entry) => {
       const current = totals.get(entry.category) ?? { posts: 0, views: 0 };
@@ -859,18 +861,6 @@ export default function CampaignDetailPage() {
       views: totals.get(cat)?.views ?? 0,
     }));
   }, [campaign?.categories, categoryOverview]);
-
-  const categoryOverviewTotals = useMemo(
-    () =>
-      categoryOverviewRows.reduce(
-        (acc, row) => ({
-          posts: acc.posts + (row.posts ?? 0),
-          views: acc.views + (row.views ?? 0),
-        }),
-        { posts: 0, views: 0 }
-      ),
-    [categoryOverviewRows]
-  );
 
   const backPath = '/campaigns';
 
