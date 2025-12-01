@@ -92,6 +92,21 @@ type FormMessage = {
   text: string;
 };
 
+type EngagementUpdateError = {
+  row: number;
+  postId: string;
+  postTitle: string;
+  contentLink: string;
+  reason: string;
+};
+
+type EngagementUpdateResult = {
+  updatedCount: number;
+  totalCount: number;
+  errors: EngagementUpdateError[];
+  type: 'success' | 'error' | 'partial';
+};
+
 const CONTENT_CATEGORY_OPTIONS = ['Hardsell product', 'Trend/FOMO', 'Berita/Event', 'Topik Sensitive', 'Sosok/Quotes/Film', 'Storytell', 'Edukasi Product'];
 const CONTENT_TYPE_OPTIONS = ['Slide', 'Video'];
 const STATUS_OPTIONS = ['On Going', 'Upload', 'Archive', 'Take Down'];
@@ -174,6 +189,8 @@ export default function PostsPage() {
   const [deleting, setDeleting] = useState(false);
   const [updatingEngagement, setUpdatingEngagement] = useState(false);
   const [engagementUpdateProgress, setEngagementUpdateProgress] = useState<{ current: number; total: number } | null>(null);
+  const [engagementUpdateResult, setEngagementUpdateResult] = useState<EngagementUpdateResult | null>(null);
+  const [retryingUpdateRows, setRetryingUpdateRows] = useState<Record<string, boolean>>({});
   const [importResult, setImportResult] = useState<{
     importedCount: number;
     errors: Array<{ row: number; error: string }>;
@@ -1182,6 +1199,7 @@ export default function PostsPage() {
     
     setUpdatingEngagement(true);
     setEngagementUpdateProgress(null);
+    setEngagementUpdateResult(null);
     
     try {
       // Fetch all posts for the campaign
@@ -1229,6 +1247,7 @@ export default function PostsPage() {
       // Update each post
       let updatedCount = 0;
       let failedCount = 0;
+      const updateErrors: EngagementUpdateError[] = [];
       
       for (let i = 0; i < postsWithTikTokUrls.length; i++) {
         const post = postsWithTikTokUrls[i];
@@ -1253,6 +1272,13 @@ export default function PostsPage() {
           } catch (error: any) {
             console.error(`Failed to update post ${post.id}:`, error);
             failedCount++;
+            updateErrors.push({
+              row: i + 1,
+              postId: post.id,
+              postTitle: post.postTitle,
+              contentLink: post.contentLink || '',
+              reason: error?.message || error?.error || 'Failed to update post',
+            });
           }
         } else {
           const errorMsg = errorMap.get(post.contentLink!);
@@ -1260,11 +1286,31 @@ export default function PostsPage() {
             console.warn(`Failed to scrape ${post.contentLink}: ${errorMsg}`);
           }
           failedCount++;
+          updateErrors.push({
+            row: i + 1,
+            postId: post.id,
+            postTitle: post.postTitle,
+            contentLink: post.contentLink || '',
+            reason: errorMsg || 'No engagement data returned from scraper',
+          });
         }
       }
       
-      // Refresh posts
-      await refreshPosts();
+      // Show summary result in modal
+      const updateType: EngagementUpdateResult['type'] = failedCount === 0 ? 'success' : updatedCount === 0 ? 'error' : 'partial';
+      setEngagementUpdateResult({
+        updatedCount,
+        totalCount: postsWithTikTokUrls.length,
+        errors: updateErrors,
+        type: updateType,
+      });
+
+      // Refresh posts in the background to reflect updates
+      try {
+        await refreshPosts();
+      } catch (refreshError) {
+        console.error('Failed to refresh posts after updating engagement:', refreshError);
+      }
       
       // Show success message with details
       const successMessage = `Updated ${updatedCount} post${updatedCount !== 1 ? 's' : ''}`;
@@ -1275,6 +1321,18 @@ export default function PostsPage() {
       });
     } catch (error: any) {
       console.error('Failed to update engagement stats:', error);
+      setEngagementUpdateResult((prev) => prev ?? {
+        updatedCount: 0,
+        totalCount: 0,
+        errors: [{
+          row: 0,
+          postId: '',
+          postTitle: '',
+          contentLink: '',
+          reason: error?.message || 'Failed to update engagement stats. Please try again.',
+        }],
+        type: 'error',
+      });
       setToast({ 
         type: 'error',
         text: error?.message || 'Failed to update engagement stats. Please try again.'
@@ -1283,6 +1341,101 @@ export default function PostsPage() {
       setUpdatingEngagement(false);
       setEngagementUpdateProgress(null);
     }
+  };
+
+  const handleRetryUpdateRow = async (errorEntry: EngagementUpdateError) => {
+    if (!errorEntry.contentLink) {
+      setToast({ type: 'error', text: 'Content link is missing for this post.' });
+      return;
+    }
+
+    setRetryingUpdateRows((prev) => ({ ...prev, [errorEntry.postId]: true }));
+
+    try {
+      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals([errorEntry.contentLink], 3, 1000);
+      const matchedResult = scrapeResult.results.find(
+        (result) =>
+          result.originalUrl === errorEntry.contentLink || result.resolvedUrl === errorEntry.contentLink
+      );
+
+      const engagementData = matchedResult?.data;
+
+      if (!engagementData) {
+        const scrapeError = scrapeResult.errors.find((err) => err.url === errorEntry.contentLink);
+        const reason = scrapeError?.error || 'No engagement data returned from scraper';
+        setEngagementUpdateResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                errors: prev.errors.map((err) =>
+                  err.postId === errorEntry.postId ? { ...err, reason } : err
+                ),
+              }
+            : prev
+        );
+        setToast({ type: 'error', text: reason });
+        return;
+      }
+
+      await api(`/posts/${errorEntry.postId}`, {
+        method: 'PUT',
+        token,
+        body: {
+          totalView: engagementData.views,
+          totalLike: engagementData.likes,
+          totalComment: engagementData.comments,
+          totalShare: engagementData.shares,
+          totalSaved: engagementData.bookmarks,
+        },
+      });
+
+      setEngagementUpdateResult((prev) => {
+        if (!prev) return prev;
+        const updatedErrors = prev.errors.filter((err) => err.postId !== errorEntry.postId);
+        const updatedCount = Math.min(prev.updatedCount + 1, prev.totalCount);
+        const nextType: EngagementUpdateResult['type'] =
+          updatedErrors.length === 0 ? 'success' : updatedCount === 0 ? 'error' : 'partial';
+
+        return {
+          ...prev,
+          updatedCount,
+          errors: updatedErrors,
+          type: nextType,
+        };
+      });
+
+      try {
+        await refreshPosts();
+      } catch (refreshError) {
+        console.error('Failed to refresh posts after retrying update:', refreshError);
+      }
+
+      setToast({ type: 'success', text: `Row ${errorEntry.row} updated successfully.` });
+    } catch (error: any) {
+      const message = error?.message || error?.error || 'Retry failed';
+      setEngagementUpdateResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              errors: prev.errors.map((err) =>
+                err.postId === errorEntry.postId ? { ...err, reason: message } : err
+              ),
+            }
+          : prev
+      );
+      setToast({ type: 'error', text: message });
+    } finally {
+      setRetryingUpdateRows((prev) => {
+        const next = { ...prev };
+        delete next[errorEntry.postId];
+        return next;
+      });
+    }
+  };
+
+  const handleCloseEngagementResult = () => {
+    setEngagementUpdateResult(null);
+    setRetryingUpdateRows({});
   };
 
   return (
@@ -2461,6 +2614,133 @@ export default function PostsPage() {
         <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
           This action cannot be undone. KPIs will be recalculated automatically after deletion.
         </p>
+      </Dialog>
+
+      <Dialog
+        open={!!engagementUpdateResult}
+        onClose={handleCloseEngagementResult}
+        title={
+          engagementUpdateResult?.type === 'success'
+            ? 'Update Successful'
+            : engagementUpdateResult?.type === 'error'
+            ? 'Update Failed'
+            : 'Update Completed with Errors'
+        }
+        footer={
+          <Button
+            variant="primary"
+            color={engagementUpdateResult?.type === 'error' ? 'red' : 'blue'}
+            onClick={handleCloseEngagementResult}
+          >
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          {engagementUpdateResult?.type === 'success' && (
+            <div
+              className="flex items-center gap-3 p-4 rounded-lg"
+              style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+            >
+              <div className="text-2xl">✓</div>
+              <div>
+                <p className="font-semibold" style={{ color: '#10b981' }}>
+                  Engagement data refreshed
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  Updated {engagementUpdateResult.updatedCount} post{engagementUpdateResult.updatedCount !== 1 ? 's' : ''} successfully.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {engagementUpdateResult?.type === 'error' && (
+            <div
+              className="flex items-center gap-3 p-4 rounded-lg"
+              style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+            >
+              <div className="text-2xl">✗</div>
+              <div>
+                <p className="font-semibold" style={{ color: '#ef4444' }}>
+                  Update failed
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  No posts were updated. Review the errors below and retry.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {engagementUpdateResult?.type === 'partial' && (
+            <div
+              className="flex items-center gap-3 p-4 rounded-lg"
+              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}
+            >
+              <div className="text-2xl">⚠</div>
+              <div>
+                <p className="font-semibold" style={{ color: '#3b82f6' }}>
+                  Partial update
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  Updated {engagementUpdateResult.updatedCount} of {engagementUpdateResult.totalCount} posts. {engagementUpdateResult.errors.length} issue{engagementUpdateResult.errors.length !== 1 ? 's' : ''} need attention.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {engagementUpdateResult && (
+            <div
+              className="p-4 rounded-lg border"
+              style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}
+            >
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Updated {engagementUpdateResult.updatedCount} of {engagementUpdateResult.totalCount} post{engagementUpdateResult.totalCount !== 1 ? 's' : ''}.
+              </p>
+            </div>
+          )}
+
+          {engagementUpdateResult && engagementUpdateResult.errors.length > 0 && (
+            <div>
+              <h4 className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+                Issues ({engagementUpdateResult.errors.length}):
+              </h4>
+              <div className="max-h-96 overflow-y-auto border rounded-lg" style={{ borderColor: 'var(--border-color)' }}>
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                    <tr>
+                      <th className="px-4 py-2 text-left border-b" style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>Row</th>
+                      <th className="px-4 py-2 text-left border-b" style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>Details</th>
+                      <th className="px-4 py-2 text-left border-b" style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {engagementUpdateResult.errors.map((error) => (
+                      <tr key={error.postId || `${error.row}-${error.contentLink}`} className="border-b align-top" style={{ borderColor: 'var(--border-color)' }}>
+                        <td className="px-4 py-2 font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{error.row || '—'}</td>
+                        <td className="px-4 py-2 space-y-1" style={{ color: 'var(--text-secondary)' }}>
+                          <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{error.postTitle || 'Untitled post'}</div>
+                          <div className="text-xs break-all">{error.contentLink || 'No content link available'}</div>
+                          <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{error.reason}</div>
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          <Button
+                            variant="outline"
+                            color="blue"
+                            className="text-xs"
+                            onClick={() => handleRetryUpdateRow(error)}
+                            disabled={!!retryingUpdateRows[error.postId]}
+                          >
+                            {retryingUpdateRows[error.postId] ? 'Retrying...' : 'Retry'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       </Dialog>
 
       <Dialog
