@@ -1109,6 +1109,11 @@ export default function AllPostsPage() {
     }
   };
 
+  const isProcessingAllPosts = importingCsv;
+  const processingDialogTitle = 'Importing posts';
+  const processingDialogDescription =
+    'Importing posts from the uploaded CSV. Please keep this tab open and avoid refreshing until the import completes.';
+
   return (
     <div>
       <PageHeader
@@ -2192,6 +2197,16 @@ export default function AllPostsPage() {
               </div>
             </div>
           )}
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={isProcessingAllPosts}
+        onClose={() => {}}
+        title={processingDialogTitle}
+      >
+        <div className="space-y-2">
+          <p style={{ color: 'var(--text-secondary)' }}>{processingDialogDescription}</p>
         </div>
       </Dialog>
 

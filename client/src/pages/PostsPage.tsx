@@ -1659,6 +1659,15 @@ export default function PostsPage() {
     setEngagementUpdateResult(null);
     setRetryingUpdateRows({});
   };
+ 
+  const isPostsProcessing = importingCsv || updatingEngagement;
+  const processingDialogTitle = importingCsv ? 'Importing posts' : 'Updating post table';
+  const processingDialogDescription = importingCsv
+    ? 'Importing posts from the uploaded CSV. Please keep this tab open and avoid refreshing until the import completes.'
+    : 'Updating engagement stats for this campaign. Please keep this tab open and avoid refreshing until the update completes.';
+  const processingDialogProgress = updatingEngagement && engagementUpdateProgress
+    ? `Processed ${engagementUpdateProgress.current}/${engagementUpdateProgress.total} posts.`
+    : null;
 
   return (
     <div>
@@ -3114,6 +3123,21 @@ export default function PostsPage() {
                 </table>
               </div>
             </div>
+          )}
+        </div>
+      </Dialog>
+ 
+      <Dialog
+        open={isPostsProcessing}
+        onClose={() => {}}
+        title={processingDialogTitle}
+      >
+        <div className="space-y-2">
+          <p style={{ color: 'var(--text-secondary)' }}>{processingDialogDescription}</p>
+          {processingDialogProgress && (
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              {processingDialogProgress}
+            </p>
           )}
         </div>
       </Dialog>

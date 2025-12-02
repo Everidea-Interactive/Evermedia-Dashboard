@@ -1035,6 +1035,14 @@ export default function CampaignDetailPage() {
     </div>
   );
 
+  const isEngagementUpdating = updatingEngagement;
+  const engagementProcessingTitle = 'Updating post table';
+  const engagementProcessingDescription =
+    'Refreshing engagement stats for the posts table. Please keep this tab open and avoid refreshing until the update completes.';
+  const engagementProcessingProgress = engagementUpdateProgress
+    ? `Processed ${engagementUpdateProgress.current}/${engagementUpdateProgress.total} posts.`
+    : null;
+
   return (
     <div>
       <PageHeader
@@ -2350,6 +2358,20 @@ export default function CampaignDetailPage() {
         <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
           This action cannot be undone. KPIs will be recalculated automatically after removal.
         </p>
+      </Dialog>
+      <Dialog
+        open={isEngagementUpdating}
+        onClose={() => {}}
+        title={engagementProcessingTitle}
+      >
+        <div className="space-y-2">
+          <p style={{ color: 'var(--text-secondary)' }}>{engagementProcessingDescription}</p>
+          {engagementProcessingProgress && (
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              {engagementProcessingProgress}
+            </p>
+          )}
+        </div>
       </Dialog>
       {id && editingAccountKpi && (
         <AccountKpiEditModal
