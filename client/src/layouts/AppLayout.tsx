@@ -33,10 +33,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center gap-3 rounded-lg px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             >
-              <div className="h-9 w-9 rounded-lg grid place-items-center font-semibold" style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' }}>TK</div>
+              <img src="/favicon.svg" alt="Evermedia Dashboard" className="h-9 w-9 rounded-lg" />
               <div className="hidden sm:block">
-                <div className="font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>TikTok Dashboard</div>
-                <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Proxy Accounts</div>
+                <div className="font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>Evermedia Dashboard</div>
               </div>
             </Link>
 

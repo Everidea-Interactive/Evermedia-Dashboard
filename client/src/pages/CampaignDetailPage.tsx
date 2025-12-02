@@ -1165,7 +1165,7 @@ export default function CampaignDetailPage() {
               </span>
             </div>
             <div
-              className="grid gap-3 overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0"
+              className="grid gap-3 overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0 scrollable-y"
               style={{ maxHeight: '200px' }}
             >
               {categoryOverviewRows.length === 0 ? (
@@ -1243,7 +1243,7 @@ export default function CampaignDetailPage() {
             <h2 className="text-base sm:text-lg font-semibold">Accounts</h2>
             <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{(campaign.accounts || []).length}</span>
           </div>
-          <div className="grid gap-3 max-h-[420px] overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0">
+          <div className="grid gap-3 max-h-[420px] overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0 scrollable-y">
             {(campaign.accounts || []).map((account: any) => (
               <div key={account.id} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 border border-dashed rounded-lg px-3 sm:px-4 py-3" style={{ borderColor: 'var(--border-color)' }}>
                 <div className="flex-1 min-w-0 sm:min-w-[150px]">

@@ -252,6 +252,27 @@ html.dark .select option {
 .table-wrap::-webkit-scrollbar-thumb:hover {
   background-color: var(--text-tertiary);
 }
+
+/* Scrollable container for vertical scrolling */
+.scrollable-y {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color-dark) transparent;
+}
+.scrollable-y::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollable-y::-webkit-scrollbar-track {
+  background-color: transparent;
+  @apply rounded;
+}
+.scrollable-y::-webkit-scrollbar-thumb {
+  background-color: var(--border-color-dark);
+  @apply rounded;
+}
+.scrollable-y::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-tertiary);
+}
+
 .table { 
   min-width: max-content;
   width: 100%;

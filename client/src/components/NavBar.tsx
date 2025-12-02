@@ -10,7 +10,7 @@ export default function NavBar() {
     <div className="w-full bg-white border-b shadow-sm sticky top-0 z-10">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/campaigns" className="font-semibold text-gray-900">TikTok Proxy Account Dashboard</Link>
+          <Link to="/campaigns" className="font-semibold text-gray-900">Evermedia Dashboard</Link>
           <nav className="flex items-center gap-3 text-sm text-gray-600">
             <Link to="/campaigns" className="hover:text-black">Campaigns</Link>
             <Link to="/accounts" className="hover:text-black">Accounts</Link>
