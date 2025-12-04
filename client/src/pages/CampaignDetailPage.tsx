@@ -69,9 +69,8 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<any>(null);
   const [engagement, setEngagement] = useState<any>(null);
   const [kpis, setKpis] = useState<any[]>([]);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [allPosts, setAllPosts] = useState<any[]>([]); // All posts fetched from server
   const [categoryOverview, setCategoryOverview] = useState<{ category: string; posts: number; views: number }[]>([]);
-  const [postsTotal, setPostsTotal] = useState(0);
   const [postsLoading, setPostsLoading] = useState(false);
   const [accountRemoving, setAccountRemoving] = useState<Record<string, boolean>>({});
   const [editingCell, setEditingCell] = useState<{ postId: string; field: string } | null>(null);
@@ -173,33 +172,21 @@ export default function CampaignDetailPage() {
     if (!id) return;
     setPostsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (postFilters.accountId) params.append('accountId', postFilters.accountId);
-      if (postFilters.status) params.append('status', postFilters.status);
-      if (postFilters.contentType) params.append('contentType', postFilters.contentType);
-      if (postFilters.contentCategory) params.append('category', postFilters.contentCategory);
-      if (postFilters.dateFrom) params.append('dateFrom', postFilters.dateFrom);
-      if (postFilters.dateTo) params.append('dateTo', postFilters.dateTo);
-      params.append('limit', String(postPagination.limit));
-      params.append('offset', String(postPagination.offset));
-
-      const response = await api(`/campaigns/${id}/posts?${params.toString()}`, { token });
+      // Fetch all posts without filters or pagination for client-side filtering
+      const response = await api(`/campaigns/${id}/posts`, { token });
       if (response.posts) {
-        setPosts(response.posts);
-        setPostsTotal(response.total || 0);
+        setAllPosts(response.posts);
       } else {
         // Fallback for old API format
-        setPosts(Array.isArray(response) ? response : []);
-        setPostsTotal(Array.isArray(response) ? response.length : 0);
+        setAllPosts(Array.isArray(response) ? response : []);
       }
     } catch (error: any) {
       console.error('Failed to fetch posts:', error);
-      setPosts([]);
-      setPostsTotal(0);
+      setAllPosts([]);
     } finally {
       setPostsLoading(false);
     }
-  }, [id, token, postFilters, postPagination]);
+  }, [id, token]);
 
   useEffect(() => {
     fetchPosts();
@@ -221,6 +208,60 @@ export default function CampaignDetailPage() {
     });
     setPostPagination((prev) => ({ ...prev, offset: 0 }));
   };
+
+  // Client-side filtering
+  const filteredPosts = useMemo(() => {
+    return allPosts.filter((post: any) => {
+      // Account filter
+      if (postFilters.accountId && post.accountId !== postFilters.accountId) {
+        return false;
+      }
+
+      // Status filter
+      if (postFilters.status && post.status !== postFilters.status) {
+        return false;
+      }
+
+      // Content type filter
+      if (postFilters.contentType && post.contentType !== postFilters.contentType) {
+        return false;
+      }
+
+      // Content category filter
+      if (postFilters.contentCategory && post.contentCategory !== postFilters.contentCategory) {
+        return false;
+      }
+
+      // Date range filters
+      if (postFilters.dateFrom || postFilters.dateTo) {
+        const postDate = post.postDate ? new Date(post.postDate) : null;
+        if (!postDate) return false;
+
+        if (postFilters.dateFrom) {
+          const fromDate = new Date(postFilters.dateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          if (postDate < fromDate) return false;
+        }
+
+        if (postFilters.dateTo) {
+          const toDate = new Date(postFilters.dateTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (postDate > toDate) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [allPosts, postFilters]);
+
+  // Client-side pagination
+  const paginatedPosts = useMemo(() => {
+    const start = postPagination.offset;
+    const end = start + postPagination.limit;
+    return filteredPosts.slice(start, end);
+  }, [filteredPosts, postPagination]);
+
+  const postsTotal = filteredPosts.length;
 
   const accountNameMap = useMemo(() => new Map(accounts.map((account: any) => [account.id, account.name || ''])), [accounts]);
   const picNameMap = useMemo(() => new Map(pics.map((pic: any) => [pic.id, pic.name || ''])), [pics]);
@@ -300,7 +341,7 @@ export default function CampaignDetailPage() {
       return a.toString().localeCompare(b.toString(), undefined, { sensitivity: 'base', numeric: true });
     };
 
-    const nextPosts = [...posts];
+    const nextPosts = [...paginatedPosts];
     nextPosts.sort((a, b) => {
       const aValue = getSortValue(a, sortConfig.key);
       const bValue = getSortValue(b, sortConfig.key);
@@ -308,7 +349,7 @@ export default function CampaignDetailPage() {
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
     return nextPosts;
-  }, [posts, sortConfig, getAccountName, getPicName]);
+  }, [paginatedPosts, sortConfig, getAccountName, getPicName]);
 
   const handleSortToggle = (key: SortKey) => {
     setSortConfig((prev) => {
@@ -386,7 +427,7 @@ export default function CampaignDetailPage() {
   const handleCellBlur = async (postId: string, field: string, skipClose?: boolean, overrideValue?: string): Promise<any | null> => {
     if (!editingCell || editingCell.postId !== postId || editingCell.field !== field) return null;
     
-    const post = posts.find((p: any) => p.id === postId);
+    const post = allPosts.find((p: any) => p.id === postId);
     if (!post) return null;
 
     // Use override value if provided (for immediate saves from onChange), otherwise use state
@@ -491,7 +532,7 @@ export default function CampaignDetailPage() {
       };
 
       // Update the post in the list
-      setPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
+      setAllPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
         if (p.id === postId) {
           return updatedPostWithRelations;
         }
@@ -523,7 +564,7 @@ export default function CampaignDetailPage() {
         return { postIndex: currentPostIndex, field: EDITABLE_FIELDS[currentFieldIndex + 1] };
       }
       // Move to first field of next row
-      if (currentPostIndex < posts.length - 1) {
+      if (currentPostIndex < paginatedPosts.length - 1) {
         return { postIndex: currentPostIndex + 1, field: EDITABLE_FIELDS[0] };
       }
     } else {
@@ -553,7 +594,7 @@ export default function CampaignDetailPage() {
       void handleCellBlur(postId, field, true);
       
       // Navigate immediately using current data
-      const currentPostIndex = posts.findIndex((p: any) => p.id === postId);
+      const currentPostIndex = paginatedPosts.findIndex((p: any) => p.id === postId);
       
       if (currentPostIndex === -1) {
         setEditingCell(null);
@@ -561,7 +602,7 @@ export default function CampaignDetailPage() {
       }
       
       // Optimistically update the current post with the edited value for navigation
-      const post = posts.find((p: any) => p.id === postId);
+      const post = paginatedPosts.find((p: any) => p.id === postId);
       if (!post) {
         setEditingCell(null);
         return;
@@ -585,7 +626,7 @@ export default function CampaignDetailPage() {
         optimisticPost[field] = parseInt(cellEditValue || '0', 10) || 0;
       }
       
-      const optimisticPosts = posts.map((p: any) => p.id === postId ? optimisticPost : p);
+      const optimisticPosts = paginatedPosts.map((p: any) => p.id === postId ? optimisticPost : p);
       
       const direction = e.shiftKey ? 'prev' : 'next';
       const nextCell = findNextEditableCell(currentPostIndex, field, direction);
@@ -954,8 +995,8 @@ export default function CampaignDetailPage() {
     setRetryingUpdateRows({});
   };
 
-  const totalViews = useMemo(() => posts.reduce((acc, p) => acc + (p.totalView ?? 0), 0), [posts]);
-  const totalLikes = useMemo(() => posts.reduce((acc, p) => acc + (p.totalLike ?? 0), 0), [posts]);
+  const totalViews = useMemo(() => allPosts.reduce((acc, p) => acc + (p.totalView ?? 0), 0), [allPosts]);
+  const totalLikes = useMemo(() => allPosts.reduce((acc, p) => acc + (p.totalLike ?? 0), 0), [allPosts]);
   const campaignKpiSummary = useMemo(() => {
     const map = new Map<string, { target: number; actual: number }>();
     // Only include campaign-level KPIs (where accountId is null)
@@ -974,14 +1015,14 @@ export default function CampaignDetailPage() {
       
       // For QTY_POST, calculate actual from posts for current campaign only
       if (k.category === 'QTY_POST') {
-        const postCount = posts.filter((p: any) => p.accountId === k.accountId).length;
+        const postCount = allPosts.filter((p: any) => p.accountId === k.accountId).length;
         map.get(k.accountId)![k.category] = { target: k.target ?? 0, actual: postCount };
       } else {
         map.get(k.accountId)![k.category] = { target: k.target ?? 0, actual: k.actual ?? 0 };
       }
     });
     return map;
-  }, [kpis, posts]);
+  }, [kpis, allPosts]);
 
   const categoryOverviewRows = useMemo(() => {
     const totals = new Map<string, { posts: number; views: number }>();
@@ -1232,7 +1273,7 @@ export default function CampaignDetailPage() {
             </p>
           </div>
           <div className="px-2 sm:px-0 pb-2 sm:pb-0">
-            <EngagementVisualizer engagement={engagement} posts={posts} />
+            <EngagementVisualizer engagement={engagement} posts={allPosts} />
           </div>
         </Card>
       </section>
@@ -1402,7 +1443,7 @@ export default function CampaignDetailPage() {
           <div className="card-inner-table">
             {postsLoading ? (
               <div className="skeleton h-10 w-full" />
-            ) : posts.length === 0 ? (
+            ) : filteredPosts.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-gray-500 text-lg">No posts found</p>
                 <p className="text-gray-400 text-sm mt-2">

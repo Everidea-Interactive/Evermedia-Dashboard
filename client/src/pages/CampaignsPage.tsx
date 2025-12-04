@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
@@ -59,8 +59,17 @@ export default function CampaignsPage() {
   const { token } = useAuth();
   const { canManageCampaigns, canDelete } = usePermissions();
   const [items, setItems] = useState<Campaign[]>([]);
+  const [allItems, setAllItems] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState('');
+  const [filters, setFilters] = useState({
+    name: '',
+    brandName: '',
+    categories: [] as string[],
+    dateFrom: '',
+    dateTo: '',
+    quotationNumber: '',
+  });
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -90,7 +99,9 @@ export default function CampaignsPage() {
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
+  const [filterCategoryInput, setFilterCategoryInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showFilterSuggestions, setShowFilterSuggestions] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [campaignKpis, setCampaignKpis] = useState<Record<string, string>>(() =>
     Object.fromEntries(accountCategoryOrder.map((cat) => [cat, '']))
@@ -104,10 +115,70 @@ export default function CampaignsPage() {
 
   const fetchCampaigns = () => {
     setLoading(true);
-    api(`/campaigns?status=${encodeURIComponent(status)}`, { token })
-      .then(setItems)
+    // Always fetch all campaigns to ensure filter options (brands, categories) show all available values
+    api('/campaigns', { token })
+      .then((data) => {
+        setAllItems(data);
+        applyFilters(data);
+      })
       .finally(() => setLoading(false));
   };
+
+  const applyFilters = useCallback((campaigns: Campaign[]) => {
+    const filtered = campaigns.filter((c) => {
+      // Filter by status (client-side filtering)
+      if (status && c.status !== status) {
+        return false;
+      }
+
+      // Filter by campaign name
+      if (filters.name.trim()) {
+        const nameLower = filters.name.toLowerCase();
+        if (!c.name.toLowerCase().includes(nameLower)) return false;
+      }
+
+      // Filter by brand name
+      if (filters.brandName) {
+        if (!c.brandName || c.brandName.trim().toLowerCase() !== filters.brandName.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Filter by categories (campaign must have at least one of the selected categories)
+      if (filters.categories.length > 0) {
+        const campaignCategories = Array.isArray(c.categories) ? c.categories : [];
+        const hasMatchingCategory = filters.categories.some(selectedCat => 
+          campaignCategories.some(cat => cat.toLowerCase() === selectedCat.toLowerCase())
+        );
+        if (!hasMatchingCategory) return false;
+      }
+
+      // Filter by date range (matching PostsPage behavior - filters by startDate)
+      if (filters.dateFrom) {
+        const campaignDate = c.startDate ? new Date(c.startDate).getTime() : 0;
+        const from = new Date(filters.dateFrom).getTime();
+        if (campaignDate < from) return false;
+      }
+
+      if (filters.dateTo) {
+        const campaignDate = c.startDate ? new Date(c.startDate).getTime() : 0;
+        const to = new Date(filters.dateTo).getTime();
+        if (campaignDate > to) return false;
+      }
+
+      // Filter by quotation number
+      if (filters.quotationNumber.trim()) {
+        const quotationLower = filters.quotationNumber.toLowerCase();
+        if (!c.quotationNumber || !c.quotationNumber.toLowerCase().includes(quotationLower)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    setItems(filtered);
+  }, [filters, status]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig((prev) => {
@@ -172,7 +243,11 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     fetchCampaigns();
-  }, [token, status]);
+  }, [token]);
+
+  useEffect(() => {
+    applyFilters(allItems);
+  }, [filters, status, allItems, applyFilters]);
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
@@ -187,13 +262,48 @@ export default function CampaignsPage() {
   useEffect(() => {
     // Extract unique categories from all campaigns
     const allCategories = new Set<string>();
-    items.forEach(campaign => {
+    allItems.forEach(campaign => {
       if (campaign.categories && Array.isArray(campaign.categories)) {
         campaign.categories.forEach(cat => allCategories.add(cat));
       }
     });
     setAvailableCategories(Array.from(allCategories).sort());
-  }, [items]);
+  }, [allItems]);
+
+  const getUniqueBrands = useMemo(() => {
+    const brands = new Set<string>();
+    allItems.forEach(campaign => {
+      if (campaign.brandName && campaign.brandName.trim()) {
+        brands.add(campaign.brandName.trim());
+      }
+    });
+    return Array.from(brands).sort();
+  }, [allItems]);
+
+  const handleClearFilters = () => {
+    setFilters({
+      name: '',
+      brandName: '',
+      categories: [],
+      dateFrom: '',
+      dateTo: '',
+      quotationNumber: '',
+    });
+    setStatus('');
+    setFilterCategoryInput('');
+  };
+
+  const hasActiveFilters = () => {
+    return !!(
+      filters.name.trim() ||
+      filters.brandName ||
+      filters.categories.length > 0 ||
+      filters.dateFrom ||
+      filters.dateTo ||
+      filters.quotationNumber.trim() ||
+      status
+    );
+  };
 
   const resetForm = () => {
     setForm({
@@ -387,15 +497,7 @@ export default function CampaignsPage() {
         >
           <div className="section-title text-xs sm:text-sm">Unique Brand</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">
-            {(() => {
-              const uniqueBrands = new Set<string>();
-              items.forEach(campaign => {
-                if (campaign.brandName && campaign.brandName.trim()) {
-                  uniqueBrands.add(campaign.brandName.trim());
-                }
-              });
-              return uniqueBrands.size;
-            })()}
+            {getUniqueBrands.length}
           </div>
         </Card>
       </div>
@@ -403,20 +505,158 @@ export default function CampaignsPage() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <RequirePermission permission={canManageCampaigns}>
-            <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)}>
-              {showAddForm ? 'Cancel' : 'Add Campaign'}
-            </Button>
-          </RequirePermission>
+          <div className="flex items-center gap-2">
+            {hasActiveFilters() && (
+              <Button variant="outline" onClick={handleClearFilters} className="text-sm">
+                Reset Filters
+              </Button>
+            )}
+            <RequirePermission permission={canManageCampaigns}>
+              <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)}>
+                {showAddForm ? 'Cancel' : 'Add Campaign'}
+              </Button>
+            </RequirePermission>
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Select label="Status" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="">All</option>
-            <option>PLANNED</option>
-            <option>ACTIVE</option>
-            <option>COMPLETED</option>
-            <option>PAUSED</option>
-          </Select>
+        <div className="mb-4 px-2 sm:px-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-2 sm:gap-3">
+              <Input
+                label="Campaign Name"
+                value={filters.name}
+                onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Search by name..."
+              />
+              <Select 
+                label="Brand Name" 
+                value={filters.brandName} 
+                onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
+              >
+                <option value="">All Brands</option>
+                {getUniqueBrands.map(brand => (
+                  <option key={brand} value={brand}>{brand}</option>
+                ))}
+              </Select>
+              <Select label="Status" value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="">All Statuses</option>
+                <option>PLANNED</option>
+                <option>ACTIVE</option>
+                <option>COMPLETED</option>
+                <option>PAUSED</option>
+              </Select>
+              <Input
+                label="Quotation Number"
+                value={filters.quotationNumber}
+                onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
+                placeholder="Search by quotation..."
+              />
+              <div className="relative">
+                <Input
+                  label="Categories"
+                  value={filterCategoryInput}
+                  onChange={e => {
+                    setFilterCategoryInput(e.target.value);
+                    setShowFilterSuggestions(e.target.value.trim().length > 0);
+                  }}
+                  onFocus={() => {
+                    if (filterCategoryInput.trim().length > 0) {
+                      setShowFilterSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowFilterSuggestions(false), 200);
+                  }}
+                  placeholder="Type and press Enter"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const category = filterCategoryInput.trim();
+                      if (category) {
+                        if (filters.categories.includes(category)) {
+                          setToast({ message: `Category "${category}" is already added`, type: 'error' });
+                        } else {
+                          setFilters(prev => ({ ...prev, categories: [...prev.categories, category] }));
+                          setFilterCategoryInput('');
+                          setShowFilterSuggestions(false);
+                        }
+                      }
+                    }
+                  }}
+                />
+                {showFilterSuggestions && filterCategoryInput.trim().length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 border rounded-md max-h-48 overflow-auto" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', boxShadow: 'var(--shadow-lg)' }}>
+                    {availableCategories
+                      .filter(cat => 
+                        !filters.categories.includes(cat) &&
+                        cat.toLowerCase().includes(filterCategoryInput.toLowerCase())
+                      )
+                      .map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm transition-colors"
+                          style={{ color: 'var(--text-primary)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; e.currentTarget.style.color = '#2563eb'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                          onClick={() => {
+                            if (filters.categories.includes(cat)) {
+                              setToast({ message: `Category "${cat}" is already added`, type: 'error' });
+                            } else {
+                              setFilters(prev => ({ ...prev, categories: [...prev.categories, cat] }));
+                              setFilterCategoryInput('');
+                              setShowFilterSuggestions(false);
+                            }
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    {availableCategories.filter(cat => 
+                      !filters.categories.includes(cat) &&
+                      cat.toLowerCase().includes(filterCategoryInput.toLowerCase())
+                    ).length === 0 && (
+                      <div className="px-3 py-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                        Press Enter to add "{filterCategoryInput.trim()}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Input
+                label="Date From"
+                type="date"
+                value={filters.dateFrom}
+                onChange={e => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+              />
+              <Input
+                label="Date To"
+                type="date"
+                value={filters.dateTo}
+                onChange={e => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+              />
+            </div>
+          {filters.categories.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2 sm:mt-3">
+              {filters.categories.map(category => (
+                <span
+                  key={category}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border"
+                  style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
+                >
+                  {category}
+                  <button
+                    type="button"
+                    onClick={() => setFilters(prev => ({ ...prev, categories: prev.categories.filter(c => c !== category) }))}
+                    className="transition-colors"
+                    style={{ color: '#2563eb' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = '#1e40af'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = '#2563eb'; }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </Card>
       <RequirePermission permission={canManageCampaigns}>
@@ -925,44 +1165,30 @@ export default function CampaignsPage() {
         }
       >
         <div className="space-y-2">
-          {(() => {
-            const uniqueBrands = new Set<string>();
-            items.forEach(campaign => {
-              if (campaign.brandName && campaign.brandName.trim()) {
-                uniqueBrands.add(campaign.brandName.trim());
-              }
-            });
-            const sortedBrands = Array.from(uniqueBrands).sort();
-            
-            if (sortedBrands.length === 0) {
-              return (
-                <p style={{ color: 'var(--text-tertiary)' }}>No brands found in campaigns.</p>
-              );
-            }
-            
-            return (
-              <div className="space-y-2">
-                <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-                  Total unique brands: <strong>{sortedBrands.length}</strong>
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {sortedBrands.map((brand, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center px-3 py-1.5 rounded-md text-sm border"
-                      style={{ 
-                        color: '#2563eb', 
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)', 
-                        borderColor: '#93c5fd' 
-                      }}
-                    >
-                      {brand}
-                    </span>
-                  ))}
-                </div>
+          {getUniqueBrands.length === 0 ? (
+            <p style={{ color: 'var(--text-tertiary)' }}>No brands found in campaigns.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+                Total unique brands: <strong>{getUniqueBrands.length}</strong>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {getUniqueBrands.map((brand, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center px-3 py-1.5 rounded-md text-sm border"
+                    style={{ 
+                      color: '#2563eb', 
+                      backgroundColor: 'rgba(37, 99, 235, 0.1)', 
+                      borderColor: '#93c5fd' 
+                    }}
+                  >
+                    {brand}
+                  </span>
+                ))}
               </div>
-            );
-          })()}
+            </div>
+          )}
         </div>
       </Dialog>
     </div>
