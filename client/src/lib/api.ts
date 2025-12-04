@@ -2,9 +2,9 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:40
 const API_URL = API_BASE_URL;
 
 // Global handler for 401 errors
-let onUnauthorized: (() => void) | null = null;
+let onUnauthorized: (() => Promise<void> | void) | null = null;
 
-export function setUnauthorizedHandler(handler: (() => void) | null) {
+export function setUnauthorizedHandler(handler: (() => Promise<void> | void) | null) {
   onUnauthorized = handler;
 }
 
@@ -28,7 +28,7 @@ export async function api(path: string, { method = 'GET', body, token, headers =
   if (!res.ok) {
     // Handle 401 Unauthorized errors
     if (res.status === 401 && onUnauthorized) {
-      onUnauthorized();
+      await onUnauthorized();
     }
     let msg = `Request failed (${res.status})`;
     try {
