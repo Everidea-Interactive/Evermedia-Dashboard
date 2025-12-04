@@ -16,6 +16,7 @@ import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 import EngagementVisualizer from '../components/EngagementVisualizer';
 import AccountKpiEditModal from '../components/AccountKpiEditModal';
+import Papa from 'papaparse';
 
 const statusPills: Record<string, { bg: string; border: string; text: string }> = {
   ACTIVE: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' },
@@ -360,6 +361,79 @@ export default function CampaignDetailPage() {
       return { key, direction: defaultDirection };
     });
   };
+
+  const handleExportCampaign = useCallback(() => {
+    if (!campaign || allPosts.length === 0) {
+      setToast({ message: 'No posts to export', type: 'error' });
+      return;
+    }
+
+    // Sort posts by postDate descending (most recent first) for export
+    const sortedPostsForExport = [...allPosts].sort((a: any, b: any) => {
+      const dateA = a.postDate ? new Date(a.postDate).getTime() : 0;
+      const dateB = b.postDate ? new Date(b.postDate).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    // Create CSV rows matching the image format
+    const csvRows = sortedPostsForExport.map((post: any, index: number) => {
+      const accountName = getAccountName(post);
+      const postDateFormatted = post.postDate ? formatDate(post.postDate) : '';
+      
+      return {
+        NO: (index + 1).toString(),
+        'TANGGAL POSTING': postDateFormatted,
+        'NAMA AKUN': accountName || '',
+        JUDUL: post.postTitle || '',
+        JENIS: post.contentType || '',
+        'LINK KONTEN': post.contentLink || '',
+        STATUS: post.status || '',
+        VIEWS: (post.totalView || 0).toString(),
+        LIKE: (post.totalLike || 0).toString(),
+        COMMENT: (post.totalComment || 0).toString(),
+        SHARE: (post.totalShare || 0).toString(),
+        SAVED: (post.totalSaved || 0).toString(),
+        CATEGORY: post.campaignCategory || '',
+      };
+    });
+
+    // Define column order matching the image
+    const csvColumns = [
+      'NO',
+      'TANGGAL POSTING',
+      'NAMA AKUN',
+      'JUDUL',
+      'JENIS',
+      'LINK KONTEN',
+      'STATUS',
+      'VIEWS',
+      'LIKE',
+      'COMMENT',
+      'SHARE',
+      'SAVED',
+      'CATEGORY',
+    ];
+
+    // Generate CSV string
+    const csvString = Papa.unparse(csvRows, {
+      columns: csvColumns,
+      header: true,
+    });
+
+    // Create blob and download
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${campaign.name || 'campaign'}-posts-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setToast({ message: 'Campaign exported successfully', type: 'success' });
+  }, [campaign, allPosts, getAccountName]);
 
   const renderSortableHeader = (label: string, key: SortKey, className?: string) => {
     const isActive = sortConfig.key === key;
@@ -1124,6 +1198,16 @@ export default function CampaignDetailPage() {
               >
                 Edit campaign
               </Link>
+            </RequirePermission>
+            <RequirePermission permission={canManageCampaigns}>
+              <Button
+                variant="outline"
+                color="blue"
+                onClick={handleExportCampaign}
+                className="text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
+              >
+                Export Campaign
+              </Button>
             </RequirePermission>
             <RequirePermission permission={canDelete}>
               <Button

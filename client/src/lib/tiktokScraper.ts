@@ -47,7 +47,7 @@ export interface TikTokBatchResponseWithOriginals {
  */
 export async function scrapeTikTokUrl(
   url: string,
-  maxRetries: number = 3,
+  maxRetries: number = 1,
   retryDelay: number = 1000
 ): Promise<TikTokEngagementData> {
   if (!TIKTOK_SCRAPER_API_URL) {
@@ -99,7 +99,7 @@ export async function scrapeTikTokUrl(
  */
 export async function scrapeTikTokUrlsBatch(
   urls: string[],
-  maxRetries: number = 3,
+  maxRetries: number = 1,
   retryDelay: number = 1000
 ): Promise<TikTokBatchResponse> {
   if (!TIKTOK_SCRAPER_API_URL) {
@@ -226,7 +226,7 @@ export async function scrapeTikTokUrlsBatch(
  */
 export async function scrapeTikTokUrlsBatchWithOriginals(
   urls: string[],
-  maxRetries: number = 3,
+  maxRetries: number = 1,
   retryDelay: number = 1000
 ): Promise<TikTokBatchResponseWithOriginals> {
   if (!TIKTOK_SCRAPER_API_URL) {
