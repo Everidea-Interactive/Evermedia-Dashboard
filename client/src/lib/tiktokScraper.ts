@@ -99,7 +99,6 @@ export async function scrapeTikTokUrl(
  */
 export async function scrapeTikTokUrlsBatch(
   urls: string[],
-  maxRetries: number = 1,
   retryDelay: number = 1000
 ): Promise<TikTokBatchResponse> {
   if (!TIKTOK_SCRAPER_API_URL) {
@@ -148,15 +147,18 @@ export async function scrapeTikTokUrlsBatch(
 
   for (const batch of batches) {
     try {
-      // Build query string for batch request
-      const queryParams = batch.map(url => `urls=${encodeURIComponent(url)}`).join('&');
       const response = await fetch(
-        `${TIKTOK_SCRAPER_API_URL}/scrape/batch?${queryParams}&timeout=15.0&use_cache=false`,
+        `${TIKTOK_SCRAPER_API_URL}/scrape/batch`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            urls: batch,
+            timeout: 15.0,
+            use_cache: false,
+          }),
         }
       );
 
@@ -169,10 +171,10 @@ export async function scrapeTikTokUrlsBatch(
       allResults.push(...batchResponse.results);
       allErrors.push(...batchResponse.errors);
     } catch (error: any) {
-      // If batch fails, try individual URLs with retry
+      // If batch fails, try individual URLs once
       for (const url of batch) {
         try {
-          const result = await scrapeTikTokUrl(url, maxRetries, retryDelay);
+          const result = await scrapeTikTokUrl(url, 1, retryDelay);
           allResults.push(result);
         } catch (err: any) {
           allErrors.push({
@@ -182,33 +184,6 @@ export async function scrapeTikTokUrlsBatch(
         }
       }
     }
-  }
-
-  // Retry failed URLs individually
-  const failedUrls = allErrors.map(e => e.url);
-  if (failedUrls.length > 0) {
-    const retryResults: TikTokEngagementData[] = [];
-    const retryErrors: TikTokScrapeError[] = [];
-
-    for (const url of failedUrls) {
-      try {
-        const result = await scrapeTikTokUrl(url, maxRetries, retryDelay);
-        retryResults.push(result);
-        // Remove from errors
-        const errorIndex = allErrors.findIndex(e => e.url === url);
-        if (errorIndex !== -1) {
-          allErrors.splice(errorIndex, 1);
-        }
-      } catch (err: any) {
-        retryErrors.push({
-          error: err.message || 'Failed to scrape after retries',
-          url,
-        });
-      }
-    }
-
-    allResults.push(...retryResults);
-    allErrors.push(...retryErrors);
   }
 
   return {
@@ -226,7 +201,6 @@ export async function scrapeTikTokUrlsBatch(
  */
 export async function scrapeTikTokUrlsBatchWithOriginals(
   urls: string[],
-  maxRetries: number = 1,
   retryDelay: number = 1000
 ): Promise<TikTokBatchResponseWithOriginals> {
   if (!TIKTOK_SCRAPER_API_URL) {
@@ -275,15 +249,18 @@ export async function scrapeTikTokUrlsBatchWithOriginals(
 
   for (const batch of batches) {
     try {
-      // Build query string for batch request
-      const queryParams = batch.map(url => `urls=${encodeURIComponent(url)}`).join('&');
       const response = await fetch(
-        `${TIKTOK_SCRAPER_API_URL}/scrape/batch?${queryParams}&timeout=15.0&use_cache=false`,
+        `${TIKTOK_SCRAPER_API_URL}/scrape/batch`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            urls: batch,
+            timeout: 15.0,
+            use_cache: false,
+          }),
         }
       );
 
@@ -337,10 +314,10 @@ export async function scrapeTikTokUrlsBatchWithOriginals(
       // Add all errors
       allErrors.push(...batchResponse.errors);
     } catch (error: any) {
-      // If batch fails, try individual URLs with retry
+      // If batch fails, try individual URLs once
       for (const originalUrl of batch) {
         try {
-          const result = await scrapeTikTokUrl(originalUrl, maxRetries, retryDelay);
+          const result = await scrapeTikTokUrl(originalUrl, 1, retryDelay);
           allResults.push({
             originalUrl,
             resolvedUrl: result.url,
@@ -354,37 +331,6 @@ export async function scrapeTikTokUrlsBatchWithOriginals(
         }
       }
     }
-  }
-
-  // Retry failed URLs individually
-  const failedUrls = allErrors.map(e => e.url);
-  if (failedUrls.length > 0) {
-    const retryResults: TikTokScrapeResultWithOriginal[] = [];
-    const retryErrors: TikTokScrapeError[] = [];
-
-    for (const originalUrl of failedUrls) {
-      try {
-        const result = await scrapeTikTokUrl(originalUrl, maxRetries, retryDelay);
-        retryResults.push({
-          originalUrl,
-          resolvedUrl: result.url,
-          data: result,
-        });
-        // Remove from errors
-        const errorIndex = allErrors.findIndex(e => e.url === originalUrl);
-        if (errorIndex !== -1) {
-          allErrors.splice(errorIndex, 1);
-        }
-      } catch (err: any) {
-        retryErrors.push({
-          error: err.message || 'Failed to scrape after retries',
-          url: originalUrl,
-        });
-      }
-    }
-
-    allResults.push(...retryResults);
-    allErrors.push(...retryErrors);
   }
 
   return {
@@ -408,4 +354,3 @@ export function isTikTokUrl(url: string | null | undefined): boolean {
     return false;
   }
 }
-

@@ -1482,7 +1482,7 @@ export default function PostsPage() {
       const urls = postsWithTikTokUrls.map((post: Post) => post.contentLink!);
       
       // Scrape engagement data with original URL tracking
-      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals(urls, 3, 1000);
+      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals(urls, 1000);
       
       // Create a map of original URL to engagement data
       const engagementMap = new Map<string, any>();
@@ -1609,7 +1609,7 @@ export default function PostsPage() {
     setRetryingUpdateRows((prev) => ({ ...prev, [errorEntry.postId]: true }));
 
     try {
-      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals([errorEntry.contentLink], 3, 1000);
+      const scrapeResult = await scrapeTikTokUrlsBatchWithOriginals([errorEntry.contentLink], 1000);
       const matchedResult = scrapeResult.results.find(
         (result) =>
           result.originalUrl === errorEntry.contentLink || result.resolvedUrl === errorEntry.contentLink
