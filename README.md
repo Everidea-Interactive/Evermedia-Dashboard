@@ -347,28 +347,46 @@ Run the daily refresh from Supabase without GitHub/Render:
    supabase functions new refresh-engagements
    ```
 2. Replace the function code with a simple forwarder:
+
    ```ts
    // supabase/functions/refresh-engagements/index.ts
-   import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+   import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
-   const API_URL = Deno.env.get('API_URL'); // e.g., https://your-api.example.com
-   const CRON_SECRET = Deno.env.get('CRON_SECRET');
+   const API_URL = Deno.env.get("API_URL"); // e.g., https://your-api.example.com
+   const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
-   serve(async () => {
-     if (!API_URL) return new Response('Missing API_URL', { status: 500 });
+   serve(async (req) => {
+     try {
+       if (!API_URL) {
+         return new Response(JSON.stringify({ error: "Missing API_URL" }), {
+           status: 500,
+           headers: { "Content-Type": "application/json" },
+         });
+       }
 
-     const res = await fetch(`${API_URL}/api/internal/engagement-refresh`, {
-       method: 'POST',
-       headers: {
-         'Content-Type': 'application/json',
-         'x-cron-secret': CRON_SECRET ?? '',
-       },
-       body: JSON.stringify({}),
-     });
+       const res = await fetch(`${API_URL}/api/internal/engagement-refresh`, {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+           "x-cron-secret": CRON_SECRET ?? "",
+         },
+         body: JSON.stringify({}),
+       });
 
-     return new Response(await res.text(), { status: res.status, headers: res.headers });
+       const text = await res.text();
+       return new Response(text, {
+         status: res.status,
+         headers: { "Content-Type": "application/json" },
+       });
+     } catch (error) {
+       return new Response(JSON.stringify({ error: error.message }), {
+         status: 500,
+         headers: { "Content-Type": "application/json" },
+       });
+     }
    });
    ```
+
 3. Deploy the function:
    ```bash
    supabase functions deploy refresh-engagements
@@ -376,7 +394,51 @@ Run the daily refresh from Supabase without GitHub/Render:
 4. Set function secrets in Supabase Dashboard → Functions → refresh-engagements → Configure: `API_URL`, `CRON_SECRET`.
 5. Add a schedule (Project Settings → Edge Functions → Schedules): set cron to `0 18 * * *` (runs at 1 AM WIB / 18:00 UTC) and target `refresh-engagements`.
 
-This keeps the cron close to your DB and off the client. Ensure `CRON_SECRET` matches the API’s expected header.
+This keeps the cron close to your DB and off the client. Ensure `CRON_SECRET` matches the API's expected header.
+
+#### Troubleshooting Edge Function Issues
+
+If you're getting **404 Unauthorized** or **401 Unauthorized** errors:
+
+1. **Check Edge Function Code**: Ensure the function properly accepts the `req` parameter: `serve(async (req) => { ... })` and that you've deployed the updated code.
+
+2. **Verify Environment Variables Match Exactly**:
+
+   - **In Vercel** (Settings → Environment Variables): Set `CRON_SECRET` (this is your server environment)
+   - **In Supabase** (Functions → refresh-engagements → Configure → Secrets): Set both:
+     - `API_URL` = your Vercel API URL (e.g., `https://your-app.vercel.app` - **no trailing slash**)
+     - `CRON_SECRET` = **exact same value** as in Vercel (copy-paste to avoid typos)
+
+   ⚠️ **Common Issues**:
+
+   - Extra spaces or newlines in the secret value
+   - Trailing slash in `API_URL` (should be `https://app.vercel.app` not `https://app.vercel.app/`)
+   - Case sensitivity (though headers are case-insensitive, values must match exactly)
+
+3. **Test Manually**: Test the Edge Function directly:
+
+   ```bash
+   curl -X POST https://<your-project-ref>.supabase.co/functions/v1/refresh-engagements \
+     -H "Authorization: Bearer <your-anon-key>"
+   ```
+
+   Then check Vercel logs to see what the server received.
+
+4. **Check Vercel Logs**:
+
+   - Go to Vercel Dashboard → Your Project → Logs
+   - Look for `[cron-auth]` messages when the Edge Function runs
+   - The logs will show if the header was received and its length (without exposing the secret)
+
+5. **Verify API_URL Format**:
+
+   - If deployed to Vercel, use: `https://your-project.vercel.app` (no `/api` suffix)
+   - The Edge Function will append `/api/internal/engagement-refresh` automatically
+   - Make sure there's **no trailing slash** in `API_URL`
+
+6. **Redeploy After Changes**:
+   - After updating Edge Function code: `supabase functions deploy refresh-engagements`
+   - After changing Vercel env vars: Trigger a new deployment (or wait for auto-deploy)
 
 ### Usage
 

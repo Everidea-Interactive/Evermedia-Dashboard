@@ -7,15 +7,30 @@ const router = Router();
 
 function isAuthorized(req: any) {
   const cronSecret = (process.env.CRON_SECRET || '').trim();
-  const headerSecret = typeof req.headers['x-cron-secret'] === 'string' ? (req.headers['x-cron-secret'] as string).trim() : '';
+  // Express normalizes headers to lowercase, but handle both cases for safety
+  const headerSecret = typeof req.headers['x-cron-secret'] === 'string' 
+    ? (req.headers['x-cron-secret'] as string).trim() 
+    : typeof req.headers['X-Cron-Secret'] === 'string'
+    ? (req.headers['X-Cron-Secret'] as string).trim()
+    : '';
 
-  // Debug logging without leaking secrets
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('cronSecret len', cronSecret.length, 'header len', headerSecret.length);
+  if (!cronSecret) {
+    console.warn('[cron-auth] CRON_SECRET not set, allowing request (unsafe for production)');
+    return true; // opt-in: if not set, allow but warn
   }
-
-  if (!cronSecret) return true; // opt-in: if not set, allow but warn
-  return headerSecret === cronSecret;
+  
+  const match = headerSecret === cronSecret;
+  if (!match) {
+    // Log only lengths/presence for debugging 401s; do not log actual secrets
+    console.warn('[cron-auth] Authorization failed', { 
+      cronSecretSet: !!cronSecret, 
+      cronSecretLength: cronSecret.length, 
+      headerPresent: !!headerSecret,
+      headerLength: headerSecret.length,
+      headerKeys: Object.keys(req.headers).filter(k => k.toLowerCase().includes('cron'))
+    });
+  }
+  return match;
 }
 
 router.post('/engagement-refresh', async (req, res) => {
