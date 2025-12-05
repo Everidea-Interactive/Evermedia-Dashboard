@@ -6,10 +6,16 @@ import { isTikTokUrl, scrapeTikTokUrlsBatchWithOriginals } from '../utils/tiktok
 const router = Router();
 
 function isAuthorized(req: any) {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = (process.env.CRON_SECRET || '').trim();
+  const headerSecret = typeof req.headers['x-cron-secret'] === 'string' ? (req.headers['x-cron-secret'] as string).trim() : '';
+
+  // Debug logging without leaking secrets
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('cronSecret len', cronSecret.length, 'header len', headerSecret.length);
+  }
+
   if (!cronSecret) return true; // opt-in: if not set, allow but warn
-  const headerSecret = req.headers['x-cron-secret'];
-  return typeof headerSecret === 'string' && headerSecret === cronSecret;
+  return headerSecret === cronSecret;
 }
 
 router.post('/engagement-refresh', async (req, res) => {
