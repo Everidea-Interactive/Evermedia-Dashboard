@@ -127,6 +127,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     totalComment,
     totalShare,
     totalSaved,
+    fypType,
   } = req.body as any;
   if (!campaignId || !accountId || !postDate || !postTitle) return res.status(400).json({ error: 'Missing fields' });
   
@@ -190,6 +191,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
       totalComment: totalComment ?? 0,
       totalShare: totalShare ?? 0,
       totalSaved: totalSaved ?? 0,
+      fypType: fypType && (fypType === 'ORG' || fypType === 'ADS') ? fypType : null,
     })
     .select()
     .single();

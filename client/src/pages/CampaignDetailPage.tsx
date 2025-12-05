@@ -498,6 +498,37 @@ export default function CampaignDetailPage() {
     initialCellValueRef.current = valueToEdit;
   };
 
+  const handleFypTypeToggle = async (postId: string, clickedType: 'ORG' | 'ADS', currentType: string | null | undefined) => {
+    // If clicking the already checked type, uncheck it. Otherwise, check the clicked type.
+    const newType = currentType === clickedType ? null : clickedType;
+    setSavingCell(`${postId}-fypType`);
+    try {
+      const updatedPost = await api(`/posts/${postId}`, {
+        method: 'PUT',
+        token,
+        body: { fypType: newType },
+      });
+
+      // Update the post in the list
+      setAllPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
+        if (p.id === postId) {
+          return { ...updatedPost, account: p.account, picTalent: p.picTalent, picEditor: p.picEditor, picPosting: p.picPosting };
+        }
+        return p;
+      }));
+
+      // Refresh KPIs and engagement
+      await refreshDashboardMetrics();
+
+      setToast({ message: 'FYP type updated successfully', type: 'success' });
+    } catch (error) {
+      console.error('Failed to update FYP type:', error);
+      setToast({ message: 'Failed to update FYP type', type: 'error' });
+    } finally {
+      setSavingCell('');
+    }
+  };
+
   const handleCellBlur = async (postId: string, field: string, skipClose?: boolean, overrideValue?: string): Promise<any | null> => {
     if (!editingCell || editingCell.postId !== postId || editingCell.field !== field) return null;
     
@@ -531,6 +562,10 @@ export default function CampaignDetailPage() {
       const currentBool = post[field] ? 'true' : 'false';
       hasChanged = valueToUse !== currentBool;
       newValue = valueToUse === 'true';
+    } else if (field === 'fypType') {
+      const currentType = post.fypType || '';
+      hasChanged = valueToUse !== currentType;
+      newValue = valueToUse === 'ORG' || valueToUse === 'ADS' ? valueToUse : null;
     } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
       const currentNum = post[field] || 0;
       const newNum = parseInt(valueToUse || '0', 10) || 0;
@@ -573,6 +608,8 @@ export default function CampaignDetailPage() {
         updatePayload.adsOnMusic = newValue;
       } else if (field === 'yellowCart') {
         updatePayload.yellowCart = newValue;
+      } else if (field === 'fypType') {
+        updatePayload.fypType = newValue;
       } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
         updatePayload[field] = newValue;
       }
@@ -1543,6 +1580,7 @@ export default function CampaignDetailPage() {
                     <THead>
                       <TR>
                         <TH>NO</TH>
+                        <TH className="!text-center">FYP TYPE</TH>
                         {renderSortableHeader('Account', 'account')}
                         {renderSortableHeader('Post Date', 'postDate')}
                         {renderSortableHeader('Title', 'postTitle', 'w-48')}
@@ -1577,6 +1615,49 @@ export default function CampaignDetailPage() {
                           <TR key={p.id}>
                             
                             <TD>{postPagination.offset + index + 1}</TD>
+                            <TD className="!text-center">
+                              {p.totalView >= 10000 ? (
+                                <div className="flex items-center justify-center gap-3">
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={p.fypType === 'ORG'}
+                                      onChange={() => {
+                                        void handleFypTypeToggle(p.id, 'ORG', p.fypType);
+                                      }}
+                                      disabled={isSaving && savingCell?.endsWith('-fypType')}
+                                      className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-green-600 dark:text-green-500 focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                    <span className={`text-xs ${p.fypType === 'ORG' ? 'font-semibold text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'}`}>
+                                      ORG
+                                    </span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={p.fypType === 'ADS'}
+                                      onChange={() => {
+                                        void handleFypTypeToggle(p.id, 'ADS', p.fypType);
+                                      }}
+                                      disabled={isSaving && savingCell?.endsWith('-fypType')}
+                                      className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-red-600 dark:text-red-500 focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                    <span className={`text-xs ${p.fypType === 'ADS' ? 'font-semibold text-red-700 dark:text-red-300' : 'text-gray-600 dark:text-gray-400'}`}>
+                                      ADS
+                                    </span>
+                                  </label>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center gap-3">
+                                  <span className={`text-xs ${p.fypType === 'ORG' ? 'font-semibold text-green-700 dark:text-green-300' : 'text-gray-400 dark:text-gray-600'}`}>
+                                    {p.fypType === 'ORG' ? '✓ ORG' : 'ORG'}
+                                  </span>
+                                  <span className={`text-xs ${p.fypType === 'ADS' ? 'font-semibold text-red-700 dark:text-red-300' : 'text-gray-400 dark:text-gray-600'}`}>
+                                    {p.fypType === 'ADS' ? '✓ ADS' : 'ADS'}
+                                  </span>
+                                </div>
+                              )}
+                            </TD>
                             <TD>
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[2rem] flex items-center min-w-0 max-w-full overflow-hidden rounded-md transition-colors duration-150 px-1 -mx-1"

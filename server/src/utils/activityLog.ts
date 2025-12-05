@@ -129,6 +129,7 @@ function formatFieldName(field: string): string {
     contentType: 'Content Type',
     adsOnMusic: 'Ads on Music',
     yellowCart: 'Yellow Cart',
+    fypType: 'FYP Type',
     targetViewsForFYP: 'Target Views for FYP',
     quotationNumber: 'Quotation Number',
     accountIds: 'Accounts',
