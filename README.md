@@ -322,6 +322,62 @@ The dashboard includes integration with the TikTok scraper API to automatically 
 - **Smart Filtering**: Only processes posts with valid TikTok URLs
 - **Automatic Refresh**: Campaign KPIs and engagement metrics are automatically recalculated
 
+### Automated Daily Refresh (server-side)
+
+- Server endpoint: `POST /api/internal/engagement-refresh`
+- Auth: set `CRON_SECRET` in server env and send `x-cron-secret: <value>` header (leave unset only for local testing).
+- Env: set `TIKTOK_SCRAPER_API_URL` on the server (can reuse the client value).
+- Example trigger (Supabase Scheduled Function or GitHub Actions) at 1 AM WIB (18:00 UTC):
+
+  ```bash
+  curl -X POST https://<your-api-host>/api/internal/engagement-refresh \
+    -H "Content-Type: application/json" \
+    -H "x-cron-secret: $CRON_SECRET" \
+    -d '{}'
+  ```
+
+The job fetches all posts with TikTok URLs, calls the scraper in batches, updates engagement metrics, and recalculates affected KPIs. Schedule your external cron to hit this endpoint daily at the desired time.
+
+### Supabase Edge Function scheduler (example)
+
+Run the daily refresh from Supabase without GitHub/Render:
+
+1. Create a new Edge Function (e.g., `refresh-engagements`):
+   ```bash
+   supabase functions new refresh-engagements
+   ```
+2. Replace the function code with a simple forwarder:
+   ```ts
+   // supabase/functions/refresh-engagements/index.ts
+   import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+
+   const API_URL = Deno.env.get('API_URL'); // e.g., https://your-api.example.com
+   const CRON_SECRET = Deno.env.get('CRON_SECRET');
+
+   serve(async () => {
+     if (!API_URL) return new Response('Missing API_URL', { status: 500 });
+
+     const res = await fetch(`${API_URL}/api/internal/engagement-refresh`, {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         'x-cron-secret': CRON_SECRET ?? '',
+       },
+       body: JSON.stringify({}),
+     });
+
+     return new Response(await res.text(), { status: res.status, headers: res.headers });
+   });
+   ```
+3. Deploy the function:
+   ```bash
+   supabase functions deploy refresh-engagements
+   ```
+4. Set function secrets in Supabase Dashboard → Functions → refresh-engagements → Configure: `API_URL`, `CRON_SECRET`.
+5. Add a schedule (Project Settings → Edge Functions → Schedules): set cron to `0 18 * * *` (runs at 1 AM WIB / 18:00 UTC) and target `refresh-engagements`.
+
+This keeps the cron close to your DB and off the client. Ensure `CRON_SECRET` matches the API’s expected header.
+
 ### Usage
 
 1. Ensure posts have valid TikTok URLs in the `contentLink` field

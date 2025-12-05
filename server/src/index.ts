@@ -12,6 +12,7 @@ import picRoutes from './routes/pics.js';
 import postRoutes from './routes/posts.js';
 import dashboardRoutes from './routes/dashboards.js';
 import activityLogRoutes from './routes/activityLogs.js';
+import internalRoutes from './routes/internal.js';
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/pics', picRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api', dashboardRoutes);
+app.use('/api/internal', internalRoutes);
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);
