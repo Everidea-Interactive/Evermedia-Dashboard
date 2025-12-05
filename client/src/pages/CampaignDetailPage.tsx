@@ -1327,8 +1327,8 @@ export default function CampaignDetailPage() {
               </span>
             </div>
             <div
-              className="grid gap-3 overflow-y-auto overflow-x-hidden pr-1 px-2 sm:px-0 pb-2 sm:pb-0 scrollable-y"
-              style={{ maxHeight: '200px' }}
+              className="grid overflow-y-auto overflow-x-hidden pr-1 px-2 sm:px-0 pb-2 sm:pb-0 scrollable-y"
+              style={{ maxHeight: '200px', gap: '12px' }}
             >
               {categoryOverviewRows.length === 0 ? (
                 <div className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
@@ -1344,11 +1344,11 @@ export default function CampaignDetailPage() {
                   return (
                     <div
                       key={row.category}
-                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 border border-dashed rounded-lg px-3 sm:px-4 py-3 min-w-0 overflow-hidden"
-                      style={{ borderColor: 'var(--border-color)' }}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center border border-dashed rounded-lg px-3 sm:px-4 py-3 min-w-0 overflow-hidden"
+                      style={{ borderColor: 'var(--border-color)', gap: '16px' }}
                     >
                       <div className="flex-1 min-w-0 sm:min-w-[150px] overflow-hidden">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center min-w-0" style={{ gap: '8px' }}>
                         <div className="font-medium text-sm sm:text-base truncate min-w-0 flex-1">{row.category}</div>
                         {row.posts === 0 && (
                           <span
@@ -1360,7 +1360,7 @@ export default function CampaignDetailPage() {
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 sm:flex sm:flex-nowrap items-center sm:justify-end gap-2 text-[10px] uppercase tracking-wide sm:flex-1 sm:min-w-0" style={{ color: 'var(--text-tertiary)' }}>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-nowrap items-center sm:justify-end text-[10px] uppercase tracking-wide sm:flex-1 sm:min-w-0" style={{ color: 'var(--text-tertiary)', gap: '8px' }}>
                         {metrics.map((metric) => (
                           <div
                             key={metric.label}
