@@ -16,7 +16,7 @@ import internalRoutes from './routes/internal.js';
 
 const app = express();
 
-// CORS configuration
+// CORS configuration - only apply to non-internal routes
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.FRONTEND_URL?.split(',') || []
@@ -24,6 +24,11 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200
 };
+
+// Internal routes should bypass CORS (server-to-server calls)
+app.use('/api/internal', internalRoutes);
+
+// Apply CORS to all other routes
 app.use(cors(corsOptions));
 
 app.use(express.json());
@@ -39,7 +44,6 @@ app.use('/api/pics', picRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api', dashboardRoutes);
-app.use('/api/internal', internalRoutes);
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);

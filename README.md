@@ -324,19 +324,107 @@ The dashboard includes integration with the TikTok scraper API to automatically 
 
 ### Automated Daily Refresh (server-side)
 
-- Server endpoint: `POST /api/internal/engagement-refresh`
-- Auth: set `CRON_SECRET` in server env and send `x-cron-secret: <value>` header (leave unset only for local testing).
-- Env: set `TIKTOK_SCRAPER_API_URL` on the server (can reuse the client value).
-- Example trigger (Supabase Scheduled Function or GitHub Actions) at 1 AM WIB (18:00 UTC):
+The server provides an endpoint for automated daily refresh of engagement statistics. This endpoint requires authentication via a secret header to prevent unauthorized access.
 
-  ```bash
-  curl -X POST https://<your-api-host>/api/internal/engagement-refresh \
-    -H "Content-Type: application/json" \
-    -H "x-cron-secret: $CRON_SECRET" \
-    -d '{}'
+**Server endpoint**: `POST /api/internal/engagement-refresh`
+
+> **Quick Setup**: Set `CRON_SECRET` and `TIKTOK_SCRAPER_API_URL` in your deployment platform (Vercel/Railway/Render). See detailed instructions below.
+
+#### Required Environment Variables
+
+You need to set these environment variables in your deployment platform (Vercel, Railway, Render, etc.):
+
+**1. `CRON_SECRET`** (Required for production)
+
+- **Purpose**: Secret token used to authenticate automated requests to the refresh endpoint
+- **Where to set**:
+  - **Vercel**: Dashboard → Your Project → Settings → Environment Variables → Add New
+  - **Railway/Render**: Project Settings → Environment Variables → Add Variable
+- **Value**: Generate a strong random string (e.g., `openssl rand -hex 32` or use a password generator)
+- **Example**: `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+- **Important**:
+  - Must match exactly with the value set in your Supabase Edge Function secrets (see below)
+  - Leave unset only for local testing (server will allow requests but warn)
+  - Use different values for production vs development environments
+
+**2. `TIKTOK_SCRAPER_API_URL`** (Required)
+
+- **Purpose**: URL of your TikTok scraper API service. This tells your **server** where to find the scraper API when it needs to fetch engagement data.
+- **Where to set**: In your **server deployment platform** (Vercel, Railway, Render, etc.) - same location as `CRON_SECRET` above
+  - **Vercel**: Dashboard → Your Project → Settings → Environment Variables
+  - **Railway/Render**: Project Settings → Environment Variables
+- **Value**: The URL where your TikTok scraper API is hosted (e.g., `https://your-tiktok-scraper.onrender.com`)
+  - ⚠️ **Important Clarification**:
+    - The scraper API might be hosted on **Render** (or any other platform)
+    - But you **set this variable in YOUR server** (Vercel), NOT on Render
+    - You're telling your Vercel server: "When you need to scrape TikTok data, call this Render URL"
+    - Think of it like a phone number: the scraper lives on Render, but your Vercel server needs to know that "phone number" to call it
+- **Example**: `https://tiktok-scraper-api.onrender.com`
+- **Why needed**:
+
+  - When the automated daily refresh runs server-side, your Vercel API needs to fetch engagement data
+  - It does this by making HTTP requests to the TikTok scraper API
+  - Without this URL, your server doesn't know where to send those requests
+
+  **Request Flow:**
+
+  ```
+  Supabase Edge Function (scheduled daily)
+    ↓ (calls with CRON_SECRET)
+  Your Vercel API (/api/internal/engagement-refresh)
+    ↓ (uses TIKTOK_SCRAPER_API_URL to call)
+  TikTok Scraper API (hosted on Render)
+    ↓ (returns engagement data)
+  Your Vercel API (updates database)
   ```
 
-The job fetches all posts with TikTok URLs, calls the scraper in batches, updates engagement metrics, and recalculates affected KPIs. Schedule your external cron to hit this endpoint daily at the desired time.
+  You set `TIKTOK_SCRAPER_API_URL` in **Vercel** so your Vercel API knows where the scraper is (even if the scraper itself is hosted on Render).
+
+- **Note**: Can reuse the same value as `VITE_TIKTOK_SCRAPER_API_URL` from client config (they can point to the same scraper service)
+
+#### Setting Up in Vercel (Step-by-Step)
+
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Select your project
+3. Go to **Settings** → **Environment Variables**
+4. Click **Add New** and add each variable:
+
+   **Variable 1:**
+
+   - **Key**: `CRON_SECRET`
+   - **Value**: Your generated secret (e.g., `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`)
+   - **Environment**: Select **Production** (and optionally Preview/Development if needed)
+   - Click **Save**
+
+   **Variable 2:**
+
+   - **Key**: `TIKTOK_SCRAPER_API_URL`
+   - **Value**: Your TikTok scraper API URL
+   - **Environment**: Select **Production** (and optionally Preview/Development if needed)
+   - Click **Save**
+
+5. **Redeploy** your project (or wait for next auto-deploy) for changes to take effect
+
+#### Testing the Endpoint
+
+You can test the endpoint manually (for local development, leave `CRON_SECRET` unset):
+
+```bash
+curl -X POST https://<your-api-host>/api/internal/engagement-refresh \
+  -H "Content-Type: application/json" \
+  -H "x-cron-secret: YOUR_CRON_SECRET_VALUE" \
+  -d '{}'
+```
+
+**For PowerShell (Windows):**
+
+```powershell
+curl.exe -X POST https://<your-api-host>/api/internal/engagement-refresh -H "Content-Type: application/json" -H "x-cron-secret: YOUR_CRON_SECRET_VALUE" -d '{}'
+```
+
+#### What It Does
+
+The job fetches all posts with TikTok URLs, calls the scraper in batches, updates engagement metrics, and recalculates affected KPIs. Schedule your external cron (Supabase Edge Function, GitHub Actions, etc.) to hit this endpoint daily at the desired time.
 
 ### Supabase Edge Function scheduler (example)
 
@@ -391,10 +479,23 @@ Run the daily refresh from Supabase without GitHub/Render:
    ```bash
    supabase functions deploy refresh-engagements
    ```
-4. Set function secrets in Supabase Dashboard → Functions → refresh-engagements → Configure: `API_URL`, `CRON_SECRET`.
-5. Add a schedule (Project Settings → Edge Functions → Schedules): set cron to `0 18 * * *` (runs at 1 AM WIB / 18:00 UTC) and target `refresh-engagements`.
+4. **Set function secrets** in Supabase Dashboard:
 
-This keeps the cron close to your DB and off the client. Ensure `CRON_SECRET` matches the API's expected header.
+   - Go to **Functions** → **refresh-engagements** → **Configure** → **Secrets**
+   - Add **`API_URL`**: Your Vercel/backend URL (e.g., `https://your-app.vercel.app` - **no trailing slash**)
+   - Add **`CRON_SECRET`**: **Must match exactly** the `CRON_SECRET` value you set in Vercel (see [Required Environment Variables](#required-environment-variables) above)
+   - Click **Save**
+
+5. **Add a schedule** (Project Settings → Edge Functions → Schedules):
+   - Set cron to `0 18 * * *` (runs at 1 AM WIB / 18:00 UTC)
+   - Target: `refresh-engagements`
+   - Click **Save**
+
+**Important**: The `CRON_SECRET` value in Supabase Edge Function secrets **must match exactly** the `CRON_SECRET` value in your Vercel environment variables. Copy-paste the value to avoid typos.
+
+**Note on CORS**: Internal routes (`/api/internal/*`) bypass CORS restrictions since they're server-to-server calls. This prevents any CORS-related issues with Supabase Edge Functions.
+
+This keeps the cron close to your DB and off the client.
 
 #### Troubleshooting Edge Function Issues
 
@@ -415,14 +516,132 @@ If you're getting **404 Unauthorized** or **401 Unauthorized** errors:
    - Trailing slash in `API_URL` (should be `https://app.vercel.app` not `https://app.vercel.app/`)
    - Case sensitivity (though headers are case-insensitive, values must match exactly)
 
-3. **Test Manually**: Test the Edge Function directly:
+3. **Test the Edge Function in Supabase**:
 
-   ```bash
-   curl -X POST https://<your-project-ref>.supabase.co/functions/v1/refresh-engagements \
-     -H "Authorization: Bearer <your-anon-key>"
+   **Option A: Using Supabase Dashboard (Easiest)**
+
+   1. Go to Supabase Dashboard → **Edge Functions** → **refresh-engagements**
+   2. Click **"Invoke Function"** button (or go to **Logs** tab and click **"Invoke"**)
+   3. Leave the payload empty `{}` or don't change anything
+   4. Click **"Invoke"**
+   5. Check the response:
+      - ✅ **200 OK**: Function executed successfully
+      - ❌ **401 Unauthorized**: `CRON_SECRET` mismatch (check both Vercel and Supabase secrets)
+      - ❌ **500 Error**: Check the error message (might be `API_URL` issue or server error)
+   6. View logs in the **Logs** tab to see detailed execution info
+
+   **Option B: Using curl command**
+
+   **For PowerShell (Windows):**
+
+   ```powershell
+   # Replace <your-project-ref> with your Supabase project reference
+   # Replace <your-anon-key> with your Supabase anon key (from Settings → API)
+   curl.exe -X POST https://<your-project-ref>.supabase.co/functions/v1/refresh-engagements `
+     -H "Authorization: Bearer <your-anon-key>" `
+     -H "Content-Type: application/json" `
+     -d '{}'
    ```
 
-   Then check Vercel logs to see what the server received.
+   **Or as a single line (PowerShell):**
+
+   ```powershell
+   curl.exe -X POST https://<your-project-ref>.supabase.co/functions/v1/refresh-engagements -H "Authorization: Bearer <your-anon-key>" -H "Content-Type: application/json" -d '{}'
+   ```
+
+   **For Bash/Linux/Mac:**
+
+   ```bash
+   # Replace <your-project-ref> with your Supabase project reference
+   # Replace <your-anon-key> with your Supabase anon key (from Settings → API)
+   curl -X POST https://<your-project-ref>.supabase.co/functions/v1/refresh-engagements \
+     -H "Authorization: Bearer <your-anon-key>" \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```
+
+   **Option C: Using Supabase CLI (Easiest - No Auth Needed)**
+
+   ```bash
+   # This skips JWT verification, perfect for testing
+   supabase functions invoke refresh-engagements --no-verify-jwt
+   ```
+
+   **Note**: If you get "Invalid JWT" error with curl, you're likely using the wrong key format. The anon key should be a JWT token starting with `eyJ...`, not a publishable key starting with `sb_publishable_...`. Alternatively, use Option A (Dashboard) or Option C (CLI) which don't require manual JWT handling.
+
+   **Finding Your Values:**
+
+   - **Project Reference**: Found in Supabase Dashboard → Settings → API → Project URL
+     - Example: If URL is `https://abcdefghijklmnop.supabase.co`, your ref is `abcdefghijklmnop`
+   - **Anon Key**: Found in Supabase Dashboard → Settings → API → Project API keys → `anon` `public` key
+     - ⚠️ **Important**: Use the JWT token (starts with `eyJ...`), NOT the publishable key (`sb_publishable_...`)
+     - The anon key looks like: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY2RlZmdoaWprbG1ub3AiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTYzODk5ODc2MCwiZXhwIjoxOTU0NTc0NzYwfQ...`
+   - **Vercel API URL**: Found in Vercel Dashboard → Your Project → Settings → Domains (or use the default `.vercel.app` URL)
+
+   **What to Check After Testing:**
+
+   - **Supabase Logs**: Dashboard → Edge Functions → refresh-engagements → **Logs** tab
+
+     - Look for any errors in the function execution
+     - Check if the fetch to your API succeeded
+     - Response status and body will be shown
+
+   - **Vercel Logs**: Vercel Dashboard → Your Project → **Logs**
+     - Look for `[cron-auth]` messages
+     - Should see either "Authorization failed" (if secret mismatch) or the engagement refresh process starting
+     - If you see "Authorization failed", check the log details for header length comparison
+     - Successful requests will show the engagement refresh process with post updates
+
+   **Expected Responses:**
+
+   - ✅ **Success (200)**: `{"updated": X, "total": Y, "failures": [], ...}`
+   - ❌ **401 Unauthorized**: `{"error": "Unauthorized"}` - Check `CRON_SECRET` values match
+   - ❌ **500 Server Error**: Check error message - might be missing `API_URL` or `TIKTOK_SCRAPER_API_URL` in Vercel
+   - ❌ **404 Not Found**: Check `API_URL` is correct and endpoint exists
+
+   **Debugging 401 Unauthorized Errors:**
+
+   If you're getting `{"error": "Unauthorized"}`, follow these steps:
+
+   1. **Check Vercel Logs** (Most Important):
+
+      - Go to Vercel Dashboard → Your Project → **Logs**
+      - Look for `[cron-auth] Authorization failed` messages
+      - The enhanced logs will show:
+        - `cronSecretLength` & `headerLength`: Compare these - if different, values don't match
+        - `cronSecretFirst3` & `cronSecretLast3`: First/last 3 chars of Vercel secret
+        - `headerFirst3` & `headerLast3`: First/last 3 chars of received header
+        - `allRelevantHeaders`: All headers containing 'cron', 'secret', or 'x-'
+        - `userAgent`: Should show `SupabaseEdgeRuntime` if coming from Edge Function
+        - `origin`: The origin of the request
+      - **Key Checks**:
+        - If `headerLength` is 0: Edge Function isn't sending the header (check Edge Function code)
+        - If lengths match but first/last chars differ: Values are different (check for hidden characters)
+        - If `userAgent` doesn't show Supabase: Request might be coming from wrong source
+
+   2. **Use Debug Endpoint** (Temporary - for testing):
+
+      ```powershell
+      # Test what your Vercel API is receiving
+      curl.exe -X GET https://<your-vercel-url>/api/internal/debug-auth -H "x-cron-secret: YOUR_SECRET_HERE"
+      ```
+
+      This will show you what headers are being received and compared.
+
+   3. **Verify Values Match Exactly**:
+
+      - **Vercel**: Settings → Environment Variables → `CRON_SECRET`
+      - **Supabase**: Functions → refresh-engagements → Configure → Secrets → `CRON_SECRET`
+      - Copy from Vercel and paste into Supabase (don't type manually)
+      - Check for:
+        - No extra spaces before/after
+        - No newlines
+        - Exact same characters
+
+   4. **Redeploy After Changes**:
+      - After updating Supabase secrets: No redeploy needed (secrets are live)
+      - After updating Vercel env vars: Trigger a new deployment or wait for auto-deploy
+      - After updating Edge Function code: `supabase functions deploy refresh-engagements`
 
 4. **Check Vercel Logs**:
 

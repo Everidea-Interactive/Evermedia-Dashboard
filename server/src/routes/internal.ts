@@ -7,6 +7,18 @@ const router = Router();
 
 function isAuthorized(req: any) {
   const cronSecret = (process.env.CRON_SECRET || '').trim();
+  
+  // Log all headers for debugging (in production, this helps diagnose issues)
+  const allHeaders = Object.keys(req.headers).reduce((acc: any, key: string) => {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('cron') || lowerKey.includes('secret') || lowerKey.includes('x-')) {
+      acc[key] = typeof req.headers[key] === 'string' 
+        ? `${(req.headers[key] as string).substring(0, 3)}...${(req.headers[key] as string).substring((req.headers[key] as string).length - 3)}`
+        : req.headers[key];
+    }
+    return acc;
+  }, {});
+  
   // Express normalizes headers to lowercase, but handle both cases for safety
   const headerSecret = typeof req.headers['x-cron-secret'] === 'string' 
     ? (req.headers['x-cron-secret'] as string).trim() 
@@ -21,21 +33,53 @@ function isAuthorized(req: any) {
   
   const match = headerSecret === cronSecret;
   if (!match) {
-    // Log only lengths/presence for debugging 401s; do not log actual secrets
+    // Enhanced logging for debugging 401s
     console.warn('[cron-auth] Authorization failed', { 
       cronSecretSet: !!cronSecret, 
-      cronSecretLength: cronSecret.length, 
+      cronSecretLength: cronSecret.length,
+      cronSecretFirst3: cronSecret.substring(0, 3),
+      cronSecretLast3: cronSecret.substring(cronSecret.length - 3),
       headerPresent: !!headerSecret,
       headerLength: headerSecret.length,
-      headerKeys: Object.keys(req.headers).filter(k => k.toLowerCase().includes('cron'))
+      headerFirst3: headerSecret ? headerSecret.substring(0, 3) : '',
+      headerLast3: headerSecret ? headerSecret.substring(headerSecret.length - 3) : '',
+      allRelevantHeaders: allHeaders,
+      userAgent: req.headers['user-agent'],
+      origin: req.headers['origin'],
     });
+  } else {
+    console.log('[cron-auth] Authorization successful');
   }
   return match;
 }
 
+// Debug endpoint to check what headers are being received (remove in production)
+router.get('/debug-auth', async (req, res) => {
+  const cronSecret = (process.env.CRON_SECRET || '').trim();
+  const headerSecret = typeof req.headers['x-cron-secret'] === 'string' 
+    ? (req.headers['x-cron-secret'] as string).trim() 
+    : typeof req.headers['X-Cron-Secret'] === 'string'
+    ? (req.headers['X-Cron-Secret'] as string).trim()
+    : '';
+
+  return res.json({
+    cronSecretSet: !!cronSecret,
+    cronSecretLength: cronSecret.length,
+    headerPresent: !!headerSecret,
+    headerLength: headerSecret.length,
+    headerValue: headerSecret ? `${headerSecret.substring(0, 3)}...${headerSecret.substring(headerSecret.length - 3)}` : 'NOT SET',
+    match: headerSecret === cronSecret,
+    allHeaders: Object.keys(req.headers).filter(k => k.toLowerCase().includes('cron') || k.toLowerCase().includes('secret')),
+  });
+});
+
 router.post('/engagement-refresh', async (req, res) => {
   if (!isAuthorized(req)) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ 
+      error: 'Unauthorized',
+      message: 'CRON_SECRET header does not match. Check Vercel logs for [cron-auth] details.',
+      hint: 'Verify CRON_SECRET in both Vercel (Environment Variables) and Supabase (Edge Function Secrets) match exactly.'
+    });
   }
 
   const { dateFrom, dateTo, limit } = (req.body || {}) as {
