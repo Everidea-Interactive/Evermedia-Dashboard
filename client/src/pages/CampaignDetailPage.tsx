@@ -1327,7 +1327,7 @@ export default function CampaignDetailPage() {
               </span>
             </div>
             <div
-              className="grid gap-3 overflow-y-auto pr-1 px-2 sm:px-0 pb-2 sm:pb-0 scrollable-y"
+              className="grid gap-3 overflow-y-auto overflow-x-hidden pr-1 px-2 sm:px-0 pb-2 sm:pb-0 scrollable-y"
               style={{ maxHeight: '200px' }}
             >
               {categoryOverviewRows.length === 0 ? (
@@ -1344,15 +1344,15 @@ export default function CampaignDetailPage() {
                   return (
                     <div
                       key={row.category}
-                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 border border-dashed rounded-lg px-3 sm:px-4 py-3"
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 border border-dashed rounded-lg px-3 sm:px-4 py-3 min-w-0 overflow-hidden"
                       style={{ borderColor: 'var(--border-color)' }}
                     >
-                      <div className="flex-1 min-w-0 sm:min-w-[150px]">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-medium text-sm sm:text-base truncate">{row.category}</div>
+                      <div className="flex-1 min-w-0 sm:min-w-[150px] overflow-hidden">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-medium text-sm sm:text-base truncate min-w-0 flex-1">{row.category}</div>
                         {row.posts === 0 && (
                           <span
-                            className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border"
+                            className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border flex-shrink-0"
                             style={{ color: 'var(--text-tertiary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}
                           >
                             No posts yet
