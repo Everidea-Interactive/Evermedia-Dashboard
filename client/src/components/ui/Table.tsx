@@ -1,29 +1,61 @@
 import React from 'react';
 
-export const TableWrap = React.forwardRef<HTMLDivElement, { children: React.ReactNode; className?: string }>(
-  ({ children, className = '' }, ref) => (
-    <div ref={ref} className={`table-wrap ${className}`} style={{ overflowX: 'auto', overflowY: 'visible', width: '100%', minWidth: 0 }}>
+type DivProps = React.HTMLAttributes<HTMLDivElement>;
+type TableProps = React.TableHTMLAttributes<HTMLTableElement>;
+type SectionProps = React.HTMLAttributes<HTMLTableSectionElement>;
+type THProps = React.ThHTMLAttributes<HTMLTableHeaderCellElement>;
+type TRProps = React.HTMLAttributes<HTMLTableRowElement>;
+type TDProps = React.TdHTMLAttributes<HTMLTableCellElement>;
+
+export const TableWrap = React.forwardRef<HTMLDivElement, DivProps>(
+  ({ children, className = '', style, ...rest }, ref) => (
+    <div
+      ref={ref}
+      className={`table-wrap ${className}`}
+      style={{ overflowX: 'auto', overflowY: 'visible', width: '100%', minWidth: 0, ...style }}
+      {...rest}
+    >
       {children}
     </div>
   )
 );
 
-export function Table({ children }: { children: React.ReactNode }) {
-  return <table className="table">{children}</table>;
+export function Table({ children, className = '', ...rest }: TableProps) {
+  return (
+    <table className={`table ${className}`} {...rest}>
+      {children}
+    </table>
+  );
 }
 
-export function THead({ children }: { children: React.ReactNode }) {
-  return <thead className="thead">{children}</thead>;
+export function THead({ children, className = '', ...rest }: SectionProps) {
+  return (
+    <thead className={`thead ${className}`} {...rest}>
+      {children}
+    </thead>
+  );
 }
 
-export function TH({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <th className={`th ${className}`}>{children}</th>;
+export function TH({ children, className = '', ...rest }: THProps) {
+  return (
+    <th className={`th ${className}`} {...rest}>
+      {children}
+    </th>
+  );
 }
 
-export function TR({ children }: { children: React.ReactNode }) {
-  return <tr className="tr">{children}</tr>;
+export function TR({ children, className = '', ...rest }: TRProps) {
+  return (
+    <tr className={`tr ${className}`} {...rest}>
+      {children}
+    </tr>
+  );
 }
 
-export function TD({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <td className={`td ${className}`}>{children}</td>;
+export function TD({ children, className = '', ...rest }: TDProps) {
+  return (
+    <td className={`td ${className}`} {...rest}>
+      {children}
+    </td>
+  );
 }

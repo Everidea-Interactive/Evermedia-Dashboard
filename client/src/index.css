@@ -278,6 +278,82 @@ html.dark .select option {
   width: 100%;
   border-collapse: collapse;
 }
+.sticky-table {
+  position: relative;
+  isolation: isolate; /* Keep sticky shadows above scrolling content */
+}
+.sticky-col {
+  position: sticky;
+  z-index: 2;
+  background-color: var(--bg-secondary);
+  background-clip: padding-box;
+}
+.sticky-col--no {
+  left: 0;
+  width: var(--sticky-no-width, 72px);
+  min-width: var(--sticky-no-width, 72px);
+  box-shadow: 12px 0 16px -16px rgba(0, 0, 0, 0.4);
+}
+.sticky-col--date {
+  left: var(--sticky-no-width, 72px);
+  width: var(--sticky-date-width, 160px);
+  min-width: var(--sticky-date-width, 160px);
+  box-shadow: 12px 0 16px -16px rgba(0, 0, 0, 0.4);
+}
+.summary-row .td {
+  background-color: var(--bg-tertiary);
+}
+.summary-row:hover,
+.summary-row:hover .td,
+.summary-row:hover .sticky-col {
+  background-color: var(--bg-tertiary);
+}
+.sticky-col--header {
+  z-index: 4;
+  background-color: var(--bg-tertiary);
+}
+.sticky-col--summary {
+  background-color: var(--bg-tertiary);
+  z-index: 3;
+}
+.tr:hover .sticky-col {
+  background-color: var(--table-row-hover);
+}
+.total-col {
+  background-color: var(--bg-tertiary);
+}
+.total-col--header,
+.tr:hover .total-col,
+.tr:hover .total-col--header {
+  background-color: var(--bg-tertiary);
+}
+.tr:hover .sticky-col--header,
+.tr:hover .sticky-col--summary {
+  background-color: var(--bg-tertiary);
+}
+.sticky-col {
+  position: sticky;
+  z-index: 2;
+  background-color: var(--bg-secondary);
+  box-shadow: 8px 0 12px -12px rgba(0, 0, 0, 0.35);
+}
+.sticky-col-header {
+  z-index: 4;
+  background-color: var(--bg-tertiary);
+}
+.sticky-col-summary {
+  background-color: var(--bg-tertiary);
+  z-index: 3;
+}
+.tr:hover .sticky-col {
+  background-color: var(--table-row-hover);
+}
+.tr:hover .sticky-col-header {
+  background-color: var(--bg-tertiary);
+}
+.tr:hover .sticky-col-summary {
+  background-color: var(--bg-tertiary);
+}
 .thead { 
   background-color: var(--bg-tertiary);
   @apply text-left;

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -29,13 +30,18 @@ type DailyCount = {
   total: number;
 };
 
-// PICs that should have pink background (based on screenshot)
-const PINK_BACKGROUND_PICS = ['Tata', 'Averus', 'Desi', 'Siti Nuranisa'];
-
 // Format number with dots as thousand separators (Indonesian format)
 const formatNumber = (num: number): string => {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
+
+const STICKY_NO_WIDTH = 72;
+const STICKY_DATE_WIDTH = 160;
+const stickyVars = {
+  // Used by CSS for sticky widths/offsets so header, summary, and body stay aligned
+  '--sticky-no-width': `${STICKY_NO_WIDTH}px`,
+  '--sticky-date-width': `${STICKY_DATE_WIDTH}px`,
+} as CSSProperties;
 
 export default function DailyPage() {
   const { token } = useAuth();
@@ -270,19 +276,22 @@ export default function DailyPage() {
         </Card>
       ) : (
         <Card>
-          <TableWrap>
+          <TableWrap className="sticky-table" style={stickyVars}>
             <Table>
               <THead>
                 <TR>
-                  <TH style={{ minWidth: '60px' }}>NO</TH>
-                  <TH style={{ minWidth: '120px' }}>TANGGAL POSTING</TH>
+                  <TH className="sticky-col sticky-col--no sticky-col--header">
+                    NO
+                  </TH>
+                  <TH className="sticky-col sticky-col--date sticky-col--header">
+                    POSTING DATE
+                  </TH>
                   {relevantPics.map((pic) => {
-                    const hasPinkBg = PINK_BACKGROUND_PICS.includes(pic.name);
                     return (
                       <TH
                         key={pic.id}
                         style={{
-                          backgroundColor: hasPinkBg ? 'rgba(251, 191, 36, 0.2)' : 'var(--bg-secondary)',
+                          backgroundColor: 'var(--bg-secondary)',
                           minWidth: '100px',
                         }}
                       >
@@ -290,25 +299,25 @@ export default function DailyPage() {
                       </TH>
                     );
                   })}
-                  <TH style={{ minWidth: '120px' }}>TOTAL POST ALL</TH>
+                  <TH className="total-col total-col--header" style={{ minWidth: '120px' }}>
+                    TOTAL POST ALL
+                  </TH>
                 </TR>
               </THead>
               <tbody>
                 {/* Summary Row */}
-                <TR>
+                <TR className="summary-row">
                   <TD
-                    className="font-semibold"
+                    className="font-semibold sticky-col sticky-col--no sticky-col--summary"
                     style={{
-                      backgroundColor: 'var(--bg-tertiary)',
                       color: '#10b981',
                     }}
                   >
                     -
                   </TD>
                   <TD
-                    className="font-semibold"
+                    className="font-semibold sticky-col sticky-col--date sticky-col--summary"
                     style={{
-                      backgroundColor: 'var(--bg-tertiary)',
                       color: '#10b981',
                     }}
                   >
@@ -316,13 +325,12 @@ export default function DailyPage() {
                   </TD>
                   {relevantPics.map((pic) => {
                     const count = picTotals.totals[pic.id] || 0;
-                    const hasPinkBg = PINK_BACKGROUND_PICS.includes(pic.name);
                     return (
                       <TD
                         key={pic.id}
                         className="font-semibold"
                         style={{
-                          backgroundColor: hasPinkBg ? 'rgba(251, 191, 36, 0.1)' : 'var(--bg-tertiary)',
+                          backgroundColor: 'var(--bg-tertiary)',
                           color: '#10b981',
                         }}
                       >
@@ -331,11 +339,8 @@ export default function DailyPage() {
                     );
                   })}
                   <TD
-                    className="font-semibold underline"
-                    style={{
-                      backgroundColor: 'var(--bg-tertiary)',
-                      color: '#10b981',
-                    }}
+                    className="font-semibold underline total-col"
+                    style={{ color: '#10b981' }}
                   >
                     {formatNumber(picTotals.grandTotal)}
                   </TD>
@@ -351,23 +356,23 @@ export default function DailyPage() {
                 ) : (
                   dailyData.map((day, index) => (
                     <TR key={day.dateKey}>
-                      <TD>{index + 1}</TD>
-                      <TD>{day.date}</TD>
+                      <TD className="sticky-col sticky-col--no">
+                        {index + 1}
+                      </TD>
+                      <TD className="sticky-col sticky-col--date">
+                        {day.date}
+                      </TD>
                       {relevantPics.map((pic) => {
                         const count = day.picCounts[pic.id] || 0;
-                        const hasPinkBg = PINK_BACKGROUND_PICS.includes(pic.name);
                         return (
                           <TD
                             key={pic.id}
-                            style={{
-                              backgroundColor: hasPinkBg ? 'rgba(251, 191, 36, 0.1)' : 'transparent',
-                            }}
                           >
                             {count > 0 ? formatNumber(count) : '0'}
                           </TD>
                         );
                       })}
-                      <TD className="underline">
+                      <TD className="underline total-col">
                         {formatNumber(day.total)}
                       </TD>
                     </TR>
