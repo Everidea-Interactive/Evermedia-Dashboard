@@ -95,9 +95,7 @@ export default function CampaignsPage() {
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
-  const [filterCategoryInput, setFilterCategoryInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showFilterSuggestions, setShowFilterSuggestions] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [campaignKpis, setCampaignKpis] = useState<Record<string, string>>(() =>
     Object.fromEntries(accountCategoryOrder.map((cat) => [cat, '']))
@@ -299,14 +297,6 @@ export default function CampaignsPage() {
       brandName: '',
       quotationNumber: '',
     });
-  };
-
-  const hasActiveFilters = () => {
-    return !!(
-      filters.name.trim() ||
-      filters.brandName ||
-      filters.quotationNumber.trim()
-    );
   };
 
   const resetForm = () => {
