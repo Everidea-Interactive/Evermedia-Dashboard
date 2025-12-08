@@ -61,13 +61,9 @@ export default function CampaignsPage() {
   const [items, setItems] = useState<Campaign[]>([]);
   const [allItems, setAllItems] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [status, setStatus] = useState('');
   const [filters, setFilters] = useState({
     name: '',
     brandName: '',
-    categories: [] as string[],
-    dateFrom: '',
-    dateTo: '',
     quotationNumber: '',
   });
   const [loading, setLoading] = useState(true);
@@ -107,9 +103,10 @@ export default function CampaignsPage() {
     Object.fromEntries(accountCategoryOrder.map((cat) => [cat, '']))
   );
   const [accountKpis, setAccountKpis] = useState<Record<string, Record<string, string>>>({});
-  const [hoveredCampaignId, setHoveredCampaignId] = useState<string | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
   const [showBrandsModal, setShowBrandsModal] = useState(false);
+  const [campaignKpisMap, setCampaignKpisMap] = useState<Map<string, any[]>>(new Map());
+  const [selectedCampaignsForKpi, setSelectedCampaignsForKpi] = useState<string[]>([]);
+  const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
 
@@ -117,20 +114,29 @@ export default function CampaignsPage() {
     setLoading(true);
     // Always fetch all campaigns to ensure filter options (brands, categories) show all available values
     api('/campaigns', { token })
-      .then((data) => {
+      .then(async (data) => {
         setAllItems(data);
         applyFilters(data);
+        
+        // Fetch KPIs for all campaigns
+        const kpiMap = new Map<string, any[]>();
+        const kpiPromises = data.map(async (campaign: Campaign) => {
+          try {
+            const kpis = await api(`/campaigns/${campaign.id}/kpis`, { token });
+            kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis : []);
+          } catch (error) {
+            console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, error);
+            kpiMap.set(campaign.id, []);
+          }
+        });
+        await Promise.allSettled(kpiPromises);
+        setCampaignKpisMap(kpiMap);
       })
       .finally(() => setLoading(false));
   };
 
   const applyFilters = useCallback((campaigns: Campaign[]) => {
     const filtered = campaigns.filter((c) => {
-      // Filter by status (client-side filtering)
-      if (status && c.status !== status) {
-        return false;
-      }
-
       // Filter by campaign name
       if (filters.name.trim()) {
         const nameLower = filters.name.toLowerCase();
@@ -142,28 +148,6 @@ export default function CampaignsPage() {
         if (!c.brandName || c.brandName.trim().toLowerCase() !== filters.brandName.toLowerCase()) {
           return false;
         }
-      }
-
-      // Filter by categories (campaign must have at least one of the selected categories)
-      if (filters.categories.length > 0) {
-        const campaignCategories = Array.isArray(c.categories) ? c.categories : [];
-        const hasMatchingCategory = filters.categories.some(selectedCat => 
-          campaignCategories.some(cat => cat.toLowerCase() === selectedCat.toLowerCase())
-        );
-        if (!hasMatchingCategory) return false;
-      }
-
-      // Filter by date range (matching PostsPage behavior - filters by startDate)
-      if (filters.dateFrom) {
-        const campaignDate = c.startDate ? new Date(c.startDate).getTime() : 0;
-        const from = new Date(filters.dateFrom).getTime();
-        if (campaignDate < from) return false;
-      }
-
-      if (filters.dateTo) {
-        const campaignDate = c.startDate ? new Date(c.startDate).getTime() : 0;
-        const to = new Date(filters.dateTo).getTime();
-        if (campaignDate > to) return false;
       }
 
       // Filter by quotation number
@@ -178,7 +162,7 @@ export default function CampaignsPage() {
     });
 
     setItems(filtered);
-  }, [filters, status]);
+  }, [filters]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig((prev) => {
@@ -247,7 +231,7 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     applyFilters(allItems);
-  }, [filters, status, allItems, applyFilters]);
+  }, [filters, allItems, applyFilters]);
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
@@ -280,28 +264,48 @@ export default function CampaignsPage() {
     return Array.from(brands).sort();
   }, [allItems]);
 
+  // Calculate aggregated KPIs for selected campaigns (or all if none selected)
+  const aggregatedKpis = useMemo(() => {
+    const campaignsToAggregate = selectedCampaignsForKpi.length > 0
+      ? allItems.filter(c => selectedCampaignsForKpi.includes(c.id))
+      : allItems;
+
+    const kpiTotals = new Map<string, { target: number; actual: number }>();
+
+    campaignsToAggregate.forEach(campaign => {
+      const kpis = campaignKpisMap.get(campaign.id) || [];
+      // Only aggregate campaign-level KPIs (where accountId is null)
+      const campaignKpis = kpis.filter((k: any) => !k.accountId);
+      campaignKpis.forEach((kpi: any) => {
+        const existing = kpiTotals.get(kpi.category) ?? { target: 0, actual: 0 };
+        kpiTotals.set(kpi.category, {
+          target: existing.target + (kpi.target ?? 0),
+          actual: existing.actual + (kpi.actual ?? 0),
+        });
+      });
+    });
+
+    return {
+      views: kpiTotals.get('VIEWS') ?? { target: 0, actual: 0 },
+      qtyPost: kpiTotals.get('QTY_POST') ?? { target: 0, actual: 0 },
+      fypCount: kpiTotals.get('FYP_COUNT') ?? { target: 0, actual: 0 },
+      gmv: kpiTotals.get('GMV_IDR') ?? { target: 0, actual: 0 },
+    };
+  }, [selectedCampaignsForKpi, allItems, campaignKpisMap]);
+
   const handleClearFilters = () => {
     setFilters({
       name: '',
       brandName: '',
-      categories: [],
-      dateFrom: '',
-      dateTo: '',
       quotationNumber: '',
     });
-    setStatus('');
-    setFilterCategoryInput('');
   };
 
   const hasActiveFilters = () => {
     return !!(
       filters.name.trim() ||
       filters.brandName ||
-      filters.categories.length > 0 ||
-      filters.dateFrom ||
-      filters.dateTo ||
-      filters.quotationNumber.trim() ||
-      status
+      filters.quotationNumber.trim()
     );
   };
 
@@ -467,6 +471,15 @@ export default function CampaignsPage() {
           <div className="section-title text-xs sm:text-sm">Project Numbers</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.projectNumbersCount?.toLocaleString() ?? '-'}</div>
         </Card>
+        <Card 
+          className="cursor-pointer transition-opacity hover:opacity-80"
+          onClick={() => setShowBrandsModal(true)}
+        >
+          <div className="section-title text-xs sm:text-sm">Unique Brand</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">
+            {getUniqueBrands.length}
+          </div>
+        </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Views</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.views?.toLocaleString() ?? '-'}</div>
@@ -491,172 +504,160 @@ export default function CampaignsPage() {
           <div className="section-title text-xs sm:text-sm">Engagement Rate</div>
           <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.engagementRate ? (engagement.engagementRate * 100).toFixed(2) + '%' : '-'}</div>
         </Card>
-        <Card 
-          className="cursor-pointer transition-opacity hover:opacity-80"
-          onClick={() => setShowBrandsModal(true)}
-        >
-          <div className="section-title text-xs sm:text-sm">Unique Brand</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">
-            {getUniqueBrands.length}
+      </div>
+
+      {/* Campaign Filter for KPI Overview */}
+      {allItems.length > 0 && (
+        <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>KPI Overview</h2>
+          <div className="relative w-full sm:w-auto sm:inline-block">
+            <button
+              type="button"
+              onClick={() => setShowCampaignDropdown(!showCampaignDropdown)}
+              className="w-full sm:w-auto text-xs py-1 px-2 rounded-lg border transition-colors flex items-center gap-1.5"
+              style={{ 
+                color: 'var(--text-primary)', 
+                borderColor: 'var(--border-color-dark)',
+                backgroundColor: 'var(--bg-secondary)',
+                minWidth: '160px'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'; }}
+            >
+              <span className="flex-1 text-left truncate">
+                {selectedCampaignsForKpi.length === 0 
+                  ? 'All Campaign' 
+                  : `${selectedCampaignsForKpi.length} campaign${selectedCampaignsForKpi.length > 1 ? 's' : ''} selected`}
+              </span>
+              <span className="flex-shrink-0">{showCampaignDropdown ? '▲' : '▼'}</span>
+            </button>
+            {showCampaignDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowCampaignDropdown(false)}
+                />
+                <div 
+                  className="absolute z-20 mt-1 w-full sm:w-auto border rounded-lg max-h-64 overflow-auto shadow-lg"
+                  style={{ 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    borderColor: 'var(--border-color-dark)',
+                    minWidth: '160px'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCampaignsForKpi([]);
+                      setShowCampaignDropdown(false);
+                    }}
+                    className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
+                    style={{ 
+                      color: 'var(--text-primary)',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <span className="w-3 text-center flex-shrink-0 text-xs">{selectedCampaignsForKpi.length === 0 ? '✓' : ''}</span>
+                    <span className="truncate">All Campaign</span>
+                  </button>
+                  {allItems.map(campaign => {
+                    const isSelected = selectedCampaignsForKpi.includes(campaign.id);
+                    return (
+                      <button
+                        key={campaign.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedCampaignsForKpi(prev => prev.filter(id => id !== campaign.id));
+                          } else {
+                            setSelectedCampaignsForKpi(prev => [...prev, campaign.id]);
+                          }
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
+                        style={{ color: 'var(--text-primary)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <span className="w-3 text-center flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
+                        <span className="truncate">{campaign.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* KPI Overview */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Views</div>
+          <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
+            {aggregatedKpis.views.actual.toLocaleString()}/{aggregatedKpis.views.target.toLocaleString()}
+          </div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">Posts</div>
+          <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
+            {aggregatedKpis.qtyPost.actual.toLocaleString()}/{aggregatedKpis.qtyPost.target.toLocaleString()}
+          </div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">FYP</div>
+          <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
+            {aggregatedKpis.fypCount.actual.toLocaleString()}/{aggregatedKpis.fypCount.target.toLocaleString()}
+          </div>
+        </Card>
+        <Card>
+          <div className="section-title text-xs sm:text-sm">GMV (IDR)</div>
+          <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
+            {aggregatedKpis.gmv.actual.toLocaleString()}/{aggregatedKpis.gmv.target.toLocaleString()}
           </div>
         </Card>
       </div>
 
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <div className="flex items-center gap-2">
-            {hasActiveFilters() && (
-              <Button variant="outline" onClick={handleClearFilters} className="text-sm">
-                Reset Filters
-              </Button>
-            )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
+            <Input
+              label={<span className="text-xs">Campaign Name</span>}
+              value={filters.name}
+              onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Search by name..."
+              className="text-sm py-1.5"
+            />
+            <Select 
+              label={<span className="text-xs">Brand Name</span>}
+              value={filters.brandName} 
+              onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
+              className="text-sm py-1.5"
+            >
+              <option value="">All Brands</option>
+              {getUniqueBrands.map(brand => (
+                <option key={brand} value={brand}>{brand}</option>
+              ))}
+            </Select>
+            <Input
+              label={<span className="text-xs">Quotation Number</span>}
+              value={filters.quotationNumber}
+              onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
+              placeholder="Search by quotation..."
+              className="text-sm py-1.5"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button variant="outline" onClick={handleClearFilters} className="text-sm py-1 px-2">
+              Reset Filters
+            </Button>
             <RequirePermission permission={canManageCampaigns}>
-              <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)}>
+              <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} className="text-sm py-1 px-2">
                 {showAddForm ? 'Cancel' : 'Add Campaign'}
               </Button>
             </RequirePermission>
           </div>
-        </div>
-        <div className="mb-4 px-2 sm:px-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-2 sm:gap-3">
-              <Input
-                label="Campaign Name"
-                value={filters.name}
-                onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Search by name..."
-              />
-              <Select 
-                label="Brand Name" 
-                value={filters.brandName} 
-                onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
-              >
-                <option value="">All Brands</option>
-                {getUniqueBrands.map(brand => (
-                  <option key={brand} value={brand}>{brand}</option>
-                ))}
-              </Select>
-              <Select label="Status" value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="">All Statuses</option>
-                <option>PLANNED</option>
-                <option>ACTIVE</option>
-                <option>COMPLETED</option>
-                <option>PAUSED</option>
-              </Select>
-              <Input
-                label="Quotation Number"
-                value={filters.quotationNumber}
-                onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
-                placeholder="Search by quotation..."
-              />
-              <div className="relative">
-                <Input
-                  label="Categories"
-                  value={filterCategoryInput}
-                  onChange={e => {
-                    setFilterCategoryInput(e.target.value);
-                    setShowFilterSuggestions(e.target.value.trim().length > 0);
-                  }}
-                  onFocus={() => {
-                    if (filterCategoryInput.trim().length > 0) {
-                      setShowFilterSuggestions(true);
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowFilterSuggestions(false), 200);
-                  }}
-                  placeholder="Type and press Enter"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const category = filterCategoryInput.trim();
-                      if (category) {
-                        if (filters.categories.includes(category)) {
-                          setToast({ message: `Category "${category}" is already added`, type: 'error' });
-                        } else {
-                          setFilters(prev => ({ ...prev, categories: [...prev.categories, category] }));
-                          setFilterCategoryInput('');
-                          setShowFilterSuggestions(false);
-                        }
-                      }
-                    }
-                  }}
-                />
-                {showFilterSuggestions && filterCategoryInput.trim().length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 border rounded-md max-h-48 overflow-auto" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', boxShadow: 'var(--shadow-lg)' }}>
-                    {availableCategories
-                      .filter(cat => 
-                        !filters.categories.includes(cat) &&
-                        cat.toLowerCase().includes(filterCategoryInput.toLowerCase())
-                      )
-                      .map(cat => (
-                        <button
-                          key={cat}
-                          type="button"
-                          className="w-full text-left px-3 py-2 text-sm transition-colors"
-                          style={{ color: 'var(--text-primary)' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; e.currentTarget.style.color = '#2563eb'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                          onClick={() => {
-                            if (filters.categories.includes(cat)) {
-                              setToast({ message: `Category "${cat}" is already added`, type: 'error' });
-                            } else {
-                              setFilters(prev => ({ ...prev, categories: [...prev.categories, cat] }));
-                              setFilterCategoryInput('');
-                              setShowFilterSuggestions(false);
-                            }
-                          }}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    {availableCategories.filter(cat => 
-                      !filters.categories.includes(cat) &&
-                      cat.toLowerCase().includes(filterCategoryInput.toLowerCase())
-                    ).length === 0 && (
-                      <div className="px-3 py-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                        Press Enter to add "{filterCategoryInput.trim()}"
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <Input
-                label="Date From"
-                type="date"
-                value={filters.dateFrom}
-                onChange={e => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-              />
-              <Input
-                label="Date To"
-                type="date"
-                value={filters.dateTo}
-                onChange={e => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-              />
-            </div>
-          {filters.categories.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2 sm:mt-3">
-              {filters.categories.map(category => (
-                <span
-                  key={category}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border"
-                  style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
-                >
-                  {category}
-                  <button
-                    type="button"
-                    onClick={() => setFilters(prev => ({ ...prev, categories: prev.categories.filter(c => c !== category) }))}
-                    className="transition-colors"
-                    style={{ color: '#2563eb' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = '#1e40af'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = '#2563eb'; }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </Card>
       <RequirePermission permission={canManageCampaigns}>
@@ -957,7 +958,7 @@ export default function CampaignsPage() {
                       {renderSortIndicator('name')}
                     </button>
                   </TH>
-                  <TH>Category</TH>
+                  <TH>KPI Overview</TH>
                   <TH>
                     <button
                       type="button"
@@ -993,60 +994,43 @@ export default function CampaignsPage() {
               </THead>
               <tbody>
                 {sortedItems.map((c) => {
-                  const categories = Array.isArray(c.categories) ? c.categories : [];
-                  const maxVisible = 2;
-                  const visibleCategories = categories.slice(0, maxVisible);
-                  const remainingCount = categories.length - maxVisible;
+                  const kpis = campaignKpisMap.get(c.id) || [];
+                  // Get campaign-level KPIs (where accountId is null)
+                  const campaignKpis = kpis.filter((k: any) => !k.accountId);
+                  
+                  // Create a map of category to { target, actual }
+                  const kpiMap = new Map<string, { target: number; actual: number }>();
+                  campaignKpis.forEach((k: any) => {
+                    const existing = kpiMap.get(k.category) ?? { target: 0, actual: 0 };
+                    kpiMap.set(k.category, {
+                      target: existing.target + (k.target ?? 0),
+                      actual: existing.actual + (k.actual ?? 0),
+                    });
+                  });
+                  
+                  // Get the three KPIs to display: VIEWS, QTY_POST, FYP_COUNT
+                  const viewsKpi = kpiMap.get('VIEWS') ?? { target: 0, actual: 0 };
+                  const qtyPostKpi = kpiMap.get('QTY_POST') ?? { target: 0, actual: 0 };
+                  const fypCountKpi = kpiMap.get('FYP_COUNT') ?? { target: 0, actual: 0 };
                   
                   return (
                     <TR key={c.id}>
                       <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
                       <TD>
-                        {categories.length > 0 ? (
-                          <div 
-                            className="relative inline-block"
-                            onMouseEnter={(e) => {
-                              if (categories.length > maxVisible) {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setHoveredCampaignId(c.id);
-                                // Calculate position, ensuring tooltip doesn't go off-screen
-                                const tooltipWidth = 320; // max-w-xs is 320px
-                                const viewportWidth = window.innerWidth;
-                                let x = rect.left;
-                                // If tooltip would go off right edge, align to right edge of element
-                                if (x + tooltipWidth > viewportWidth - 10) {
-                                  x = Math.max(10, viewportWidth - tooltipWidth - 10);
-                                }
-                                setTooltipPosition({
-                                  x,
-                                  y: rect.bottom + 4
-                                });
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              setHoveredCampaignId(null);
-                              setTooltipPosition(null);
-                            }}
-                          >
-                            <div className="flex items-center gap-1 flex-nowrap">
-                              {visibleCategories.map((cat, idx) => (
-                                <span key={idx} className="text-xs px-2 py-0.5 rounded border whitespace-nowrap" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                  {cat}
-                                </span>
-                              ))}
-                              {remainingCount > 0 && (
-                                <span 
-                                  className="text-xs px-2 py-0.5 rounded border cursor-help whitespace-nowrap" 
-                                  style={{ color: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderColor: '#a5b4fc' }}
-                                >
-                                  +{remainingCount} more
-                                </span>
-                              )}
-                            </div>
+                        <div className="flex items-center gap-2 flex-nowrap">
+                          <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>VIEWS</div>
+                            <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{viewsKpi.actual.toLocaleString()}/{viewsKpi.target.toLocaleString()}</div>
                           </div>
-                        ) : (
-                          <span style={{ color: 'var(--text-tertiary)' }}>-</span>
-                        )}
+                          <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>QTY POST</div>
+                            <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{qtyPostKpi.actual.toLocaleString()}/{qtyPostKpi.target.toLocaleString()}</div>
+                          </div>
+                          <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>FYP COUNT</div>
+                            <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{fypCountKpi.actual.toLocaleString()}/{fypCountKpi.target.toLocaleString()}</div>
+                          </div>
+                        </div>
                       </TD>
                       <TD>{formatDate(c.startDate)}</TD>
                       <TD>{formatDate(c.endDate)}</TD>
@@ -1117,43 +1101,6 @@ export default function CampaignsPage() {
           onClose={() => setToast(null)}
         />
       )}
-      {hoveredCampaignId && tooltipPosition && (() => {
-        const campaign = items.find(c => c.id === hoveredCampaignId);
-        const categories = campaign && Array.isArray(campaign.categories) ? campaign.categories : [];
-        return (
-          <div
-            className="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPosition.x}px`,
-              top: `${tooltipPosition.y}px`,
-            }}
-          >
-            <div 
-              className="px-3 py-2 rounded-md border shadow-lg max-w-xs"
-              style={{ 
-                backgroundColor: 'var(--bg-secondary)', 
-                borderColor: 'var(--border-color)',
-                boxShadow: 'var(--shadow-lg)'
-              }}
-            >
-              <div className="text-xs font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
-                All Categories:
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {categories.map((cat, idx) => (
-                  <span 
-                    key={idx} 
-                    className="text-xs px-2 py-0.5 rounded border" 
-                    style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
-                  >
-                    {cat}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
       <Dialog
         open={showBrandsModal}
         onClose={() => setShowBrandsModal(false)}
