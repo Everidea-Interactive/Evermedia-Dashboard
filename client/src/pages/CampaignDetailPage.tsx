@@ -394,6 +394,7 @@ export default function CampaignDetailPage() {
         SHARE: (post.totalShare || 0).toString(),
         SAVED: (post.totalSaved || 0).toString(),
         CATEGORY: post.campaignCategory || '',
+        'KERANJANG KUNING': post.yellowCart ? 'Yes' : 'No',
       };
     });
 
@@ -412,6 +413,7 @@ export default function CampaignDetailPage() {
       'SHARE',
       'SAVED',
       'CATEGORY',
+      'KERANJANG KUNING',
     ];
 
     // Generate CSV string
