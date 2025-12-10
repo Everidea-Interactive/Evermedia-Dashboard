@@ -358,6 +358,13 @@ export default function AccountsPage() {
     );
   };
 
+  const hasAccountFilters = Boolean(
+    search.trim() ||
+    type ||
+    crossbrand ||
+    campaignFilter
+  );
+
   const AccountFormFields = () => (
     <>
       <Input
@@ -512,34 +519,37 @@ export default function AccountsPage() {
             </div>
           </div>
           {loading ? <div className="skeleton h-10 w-full" /> : (
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    {renderSortableHeader('Account', 'name')}
-                    {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
-                    {kpiDisplayCategories.map(cat =>
-                      renderSortableHeader(
-                        kpiLabels[cat],
-                        cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
-                        undefined,
-                        cat
-                      )
-                    )}
-                    {renderSortableHeader('Type', 'accountType')}
-                    {renderSortableHeader('Posts', 'postCount')}
-                    <TH className="!text-center">Actions</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {items.length === 0 ? (
+            items.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-gray-500 text-lg">No accounts found</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  {hasAccountFilters
+                    ? 'Try adjusting your filters to see more results.'
+                    : 'There are no accounts available.'}
+                </p>
+              </div>
+            ) : (
+              <TableWrap>
+                <Table>
+                  <THead>
                     <TR>
-                      <TD colSpan={8} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
-                        No accounts found
-                      </TD>
+                      {renderSortableHeader('Account', 'name')}
+                      {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
+                      {kpiDisplayCategories.map(cat =>
+                        renderSortableHeader(
+                          kpiLabels[cat],
+                          cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
+                          undefined,
+                          cat
+                        )
+                      )}
+                      {renderSortableHeader('Type', 'accountType')}
+                      {renderSortableHeader('Posts', 'postCount')}
+                      <TH className="!text-center">Actions</TH>
                     </TR>
-                  ) : (
-                    items.map(a => {
+                  </THead>
+                  <tbody>
+                    {items.map(a => {
                       const kpiData = accountKpiMap.get(a.id);
                       const getKpiEntry = (category: string) => kpiData?.[category] || { target: 0, actual: 0 };
                       const postCount = a.postCount ?? 0;
@@ -614,11 +624,11 @@ export default function AccountsPage() {
                           </TD>
                         </TR>
                       );
-                    })
-                  )}
-                </tbody>
-              </Table>
-            </TableWrap>
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrap>
+            )
           )}
         </div>
       </Card>

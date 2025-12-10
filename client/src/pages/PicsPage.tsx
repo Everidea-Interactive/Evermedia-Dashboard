@@ -187,6 +187,12 @@ export default function PicsPage() {
     }));
   };
 
+  const hasPicFilters = Boolean(
+    search.trim() ||
+    role ||
+    (active && active !== 'true')
+  );
+
   const PicFormFields = () => (
     <>
       <Input
@@ -292,6 +298,15 @@ export default function PicsPage() {
           </div>
           {loading ? (
             <div className="skeleton h-10 w-full" />
+          ) : filteredItems.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No PICs found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {hasPicFilters
+                  ? 'Try adjusting your filters to see more results.'
+                  : 'There are no PICs available.'}
+              </p>
+            </div>
           ) : (
             <TableWrap>
               <Table>
@@ -304,70 +319,62 @@ export default function PicsPage() {
                   </TR>
                 </THead>
                 <tbody>
-                  {filteredItems.length === 0 ? (
-                    <TR>
-                      <TD colSpan={4} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
-                        No PICs found
+                  {filteredItems.map(p => (
+                    <TR key={p.id}>
+                      <TD>
+                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
+                      </TD>
+                      <TD className="text-center">
+                        {p.roles.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {p.roles.map(roleName => (
+                              <span key={roleName} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                {roleName}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No roles</span>
+                        )}
+                      </TD>
+                      <TD>
+                        <span
+                          className="badge border"
+                          style={p.active ? {
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderColor: 'rgba(16, 185, 129, 0.3)',
+                            color: '#10b981',
+                          } : {
+                            backgroundColor: 'var(--bg-tertiary)',
+                            borderColor: 'var(--border-color)',
+                            color: 'var(--text-tertiary)',
+                          }}
+                        >
+                          {p.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </TD>
+                      <TD>
+                        <div className="flex gap-2 justify-center">
+                          <RequirePermission permission={canManagePics}>
+                            <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="text-sm px-3 py-1.5">
+                              Edit
+                            </Button>
+                          </RequirePermission>
+                          <RequirePermission permission={canDelete}>
+                            <Button
+                              variant="outline"
+                              color="red"
+                              onClick={() => handleDeleteClick(p.id, p.name)}
+                              disabled={deletingIds.has(p.id)}
+                              className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
+                            </Button>
+                          </RequirePermission>
+                        </div>
                       </TD>
                     </TR>
-                  ) : (
-                    filteredItems.map(p => (
-                      <TR key={p.id}>
-                        <TD>
-                          <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
-                        </TD>
-                        <TD className="text-center">
-                          {p.roles.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 justify-center">
-                              {p.roles.map(roleName => (
-                                <span key={roleName} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                  {roleName}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No roles</span>
-                          )}
-                        </TD>
-                        <TD>
-                          <span
-                            className="badge border"
-                            style={p.active ? {
-                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                              borderColor: 'rgba(16, 185, 129, 0.3)',
-                              color: '#10b981',
-                            } : {
-                              backgroundColor: 'var(--bg-tertiary)',
-                              borderColor: 'var(--border-color)',
-                              color: 'var(--text-tertiary)',
-                            }}
-                          >
-                            {p.active ? 'Active' : 'Inactive'}
-                          </span>
-                        </TD>
-                        <TD>
-                          <div className="flex gap-2 justify-center">
-                            <RequirePermission permission={canManagePics}>
-                              <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="text-sm px-3 py-1.5">
-                                Edit
-                              </Button>
-                            </RequirePermission>
-                            <RequirePermission permission={canDelete}>
-                              <Button
-                                variant="outline"
-                                color="red"
-                                onClick={() => handleDeleteClick(p.id, p.name)}
-                                disabled={deletingIds.has(p.id)}
-                                className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
-                              </Button>
-                            </RequirePermission>
-                          </div>
-                        </TD>
-                      </TR>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </Table>
             </TableWrap>

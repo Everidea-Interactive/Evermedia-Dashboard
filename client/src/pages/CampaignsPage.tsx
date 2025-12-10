@@ -449,6 +449,12 @@ export default function CampaignsPage() {
     }
   };
 
+  const hasCampaignFilters = Boolean(
+    filters.name.trim() ||
+    filters.brandName ||
+    filters.quotationNumber.trim()
+  );
+
   return (
     <div>
       <div className="mb-4">
@@ -652,6 +658,15 @@ export default function CampaignsPage() {
           </div>
           {loading ? (
             <div className="skeleton h-10 w-full" />
+          ) : sortedItems.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No campaigns found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {hasCampaignFilters
+                  ? 'Try adjusting your filters to see more results.'
+                  : 'There are no campaigns available. Add a campaign to get started.'}
+              </p>
+            </div>
           ) : (
             <TableWrap>
               <Table>

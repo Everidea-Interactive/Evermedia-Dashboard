@@ -184,6 +184,11 @@ export default function UsersPage() {
     setEditingId(null);
   };
 
+  const hasUserFilters = Boolean(
+    search.trim() ||
+    roleFilter
+  );
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'ADMIN':
@@ -362,6 +367,15 @@ export default function UsersPage() {
           </div>
           {loading ? (
             <div className="skeleton h-10 w-full" />
+          ) : filteredUsers.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No users found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {hasUserFilters
+                  ? 'Try adjusting your filters to see more results.'
+                  : 'There are no users available. Add a user to get started.'}
+              </p>
+            </div>
           ) : (
             <TableWrap>
               <Table>
