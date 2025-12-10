@@ -14,6 +14,7 @@ import Select from '../components/ui/Select';
 import Dialog from '../components/ui/Dialog';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
+import AccountDropdownFilter from '../components/AccountDropdownFilter';
 import Papa from 'papaparse';
 
 type Post = {
@@ -230,6 +231,7 @@ export default function PostsPage() {
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [pics, setPics] = useState<PicOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [campaignAccounts, setCampaignAccounts] = useState<AccountOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<FormMessage | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
@@ -325,6 +327,22 @@ export default function PostsPage() {
     api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !routeCampaignId) {
+      setCampaignAccounts([]);
+      return;
+    }
+    api(`/campaigns/${routeCampaignId}`, { token })
+      .then((data) => {
+        if (data && Array.isArray((data as any).accounts)) {
+          setCampaignAccounts((data as any).accounts as AccountOption[]);
+        } else {
+          setCampaignAccounts([]);
+        }
+      })
+      .catch(() => setCampaignAccounts([]));
+  }, [routeCampaignId, token]);
+
   const accountNameMap = useMemo(() => new Map(accounts.map((account) => [account.id, account.name || ''])), [accounts]);
   const campaignNameMap = useMemo(() => new Map(campaigns.map((campaign) => [campaign.id, campaign.name || ''])), [campaigns]);
   const picNameMap = useMemo(() => new Map(pics.map((pic) => [pic.id, pic.name || ''])), [pics]);
@@ -384,6 +402,19 @@ export default function PostsPage() {
   const talentPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'TALENT')), [pics]);
   const editorPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'EDITOR')), [pics]);
   const postingPics = useMemo(() => pics.filter((pic) => pic.roles.some((role) => role.toUpperCase() === 'POSTING')), [pics]);
+  const hasActiveFilters = useMemo(
+    () => Object.values(postFilters).some((value) => value !== ''),
+    [postFilters],
+  );
+
+  const campaignAccountOptions = useMemo(() => {
+    if (!routeCampaignId) return accounts;
+    if (campaignAccounts.length > 0) return campaignAccounts;
+    // Fallback: derive from posts for current campaign to avoid empty dropdown if API lacks accounts
+    const ids = new Set(posts.map((post) => post.accountId).filter(Boolean));
+    const fromAccounts = accounts.filter((account) => ids.has(account.id));
+    return fromAccounts.length > 0 ? fromAccounts : accounts;
+  }, [routeCampaignId, campaignAccounts, posts, accounts]);
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
@@ -2155,19 +2186,11 @@ export default function PostsPage() {
               <div className="mb-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-1.5 sm:gap-2 w-full">
-                    <Select
-                      label={<span className="text-xs">Account</span>}
-                      value={postFilters.accountId}
-                      onChange={(e) => handleFilterChange('accountId', e.target.value)}
-                      className="text-sm py-1.5"
-                    >
-                      <option value="">All Accounts</option>
-                      {accounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.name}
-                        </option>
-                      ))}
-                    </Select>
+                    <AccountDropdownFilter
+                      accounts={campaignAccountOptions}
+                      selectedAccountId={postFilters.accountId}
+                      onSelect={(value) => handleFilterChange('accountId', value)}
+                    />
                     <Select
                       label={<span className="text-xs">Status</span>}
                       value={postFilters.status}
@@ -2233,7 +2256,17 @@ export default function PostsPage() {
                   </div>
                 </div>
               </div>
-              <TableWrap>
+              {sortedPosts.length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-gray-500 text-lg">No posts found</p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    {hasActiveFilters
+                      ? 'Try adjusting your filters to see more results.'
+                      : 'There are no posts available. Import posts from CSV to get started.'}
+                  </p>
+                </div>
+              ) : (
+                <TableWrap>
                   <Table>
                     <THead>
                       <TR>
@@ -3031,6 +3064,7 @@ export default function PostsPage() {
                     </tbody>
                   </Table>
                 </TableWrap>
+              )}
             </div>
           </Card>
         )

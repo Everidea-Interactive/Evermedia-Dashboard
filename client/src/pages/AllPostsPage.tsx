@@ -13,6 +13,7 @@ import Select from '../components/ui/Select';
 import Dialog from '../components/ui/Dialog';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
+import AccountDropdownFilter from '../components/AccountDropdownFilter';
 import Papa from 'papaparse';
 
 type Post = {
@@ -1276,19 +1277,11 @@ export default function AllPostsPage() {
                       </option>
                     ))}
                   </Select>
-                  <Select
-                    label={<span className="text-xs">Account</span>}
-                    value={filters.accountId}
-                    onChange={(event) => handleFilterChange('accountId', event.target.value)}
-                    className="text-sm py-1.5"
-                  >
-                    <option value="">All accounts</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <AccountDropdownFilter
+                    accounts={accounts}
+                    selectedAccountId={filters.accountId}
+                    onSelect={(value) => handleFilterChange('accountId', value)}
+                  />
                   <Select
                     label={<span className="text-xs">Status</span>}
                     value={filters.status}

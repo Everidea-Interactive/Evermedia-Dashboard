@@ -16,6 +16,7 @@ import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 import EngagementVisualizer from '../components/EngagementVisualizer';
 import AccountKpiEditModal from '../components/AccountKpiEditModal';
+import AccountDropdownFilter from '../components/AccountDropdownFilter';
 import Papa from 'papaparse';
 
 const statusPills: Record<string, { bg: string; border: string; text: string }> = {
@@ -1550,19 +1551,11 @@ export default function CampaignDetailPage() {
         <Card>
           <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
             <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-1.5 sm:gap-2 w-full">
-              <Select
-                label={<span className="text-xs">Account</span>}
-                value={postFilters.accountId}
-                onChange={(e) => handleFilterChange('accountId', e.target.value)}
-                className="text-sm py-1.5"
-              >
-                <option value="">All Accounts</option>
-                {(campaign?.accounts || []).map((account: any) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
+              <AccountDropdownFilter
+                accounts={(campaign?.accounts || []) as any[]}
+                selectedAccountId={postFilters.accountId}
+                onSelect={(value) => handleFilterChange('accountId', value)}
+              />
               <Select
                 label={<span className="text-xs">Status</span>}
                 value={postFilters.status}
