@@ -1548,12 +1548,13 @@ export default function CampaignDetailPage() {
           </div>
         </div>
         <Card>
-          <div className="mb-4 px-2 sm:px-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-1.5 sm:gap-2 w-full">
               <Select
-                label="Account"
+                label={<span className="text-xs">Account</span>}
                 value={postFilters.accountId}
                 onChange={(e) => handleFilterChange('accountId', e.target.value)}
+                className="text-sm py-1.5"
               >
                 <option value="">All Accounts</option>
                 {(campaign?.accounts || []).map((account: any) => (
@@ -1563,9 +1564,10 @@ export default function CampaignDetailPage() {
                 ))}
               </Select>
               <Select
-                label="Status"
+                label={<span className="text-xs">Status</span>}
                 value={postFilters.status}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="text-sm py-1.5"
               >
                 <option value="">All Status</option>
                 <option value="On Going">On Going</option>
@@ -1574,18 +1576,20 @@ export default function CampaignDetailPage() {
                 <option value="Take Down">Take Down</option>
               </Select>
               <Select
-                label="Content Type"
+                label={<span className="text-xs">Content Type</span>}
                 value={postFilters.contentType}
                 onChange={(e) => handleFilterChange('contentType', e.target.value)}
+                className="text-sm py-1.5"
               >
                 <option value="">All Types</option>
                 <option value="Slide">Slide</option>
                 <option value="Video">Video</option>
               </Select>
               <Select
-                label="Content Category"
+                label={<span className="text-xs">Content Category</span>}
                 value={postFilters.contentCategory}
                 onChange={(e) => handleFilterChange('contentCategory', e.target.value)}
+                className="text-sm py-1.5"
               >
                 <option value="">All Categories</option>
                 <option value="Hardsell product">Hardsell product</option>
@@ -1597,23 +1601,25 @@ export default function CampaignDetailPage() {
                 <option value="Edukasi Product">Edukasi Product</option>
               </Select>
               <Input
-                label="Date From"
+                label={<span className="text-xs">Date From</span>}
                 type="date"
                 value={postFilters.dateFrom}
                 onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                className="text-sm py-1.5"
               />
               <Input
-                label="Date To"
+                label={<span className="text-xs">Date To</span>}
                 type="date"
                 value={postFilters.dateTo}
                 onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                className="text-sm py-1.5"
               />
             </div>
-            <div className="flex gap-2 mt-3">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={handleResetFilters}
-                className="text-xs sm:text-sm"
+                className="text-sm py-1 px-2"
               >
                 Reset Filters
               </Button>

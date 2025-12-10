@@ -2152,77 +2152,85 @@ export default function PostsPage() {
                   </Button>
                 </div>
               </div>
-              <div className="mb-4 px-2 sm:px-0">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
-                  <Select
-                    label="Account"
-                    value={postFilters.accountId}
-                    onChange={(e) => handleFilterChange('accountId', e.target.value)}
-                  >
-                    <option value="">All Accounts</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select
-                    label="Status"
-                    value={postFilters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                  >
-                    <option value="">All Status</option>
-                    {STATUS_OPTIONS.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select
-                    label="Content Type"
-                    value={postFilters.contentType}
-                    onChange={(e) => handleFilterChange('contentType', e.target.value)}
-                  >
-                    <option value="">All Types</option>
-                    {CONTENT_TYPE_OPTIONS.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select
-                    label="Content Category"
-                    value={postFilters.contentCategory}
-                    onChange={(e) => handleFilterChange('contentCategory', e.target.value)}
-                  >
-                    <option value="">All Categories</option>
-                    {CONTENT_CATEGORY_OPTIONS.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    label="Date From"
-                    type="date"
-                    value={postFilters.dateFrom}
-                    onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                  />
-                  <Input
-                    label="Date To"
-                    type="date"
-                    value={postFilters.dateTo}
-                    onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleResetFilters}
-                    className="text-xs sm:text-sm"
-                  >
-                    Reset Filters
-                  </Button>
+              <div className="mb-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-1.5 sm:gap-2 w-full">
+                    <Select
+                      label={<span className="text-xs">Account</span>}
+                      value={postFilters.accountId}
+                      onChange={(e) => handleFilterChange('accountId', e.target.value)}
+                      className="text-sm py-1.5"
+                    >
+                      <option value="">All Accounts</option>
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      label={<span className="text-xs">Status</span>}
+                      value={postFilters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                      className="text-sm py-1.5"
+                    >
+                      <option value="">All Status</option>
+                      {STATUS_OPTIONS.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      label={<span className="text-xs">Content Type</span>}
+                      value={postFilters.contentType}
+                      onChange={(e) => handleFilterChange('contentType', e.target.value)}
+                      className="text-sm py-1.5"
+                    >
+                      <option value="">All Types</option>
+                      {CONTENT_TYPE_OPTIONS.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      label={<span className="text-xs">Content Category</span>}
+                      value={postFilters.contentCategory}
+                      onChange={(e) => handleFilterChange('contentCategory', e.target.value)}
+                      className="text-sm py-1.5"
+                    >
+                      <option value="">All Categories</option>
+                      {CONTENT_CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      label={<span className="text-xs">Date From</span>}
+                      type="date"
+                      value={postFilters.dateFrom}
+                      onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                      className="text-sm py-1.5"
+                    />
+                    <Input
+                      label={<span className="text-xs">Date To</span>}
+                      type="date"
+                      value={postFilters.dateTo}
+                      onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                      className="text-sm py-1.5"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      onClick={handleResetFilters}
+                      className="text-sm py-1 px-2"
+                    >
+                      Reset Filters
+                    </Button>
+                  </div>
                 </div>
               </div>
               <TableWrap>
