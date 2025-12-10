@@ -179,9 +179,15 @@ export default function UsersPage() {
   };
 
   const handleCancelEdit = () => {
+    if (submitting) return;
     resetForm();
     setEditingId(null);
   };
+
+  const hasUserFilters = Boolean(
+    search.trim() ||
+    roleFilter
+  );
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -226,6 +232,43 @@ export default function UsersPage() {
       </TH>
     );
   };
+
+  const UserFormFields = () => (
+    <>
+      <Input
+        label="Name"
+        value={form.name}
+        onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+        required
+      />
+      <Input
+        label="Email"
+        type="email"
+        value={form.email}
+        onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
+        required
+      />
+      <Input
+        label={editingId ? 'New Password (leave blank to keep current)' : 'Password'}
+        type="password"
+        value={form.password}
+        onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
+        required={!editingId}
+      />
+      <Select
+        label="Role"
+        value={form.role}
+        onChange={e => setForm(prev => ({ ...prev, role: e.target.value as any }))}
+        required
+      >
+        <option value="">Select role</option>
+        <option value="ADMIN">ADMIN</option>
+        <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
+        <option value="EDITOR">EDITOR</option>
+        <option value="VIEWER">VIEWER</option>
+      </Select>
+    </>
+  );
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -277,174 +320,171 @@ export default function UsersPage() {
         title={<h2 className="page-title">User Management</h2>}
       />
       <Card>
-        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
-            <Input
-              label={<span className="text-xs">Search</span>}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Name or email"
-              className="text-sm py-1.5"
-            />
-            <Select
-              label={<span className="text-xs">Role</span>}
-              value={roleFilter}
-              onChange={e => setRoleFilter(e.target.value)}
-              className="text-sm py-1.5"
-            >
-              <option value="">All roles</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
-              <option value="EDITOR">EDITOR</option>
-              <option value="VIEWER">VIEWER</option>
-            </Select>
+        <div className="card-inner-table">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
+              <Input
+                label={<span className="text-xs">Search</span>}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Name or email"
+                className="text-sm py-1.5"
+              />
+              <Select
+                label={<span className="text-xs">Role</span>}
+                value={roleFilter}
+                onChange={e => setRoleFilter(e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All roles</option>
+                <option value="ADMIN">ADMIN</option>
+                <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
+                <option value="EDITOR">EDITOR</option>
+                <option value="VIEWER">VIEWER</option>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearch('');
+                  setRoleFilter('');
+                }}
+                className="text-sm py-1 px-2"
+              >
+                Reset Filters
+              </Button>
+              <Button
+                variant="primary"
+                color="green"
+                onClick={() => setShowAddForm(!showAddForm)}
+                disabled={!!editingId}
+                className="text-sm py-1 px-2"
+              >
+                {showAddForm ? 'Cancel' : 'Add User'}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSearch('');
-                setRoleFilter('');
-              }}
-              className="text-sm py-1 px-2"
-            >
-              Reset Filters
-            </Button>
-            <Button
-              variant="primary"
-              color="green"
-              onClick={() => setShowAddForm(!showAddForm)}
-              disabled={!!editingId}
-              className="text-sm py-1 px-2"
-            >
-              {showAddForm ? 'Cancel' : 'Add User'}
-            </Button>
-          </div>
+          {loading ? (
+            <div className="skeleton h-10 w-full" />
+          ) : filteredUsers.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No users found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {hasUserFilters
+                  ? 'Try adjusting your filters to see more results.'
+                  : 'There are no users available. Add a user to get started.'}
+              </p>
+            </div>
+          ) : (
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR>
+                    {renderSortableHeader('Name', 'name')}
+                    {renderSortableHeader('Email', 'email')}
+                    {renderSortableHeader('Role', 'role')}
+                    {renderSortableHeader('Created At', 'createdAt')}
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
+                <tbody>
+                  {filteredUsers.map(user => {
+                    const badgeStyle = getRoleBadgeColor(user.role);
+                    const isCurrentUser = user.id === currentUser?.id;
+                    return (
+                      <TR key={user.id}>
+                        <TD>
+                          <div className="flex items-center gap-2">
+                            <span style={{ color: 'var(--text-primary)' }}>{user.name}</span>
+                            {isCurrentUser && (
+                              <span className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                You
+                              </span>
+                            )}
+                          </div>
+                        </TD>
+                        <TD>
+                          <span style={{ color: 'var(--text-secondary)' }}>{user.email}</span>
+                        </TD>
+                        <TD>
+                          <span className="text-xs px-2 py-1 rounded border" style={badgeStyle}>
+                            {user.role}
+                          </span>
+                        </TD>
+                        <TD>
+                          <span style={{ color: 'var(--text-tertiary)' }}>
+                            {formatDate(user.createdAt)}
+                          </span>
+                        </TD>
+                        <TD>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              color="blue"
+                              onClick={() => handleEditUser(user)}
+                              className="text-sm py-1.5"
+                              disabled={!!editingId}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              color="red"
+                              onClick={() => handleDeleteClick(user.id, user.name)}
+                              disabled={deletingIds.has(user.id) || isCurrentUser || !!editingId}
+                              className="text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingIds.has(user.id) ? 'Deleting...' : 'Delete'}
+                            </Button>
+                          </div>
+                        </TD>
+                      </TR>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </TableWrap>
+          )}
         </div>
       </Card>
-      {(showAddForm || editingId) && (
+      {showAddForm && (
         <Card className="mt-4">
           <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
-            {editingId ? 'Edit User' : 'Add User'}
+            Add User
           </h2>
-          <form onSubmit={editingId ? handleUpdateUser : handleAddUser} className="space-y-3">
-            <Input
-              label="Name"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={form.email}
-              onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
-              required
-            />
-            <Input
-              label={editingId ? 'New Password (leave blank to keep current)' : 'Password'}
-              type="password"
-              value={form.password}
-              onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
-              required={!editingId}
-            />
-            <Select
-              label="Role"
-              value={form.role}
-              onChange={e => setForm(prev => ({ ...prev, role: e.target.value as any }))}
-              required
-            >
-              <option value="">Select role</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
-              <option value="EDITOR">EDITOR</option>
-              <option value="VIEWER">VIEWER</option>
-            </Select>
+          <form onSubmit={handleAddUser} className="space-y-3">
+            <UserFormFields />
             <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
-                {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update User' : 'Add User')}
+              <Button type="submit" disabled={submitting} className="flex-1" color="green">
+                {submitting ? 'Adding...' : 'Add User'}
               </Button>
-              <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
+              <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} disabled={submitting}>
                 Cancel
               </Button>
             </div>
           </form>
         </Card>
       )}
-      <Card className="mt-4">
-        {loading ? (
-          <div className="skeleton h-10 w-full" />
-        ) : (
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR>
-                  {renderSortableHeader('Name', 'name')}
-                  {renderSortableHeader('Email', 'email')}
-                  {renderSortableHeader('Role', 'role')}
-                  {renderSortableHeader('Created At', 'createdAt')}
-                  <TH>Actions</TH>
-                </TR>
-              </THead>
-              <tbody>
-                {filteredUsers.map(user => {
-                  const badgeStyle = getRoleBadgeColor(user.role);
-                  const isCurrentUser = user.id === currentUser?.id;
-                  return (
-                    <TR key={user.id}>
-                      <TD>
-                        <div className="flex items-center gap-2">
-                          <span style={{ color: 'var(--text-primary)' }}>{user.name}</span>
-                          {isCurrentUser && (
-                            <span className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                              You
-                            </span>
-                          )}
-                        </div>
-                      </TD>
-                      <TD>
-                        <span style={{ color: 'var(--text-secondary)' }}>{user.email}</span>
-                      </TD>
-                      <TD>
-                        <span className="text-xs px-2 py-1 rounded border" style={badgeStyle}>
-                          {user.role}
-                        </span>
-                      </TD>
-                      <TD>
-                        <span style={{ color: 'var(--text-tertiary)' }}>
-                          {formatDate(user.createdAt)}
-                        </span>
-                      </TD>
-                      <TD>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            color="blue"
-                            onClick={() => handleEditUser(user)}
-                            className="text-sm py-1.5"
-                            disabled={!!editingId}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            color="red"
-                            onClick={() => handleDeleteClick(user.id, user.name)}
-                            disabled={deletingIds.has(user.id) || isCurrentUser || !!editingId}
-                            className="text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {deletingIds.has(user.id) ? 'Deleting...' : 'Delete'}
-                          </Button>
-                        </div>
-                      </TD>
-                    </TR>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </TableWrap>
-        )}
-      </Card>
+      <Dialog
+        open={!!editingId}
+        onClose={handleCancelEdit}
+        title="Edit User"
+        footer={
+          <>
+            <Button variant="outline" onClick={handleCancelEdit} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-user-form" disabled={submitting} color="blue">
+              {submitting ? 'Updating...' : 'Update User'}
+            </Button>
+          </>
+        }
+      >
+        <form id="edit-user-form" onSubmit={handleUpdateUser} className="space-y-3">
+          <UserFormFields />
+        </form>
+      </Dialog>
       <Dialog
         open={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}

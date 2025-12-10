@@ -516,6 +516,70 @@ export default function AllPostsPage() {
       return null;
     }
 
+    const getPicObject = (picId: string | undefined) => {
+      if (!picId) return null;
+      const pic = pics.find(p => p.id === picId);
+      return pic ? { id: pic.id, name: pic.name } : null;
+    };
+    
+    const getAccountObject = (accountId: string | undefined) => {
+      if (!accountId) return null;
+      const account = accounts.find(a => a.id === accountId);
+      return account ? { id: account.id, name: account.name } : null;
+    };
+    
+    const getCampaignObject = (campaignId: string | undefined) => {
+      if (!campaignId) return null;
+      const campaign = campaigns.find(c => c.id === campaignId);
+      return campaign ? { id: campaign.id, name: campaign.name } : null;
+    };
+
+    // Optimistically update local state so the table shows the new value immediately
+    setPosts(prevPosts => prevPosts.map(p => {
+      if (p.id !== postId) return p;
+      const updated: Post = { ...p };
+      if (field === 'postDate') {
+        updated.postDate = new Date(valueToUse).toISOString();
+        updated.postDay = updated.postDate ? new Date(updated.postDate).toLocaleDateString('en-US', { weekday: 'long' }) : p.postDay;
+      } else if (field === 'campaignId') {
+        updated.campaignId = valueToUse || '';
+        updated.campaign = valueToUse ? getCampaignObject(valueToUse) || undefined : p.campaign;
+      } else if (field === 'accountId') {
+        updated.accountId = valueToUse || '';
+        updated.account = valueToUse ? getAccountObject(valueToUse) || undefined : p.account;
+      } else if (field === 'postTitle') {
+        updated.postTitle = valueToUse;
+      } else if (field === 'contentLink') {
+        updated.contentLink = valueToUse;
+      } else if (field === 'contentType') {
+        updated.contentType = valueToUse;
+      } else if (field === 'contentCategory') {
+        updated.contentCategory = valueToUse;
+      } else if (field === 'campaignCategory') {
+        updated.campaignCategory = valueToUse;
+      } else if (field === 'status') {
+        updated.status = valueToUse;
+      } else if (field === 'picTalentId') {
+        updated.picTalentId = valueToUse || undefined;
+        updated.picTalent = valueToUse ? getPicObject(valueToUse) || undefined : p.picTalent;
+      } else if (field === 'picEditorId') {
+        updated.picEditorId = valueToUse || undefined;
+        updated.picEditor = valueToUse ? getPicObject(valueToUse) || undefined : p.picEditor;
+      } else if (field === 'picPostingId') {
+        updated.picPostingId = valueToUse || undefined;
+        updated.picPosting = valueToUse ? getPicObject(valueToUse) || undefined : p.picPosting;
+      } else if (field === 'adsOnMusic') {
+        updated.adsOnMusic = newValue;
+      } else if (field === 'yellowCart') {
+        updated.yellowCart = newValue;
+      } else if (field === 'fypType') {
+        updated.fypType = newValue;
+      } else if (['totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved'].includes(field)) {
+        (updated as any)[field] = newValue;
+      }
+      return updated;
+    }));
+
     setSavingCell(`${postId}-${field}`);
     try {
       const updatePayload: any = {};
@@ -601,6 +665,8 @@ export default function AllPostsPage() {
       setToast({ type: 'success', text: 'Post updated successfully' });
       return updatedPostWithRelations;
     } catch (error) {
+      // Revert optimistic update on failure
+      setPosts(prevPosts => prevPosts.map(p => (p.id === postId ? post : p)));
       setToast({ type: 'error', text: (error as Error).message });
       return null;
     } finally {
@@ -640,7 +706,9 @@ export default function AllPostsPage() {
   const handleCellKeyDown = (e: React.KeyboardEvent, postId: string, field: string) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      void handleCellBlur(postId, field);
+      void handleCellBlur(postId, field, true);
+      setEditingCell(null);
+      return;
     } else if (e.key === 'Escape') {
       setEditingCell(null);
     } else if (e.key === 'Tab') {
@@ -1164,155 +1232,6 @@ export default function AllPostsPage() {
         onChange={handleCsvFileChange}
       />
 
-      <Card className="mb-6">
-        <div className="flex flex-col gap-1 mb-6">
-          <div className="text-lg font-semibold">Filters</div>
-          <p className="text-xs text-gray-500">Filter posts across all campaigns.</p>
-        </div>
-        <div className="space-y-6">
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Select
-                label="Campaign"
-                value={filters.campaignId}
-                onChange={(event) => handleFilterChange('campaignId', event.target.value)}
-              >
-                <option value="">All campaigns</option>
-                {campaigns.map((campaign) => (
-                  <option key={campaign.id} value={campaign.id}>
-                    {campaign.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="Account"
-                value={filters.accountId}
-                onChange={(event) => handleFilterChange('accountId', event.target.value)}
-              >
-                <option value="">All accounts</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="Status"
-                value={filters.status}
-                onChange={(event) => handleFilterChange('status', event.target.value)}
-              >
-                <option value="">All statuses</option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Select
-                label="Content Category"
-                value={filters.category}
-                onChange={(event) => handleFilterChange('category', event.target.value)}
-              >
-                <option value="">All categories</option>
-                {CONTENT_CATEGORY_OPTIONS.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="PIC Talent"
-                value={filters.picTalentId}
-                onChange={(event) => handleFilterChange('picTalentId', event.target.value)}
-              >
-                <option value="">All PICs</option>
-                {talentPics.map((pic) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Select
-                label="PIC Editor"
-                value={filters.picEditorId}
-                onChange={(event) => handleFilterChange('picEditorId', event.target.value)}
-              >
-                <option value="">All Editors</option>
-                {editorPics.map((pic) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Select
-                label="PIC Posting"
-                value={filters.picPostingId}
-                onChange={(event) => handleFilterChange('picPostingId', event.target.value)}
-              >
-                <option value="">All Posting PICs</option>
-                {postingPics.map((pic) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Input
-                label="Date From"
-                type="date"
-                value={filters.dateFrom}
-                onChange={(event) => handleFilterChange('dateFrom', event.target.value)}
-              />
-            </div>
-            <div>
-              <Input
-                label="Date To"
-                type="date"
-                value={filters.dateTo}
-                onChange={(event) => handleFilterChange('dateTo', event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end pt-2">
-            <Button
-              onClick={() => {
-                setFilters({
-                  campaignId: '',
-                  accountId: '',
-                  status: '',
-                  category: '',
-                  dateFrom: '',
-                  dateTo: '',
-                  picTalentId: '',
-                  picEditorId: '',
-                  picPostingId: '',
-                });
-              }}
-              variant="outline"
-            >
-              Clear Filters
-            </Button>
-          </div>
-        </div>
-      </Card>
-
       {loading ? (
         <div className="skeleton h-10 w-full" />
       ) : (
@@ -1339,6 +1258,138 @@ export default function AllPostsPage() {
                 >
                   Export CSV
                 </Button>
+              </div>
+            </div>
+            <div className="mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-9 gap-1.5 sm:gap-2 w-full">
+                  <Select
+                    label={<span className="text-xs">Campaign</span>}
+                    value={filters.campaignId}
+                    onChange={(event) => handleFilterChange('campaignId', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All campaigns</option>
+                    {campaigns.map((campaign) => (
+                      <option key={campaign.id} value={campaign.id}>
+                        {campaign.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label={<span className="text-xs">Account</span>}
+                    value={filters.accountId}
+                    onChange={(event) => handleFilterChange('accountId', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All accounts</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label={<span className="text-xs">Status</span>}
+                    value={filters.status}
+                    onChange={(event) => handleFilterChange('status', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label={<span className="text-xs">Content Category</span>}
+                    value={filters.category}
+                    onChange={(event) => handleFilterChange('category', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All categories</option>
+                    {CONTENT_CATEGORY_OPTIONS.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label={<span className="text-xs">PIC Talent</span>}
+                    value={filters.picTalentId}
+                    onChange={(event) => handleFilterChange('picTalentId', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All PICs</option>
+                    {talentPics.map((pic) => (
+                      <option key={pic.id} value={pic.id}>
+                        {pic.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label={<span className="text-xs">PIC Editor</span>}
+                    value={filters.picEditorId}
+                    onChange={(event) => handleFilterChange('picEditorId', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All Editors</option>
+                    {editorPics.map((pic) => (
+                      <option key={pic.id} value={pic.id}>
+                        {pic.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    label={<span className="text-xs">PIC Posting</span>}
+                    value={filters.picPostingId}
+                    onChange={(event) => handleFilterChange('picPostingId', event.target.value)}
+                    className="text-sm py-1.5"
+                  >
+                    <option value="">All Posting PICs</option>
+                    {postingPics.map((pic) => (
+                      <option key={pic.id} value={pic.id}>
+                        {pic.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    label={<span className="text-xs">Date From</span>}
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(event) => handleFilterChange('dateFrom', event.target.value)}
+                    className="text-sm py-1.5"
+                  />
+                  <Input
+                    label={<span className="text-xs">Date To</span>}
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(event) => handleFilterChange('dateTo', event.target.value)}
+                    className="text-sm py-1.5"
+                  />
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    onClick={() => {
+                      setFilters({
+                        campaignId: '',
+                        accountId: '',
+                        status: '',
+                        category: '',
+                        dateFrom: '',
+                        dateTo: '',
+                        picTalentId: '',
+                        picEditorId: '',
+                        picPostingId: '',
+                      });
+                    }}
+                    variant="outline"
+                    className="text-sm py-1 px-2"
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
               </div>
             </div>
             {sortedPosts.length === 0 ? (

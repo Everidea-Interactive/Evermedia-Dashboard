@@ -173,6 +173,7 @@ export default function PicsPage() {
   };
 
   const handleCancelEdit = () => {
+    if (submitting) return;
     resetForm();
     setEditingId(null);
   };
@@ -186,6 +187,50 @@ export default function PicsPage() {
     }));
   };
 
+  const hasPicFilters = Boolean(
+    search.trim() ||
+    role ||
+    (active && active !== 'true')
+  );
+
+  const PicFormFields = () => (
+    <>
+      <Input
+        label="Name"
+        value={form.name}
+        onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+        required
+      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Roles</label>
+        <div className="flex flex-wrap gap-2">
+          {['TALENT', 'EDITOR', 'POSTING'].map(roleName => (
+            <label key={roleName} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.roles.includes(roleName)}
+                onChange={() => toggleRole(roleName)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm">{roleName}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={e => setForm(prev => ({ ...prev, active: e.target.checked }))}
+            className="rounded border-gray-300"
+          />
+          <span className="text-sm font-medium text-gray-700">Active</span>
+        </label>
+      </div>
+    </>
+  );
+
   return (
     <div>
       <PageHeader
@@ -194,136 +239,87 @@ export default function PicsPage() {
         title={<h2 className="page-title">PICs</h2>}
       />
       <Card>
-        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
-            <Input
-              label={<span className="text-xs">Search</span>}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Name or role"
-              className="text-sm py-1.5"
-            />
-            <Select
-              label={<span className="text-xs">Role</span>}
-              value={role}
-              onChange={e => setRole(e.target.value)}
-              className="text-sm py-1.5"
-            >
-              <option value="">All roles</option>
-              <option value="TALENT">TALENT</option>
-              <option value="EDITOR">EDITOR</option>
-              <option value="POSTING">POSTING</option>
-            </Select>
-            <Select
-              label={<span className="text-xs">Active</span>}
-              value={active}
-              onChange={e => setActive(e.target.value)}
-              className="text-sm py-1.5"
-            >
-              <option value="">All</option>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSearch('');
-                setRole('');
-                setActive('true');
-              }}
-              className="text-sm py-1 px-2"
-            >
-              Reset Filters
-            </Button>
-            <RequirePermission permission={canManagePics}>
+        <div className="card-inner-table">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
+              <Input
+                label={<span className="text-xs">Search</span>}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Name or role"
+                className="text-sm py-1.5"
+              />
+              <Select
+                label={<span className="text-xs">Role</span>}
+                value={role}
+                onChange={e => setRole(e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All roles</option>
+                <option value="TALENT">TALENT</option>
+                <option value="EDITOR">EDITOR</option>
+                <option value="POSTING">POSTING</option>
+              </Select>
+              <Select
+                label={<span className="text-xs">Active</span>}
+                value={active}
+                onChange={e => setActive(e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
-                variant="primary"
-                color="green"
-                onClick={() => setShowAddForm(!showAddForm)}
-                disabled={!!editingId}
+                variant="outline"
+                onClick={() => {
+                  setSearch('');
+                  setRole('');
+                  setActive('true');
+                }}
                 className="text-sm py-1 px-2"
               >
-                {showAddForm ? 'Cancel' : 'Add PIC System'}
+                Reset Filters
               </Button>
-            </RequirePermission>
+              <RequirePermission permission={canManagePics}>
+                <Button
+                  variant="primary"
+                  color="green"
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  disabled={!!editingId}
+                  className="text-sm py-1 px-2"
+                >
+                  {showAddForm ? 'Cancel' : 'Add PIC System'}
+                </Button>
+              </RequirePermission>
+            </div>
           </div>
-        </div>
-      </Card>
-      <RequirePermission permission={canManagePics}>
-        {(showAddForm || editingId) && (
-          <Card className="mt-4">
-            <h2 className="text-lg font-semibold mb-3">{editingId ? 'Edit PIC System' : 'Add PIC System'}</h2>
-          <form onSubmit={editingId ? handleUpdatePic : handleAddPic} className="space-y-3">
-            <Input
-              label="Name"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Roles</label>
-              <div className="flex flex-wrap gap-2">
-                {['TALENT', 'EDITOR', 'POSTING'].map(roleName => (
-                  <label key={roleName} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.roles.includes(roleName)}
-                      onChange={() => toggleRole(roleName)}
-                      className="rounded border-gray-300"
-                    />
-                    <span className="text-sm">{roleName}</span>
-                  </label>
-                ))}
-              </div>
+          {loading ? (
+            <div className="skeleton h-10 w-full" />
+          ) : filteredItems.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No PICs found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {hasPicFilters
+                  ? 'Try adjusting your filters to see more results.'
+                  : 'There are no PICs available.'}
+              </p>
             </div>
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={e => setForm(prev => ({ ...prev, active: e.target.checked }))}
-                  className="rounded border-gray-300"
-                />
-                <span className="text-sm font-medium text-gray-700">Active</span>
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
-                {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update PIC System' : 'Add PIC System')}
-              </Button>
-              <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-          </Card>
-        )}
-      </RequirePermission>
-      <div className="mt-4">
-        {loading ? (
-          <div className="skeleton h-10 w-full" />
-        ) : (
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR>
-                  <TH>PIC</TH>
-                  <TH className="!text-center">Roles</TH>
-                  <TH>Status</TH>
-                  <TH className="!text-center">Actions</TH>
-                </TR>
-              </THead>
-              <tbody>
-                {filteredItems.length === 0 ? (
+          ) : (
+            <TableWrap>
+              <Table>
+                <THead>
                   <TR>
-                    <TD colSpan={4} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
-                      No PICs found
-                    </TD>
+                    <TH>PIC</TH>
+                    <TH className="!text-center">Roles</TH>
+                    <TH>Status</TH>
+                    <TH className="!text-center">Actions</TH>
                   </TR>
-                ) : (
-                  filteredItems.map(p => (
+                </THead>
+                <tbody>
+                  {filteredItems.map(p => (
                     <TR key={p.id}>
                       <TD>
                         <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
@@ -378,13 +374,52 @@ export default function PicsPage() {
                         </div>
                       </TD>
                     </TR>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </TableWrap>
+                  ))}
+                </tbody>
+              </Table>
+            </TableWrap>
+          )}
+        </div>
+      </Card>
+      <RequirePermission permission={canManagePics}>
+        {showAddForm && (
+          <Card className="mt-4">
+            <h2 className="text-lg font-semibold mb-3">Add PIC System</h2>
+            <form onSubmit={handleAddPic} className="space-y-3">
+              <PicFormFields />
+              <div className="flex gap-2">
+                <Button type="submit" disabled={submitting} className="flex-1" color="green">
+                  {submitting ? 'Adding...' : 'Add PIC System'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} disabled={submitting}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Card>
         )}
-      </div>
+      </RequirePermission>
+      <RequirePermission permission={canManagePics}>
+        <Dialog
+          open={!!editingId}
+          onClose={handleCancelEdit}
+          title="Edit PIC System"
+          footer={
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" form="edit-pic-form" disabled={submitting} color="blue">
+                {submitting ? 'Updating...' : 'Update PIC'}
+              </Button>
+            </>
+          }
+        >
+          <form id="edit-pic-form" onSubmit={handleUpdatePic} className="space-y-3">
+            <PicFormFields />
+          </form>
+        </Dialog>
+      </RequirePermission>
       <Dialog
         open={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}

@@ -449,6 +449,12 @@ export default function CampaignsPage() {
     }
   };
 
+  const hasCampaignFilters = Boolean(
+    filters.name.trim() ||
+    filters.brandName ||
+    filters.quotationNumber.trim()
+  );
+
   return (
     <div>
       <div className="mb-4">
@@ -610,44 +616,185 @@ export default function CampaignsPage() {
       </div>
 
       <Card>
-        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
-            <Input
-              label={<span className="text-xs">Campaign Name</span>}
-              value={filters.name}
-              onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Search by name..."
-              className="text-sm py-1.5"
-            />
-            <Select 
-              label={<span className="text-xs">Brand Name</span>}
-              value={filters.brandName} 
-              onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
-              className="text-sm py-1.5"
-            >
-              <option value="">All Brands</option>
-              {getUniqueBrands.map(brand => (
-                <option key={brand} value={brand}>{brand}</option>
-              ))}
-            </Select>
-            <Input
-              label={<span className="text-xs">Quotation Number</span>}
-              value={filters.quotationNumber}
-              onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
-              placeholder="Search by quotation..."
-              className="text-sm py-1.5"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button variant="outline" onClick={handleClearFilters} className="text-sm py-1 px-2">
-              Reset Filters
-            </Button>
-            <RequirePermission permission={canManageCampaigns}>
-              <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} className="text-sm py-1 px-2">
-                {showAddForm ? 'Cancel' : 'Add Campaign'}
+        <div className="card-inner-table">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
+              <Input
+                label={<span className="text-xs">Campaign Name</span>}
+                value={filters.name}
+                onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Search by name..."
+                className="text-sm py-1.5"
+              />
+              <Select 
+                label={<span className="text-xs">Brand Name</span>}
+                value={filters.brandName} 
+                onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
+                className="text-sm py-1.5"
+              >
+                <option value="">All Brands</option>
+                {getUniqueBrands.map(brand => (
+                  <option key={brand} value={brand}>{brand}</option>
+                ))}
+              </Select>
+              <Input
+                label={<span className="text-xs">Quotation Number</span>}
+                value={filters.quotationNumber}
+                onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
+                placeholder="Search by quotation..."
+                className="text-sm py-1.5"
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button variant="outline" onClick={handleClearFilters} className="text-sm py-1 px-2">
+                Reset Filters
               </Button>
-            </RequirePermission>
+              <RequirePermission permission={canManageCampaigns}>
+                <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} className="text-sm py-1 px-2">
+                  {showAddForm ? 'Cancel' : 'Add Campaign'}
+                </Button>
+              </RequirePermission>
+            </div>
           </div>
+          {loading ? (
+            <div className="skeleton h-10 w-full" />
+          ) : sortedItems.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No campaigns found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {hasCampaignFilters
+                  ? 'Try adjusting your filters to see more results.'
+                  : 'There are no campaigns available. Add a campaign to get started.'}
+              </p>
+            </div>
+          ) : (
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('name')}
+                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                      >
+                        <span>Name</span>
+                        {renderSortIndicator('name')}
+                      </button>
+                    </TH>
+                    <TH>KPI Overview</TH>
+                    <TH>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('startDate')}
+                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                      >
+                        <span>Start</span>
+                        {renderSortIndicator('startDate')}
+                      </button>
+                    </TH>
+                    <TH>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('endDate')}
+                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                      >
+                        <span>End</span>
+                        {renderSortIndicator('endDate')}
+                      </button>
+                    </TH>
+                    <TH>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('status')}
+                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                      >
+                        <span>Status</span>
+                        {renderSortIndicator('status')}
+                      </button>
+                    </TH>
+                    <TH className="!text-center">Actions</TH>
+                  </TR>
+                </THead>
+                <tbody>
+                  {sortedItems.map((c) => {
+                    const kpis = campaignKpisMap.get(c.id) || [];
+                    // Get campaign-level KPIs (where accountId is null)
+                    const campaignKpis = kpis.filter((k: any) => !k.accountId);
+                    
+                    // Create a map of category to { target, actual }
+                    const kpiMap = new Map<string, { target: number; actual: number }>();
+                    campaignKpis.forEach((k: any) => {
+                      const existing = kpiMap.get(k.category) ?? { target: 0, actual: 0 };
+                      kpiMap.set(k.category, {
+                        target: existing.target + (k.target ?? 0),
+                        actual: existing.actual + (k.actual ?? 0),
+                      });
+                    });
+                    
+                    // Get the three KPIs to display: VIEWS, QTY_POST, FYP_COUNT
+                    const viewsKpi = kpiMap.get('VIEWS') ?? { target: 0, actual: 0 };
+                    const qtyPostKpi = kpiMap.get('QTY_POST') ?? { target: 0, actual: 0 };
+                    const fypCountKpi = kpiMap.get('FYP_COUNT') ?? { target: 0, actual: 0 };
+                    
+                    return (
+                      <TR key={c.id}>
+                        <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
+                        <TD>
+                          <div className="flex items-center gap-2 flex-nowrap">
+                            <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>VIEWS</div>
+                              <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{viewsKpi.actual.toLocaleString()}/{viewsKpi.target.toLocaleString()}</div>
+                            </div>
+                            <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>QTY POST</div>
+                              <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{qtyPostKpi.actual.toLocaleString()}/{qtyPostKpi.target.toLocaleString()}</div>
+                            </div>
+                            <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>FYP COUNT</div>
+                              <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{fypCountKpi.actual.toLocaleString()}/{fypCountKpi.target.toLocaleString()}</div>
+                            </div>
+                          </div>
+                        </TD>
+                        <TD>{formatDate(c.startDate)}</TD>
+                        <TD>{formatDate(c.endDate)}</TD>
+                        <TD>
+                          <span 
+                            className="badge border" 
+                            style={statusPills[c.status] ? {
+                              backgroundColor: statusPills[c.status].bg,
+                              borderColor: statusPills[c.status].border,
+                              color: statusPills[c.status].text
+                            } : {}}
+                          >
+                            {c.status}
+                          </span>
+                        </TD>
+                        <TD>
+                          <div className="flex gap-1.5 justify-center">
+                            <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
+                              View
+                            </Link>
+                            <RequirePermission permission={canDelete}>
+                              <Button
+                                variant="outline"
+                                color="red"
+                                onClick={() => handleDeleteClick(c.id, c.name)}
+                                disabled={deletingIds.has(c.id)}
+                                className="text-xs px-1.5 py-0.5"
+                              >
+                                {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </RequirePermission>
+                          </div>
+                        </TD>
+                      </TR>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </TableWrap>
+          )}
         </div>
       </Card>
       <RequirePermission permission={canManageCampaigns}>
@@ -930,138 +1077,6 @@ export default function CampaignsPage() {
         )}
       </RequirePermission>
 
-      <div className="mt-4">
-        {loading ? (
-          <div className="skeleton h-10 w-full" />
-        ) : (
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR>
-                  <TH>
-                    <button
-                      type="button"
-                      onClick={() => handleSort('name')}
-                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                    >
-                      <span>Name</span>
-                      {renderSortIndicator('name')}
-                    </button>
-                  </TH>
-                  <TH>KPI Overview</TH>
-                  <TH>
-                    <button
-                      type="button"
-                      onClick={() => handleSort('startDate')}
-                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                    >
-                      <span>Start</span>
-                      {renderSortIndicator('startDate')}
-                    </button>
-                  </TH>
-                  <TH>
-                    <button
-                      type="button"
-                      onClick={() => handleSort('endDate')}
-                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                    >
-                      <span>End</span>
-                      {renderSortIndicator('endDate')}
-                    </button>
-                  </TH>
-                  <TH>
-                    <button
-                      type="button"
-                      onClick={() => handleSort('status')}
-                      className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                    >
-                      <span>Status</span>
-                      {renderSortIndicator('status')}
-                    </button>
-                  </TH>
-                  <TH className="!text-center">Actions</TH>
-                </TR>
-              </THead>
-              <tbody>
-                {sortedItems.map((c) => {
-                  const kpis = campaignKpisMap.get(c.id) || [];
-                  // Get campaign-level KPIs (where accountId is null)
-                  const campaignKpis = kpis.filter((k: any) => !k.accountId);
-                  
-                  // Create a map of category to { target, actual }
-                  const kpiMap = new Map<string, { target: number; actual: number }>();
-                  campaignKpis.forEach((k: any) => {
-                    const existing = kpiMap.get(k.category) ?? { target: 0, actual: 0 };
-                    kpiMap.set(k.category, {
-                      target: existing.target + (k.target ?? 0),
-                      actual: existing.actual + (k.actual ?? 0),
-                    });
-                  });
-                  
-                  // Get the three KPIs to display: VIEWS, QTY_POST, FYP_COUNT
-                  const viewsKpi = kpiMap.get('VIEWS') ?? { target: 0, actual: 0 };
-                  const qtyPostKpi = kpiMap.get('QTY_POST') ?? { target: 0, actual: 0 };
-                  const fypCountKpi = kpiMap.get('FYP_COUNT') ?? { target: 0, actual: 0 };
-                  
-                  return (
-                    <TR key={c.id}>
-                      <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
-                      <TD>
-                        <div className="flex items-center gap-2 flex-nowrap">
-                          <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>VIEWS</div>
-                            <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{viewsKpi.actual.toLocaleString()}/{viewsKpi.target.toLocaleString()}</div>
-                          </div>
-                          <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>QTY POST</div>
-                            <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{qtyPostKpi.actual.toLocaleString()}/{qtyPostKpi.target.toLocaleString()}</div>
-                          </div>
-                          <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>FYP COUNT</div>
-                            <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{fypCountKpi.actual.toLocaleString()}/{fypCountKpi.target.toLocaleString()}</div>
-                          </div>
-                        </div>
-                      </TD>
-                      <TD>{formatDate(c.startDate)}</TD>
-                      <TD>{formatDate(c.endDate)}</TD>
-                      <TD>
-                        <span 
-                          className="badge border" 
-                          style={statusPills[c.status] ? {
-                            backgroundColor: statusPills[c.status].bg,
-                            borderColor: statusPills[c.status].border,
-                            color: statusPills[c.status].text
-                          } : {}}
-                        >
-                          {c.status}
-                        </span>
-                      </TD>
-                      <TD>
-                        <div className="flex gap-1.5 justify-center">
-                          <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
-                            View
-                          </Link>
-                          <RequirePermission permission={canDelete}>
-                            <Button
-                              variant="outline"
-                              color="red"
-                              onClick={() => handleDeleteClick(c.id, c.name)}
-                              disabled={deletingIds.has(c.id)}
-                              className="text-xs px-1.5 py-0.5"
-                            >
-                              {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
-                            </Button>
-                          </RequirePermission>
-                        </div>
-                      </TD>
-                    </TR>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </TableWrap>
-        )}
-      </div>
       <Dialog
         open={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
