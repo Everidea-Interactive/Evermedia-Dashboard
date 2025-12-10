@@ -179,6 +179,7 @@ export default function UsersPage() {
   };
 
   const handleCancelEdit = () => {
+    if (submitting) return;
     resetForm();
     setEditingId(null);
   };
@@ -226,6 +227,43 @@ export default function UsersPage() {
       </TH>
     );
   };
+
+  const UserFormFields = () => (
+    <>
+      <Input
+        label="Name"
+        value={form.name}
+        onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+        required
+      />
+      <Input
+        label="Email"
+        type="email"
+        value={form.email}
+        onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
+        required
+      />
+      <Input
+        label={editingId ? 'New Password (leave blank to keep current)' : 'Password'}
+        type="password"
+        value={form.password}
+        onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
+        required={!editingId}
+      />
+      <Select
+        label="Role"
+        value={form.role}
+        onChange={e => setForm(prev => ({ ...prev, role: e.target.value as any }))}
+        required
+      >
+        <option value="">Select role</option>
+        <option value="ADMIN">ADMIN</option>
+        <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
+        <option value="EDITOR">EDITOR</option>
+        <option value="VIEWER">VIEWER</option>
+      </Select>
+    </>
+  );
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -322,55 +360,43 @@ export default function UsersPage() {
           </div>
         </div>
       </Card>
-      {(showAddForm || editingId) && (
+      {showAddForm && (
         <Card className="mt-4">
           <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
-            {editingId ? 'Edit User' : 'Add User'}
+            Add User
           </h2>
-          <form onSubmit={editingId ? handleUpdateUser : handleAddUser} className="space-y-3">
-            <Input
-              label="Name"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={form.email}
-              onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
-              required
-            />
-            <Input
-              label={editingId ? 'New Password (leave blank to keep current)' : 'Password'}
-              type="password"
-              value={form.password}
-              onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
-              required={!editingId}
-            />
-            <Select
-              label="Role"
-              value={form.role}
-              onChange={e => setForm(prev => ({ ...prev, role: e.target.value as any }))}
-              required
-            >
-              <option value="">Select role</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
-              <option value="EDITOR">EDITOR</option>
-              <option value="VIEWER">VIEWER</option>
-            </Select>
+          <form onSubmit={handleAddUser} className="space-y-3">
+            <UserFormFields />
             <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
-                {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update User' : 'Add User')}
+              <Button type="submit" disabled={submitting} className="flex-1" color="green">
+                {submitting ? 'Adding...' : 'Add User'}
               </Button>
-              <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
+              <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} disabled={submitting}>
                 Cancel
               </Button>
             </div>
           </form>
         </Card>
       )}
+      <Dialog
+        open={!!editingId}
+        onClose={handleCancelEdit}
+        title="Edit User"
+        footer={
+          <>
+            <Button variant="outline" onClick={handleCancelEdit} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-user-form" disabled={submitting} color="blue">
+              {submitting ? 'Updating...' : 'Update User'}
+            </Button>
+          </>
+        }
+      >
+        <form id="edit-user-form" onSubmit={handleUpdateUser} className="space-y-3">
+          <UserFormFields />
+        </form>
+      </Dialog>
       <Card className="mt-4">
         {loading ? (
           <div className="skeleton h-10 w-full" />

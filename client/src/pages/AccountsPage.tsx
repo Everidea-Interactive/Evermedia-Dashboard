@@ -251,6 +251,7 @@ export default function AccountsPage() {
       notes: account.notes || '',
       campaignIds: existingCampaignIds,
     });
+    setSelectedCampaign('');
     setShowAddForm(false);
   };
 
@@ -322,6 +323,7 @@ export default function AccountsPage() {
   };
 
   const handleCancelEdit = () => {
+    if (submitting) return;
     resetForm();
     setEditingId(null);
     setOriginalCampaignIds([]);
@@ -355,6 +357,91 @@ export default function AccountsPage() {
       </TH>
     );
   };
+
+  const AccountFormFields = () => (
+    <>
+      <Input
+        label="Name"
+        value={form.name}
+        onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+        required
+      />
+      <Input
+        label="TikTok Handle"
+        value={form.tiktokHandle}
+        onChange={e => setForm(prev => ({ ...prev, tiktokHandle: e.target.value }))}
+        placeholder="@username"
+      />
+      <Select
+        label="Account Type"
+        value={form.accountType}
+        onChange={e => setForm(prev => ({ ...prev, accountType: e.target.value as 'CROSSBRAND' | 'NEW_PERSONA' | 'KOL' | 'PROXY' }))}
+        required
+      >
+        <option value="">Select type</option>
+        <option value="CROSSBRAND">CROSSBRAND</option>
+        <option value="NEW_PERSONA">New Persona</option>
+        <option value="KOL">KOL</option>
+        <option value="PROXY">Proxy</option>
+      </Select>
+      <div>
+        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Campaigns</label>
+        <Select
+          value={selectedCampaign}
+          onChange={e => {
+            const campaignId = e.target.value;
+            if (campaignId && !form.campaignIds.includes(campaignId)) {
+              setForm(prev => ({ ...prev, campaignIds: [...prev.campaignIds, campaignId] }));
+            }
+            setSelectedCampaign('');
+          }}
+        >
+          <option value="">Select a campaign to add</option>
+          {campaigns
+            .filter(c => !form.campaignIds.includes(c.id))
+            .map(campaign => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name} ({Array.isArray(campaign.categories) ? campaign.categories.join(', ') : ''})
+              </option>
+            ))}
+        </Select>
+        {form.campaignIds.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {form.campaignIds.map(campaignId => {
+              const campaign = campaigns.find(c => c.id === campaignId);
+              const isOriginalCampaign = editingId ? originalCampaignIds.includes(campaignId) : false;
+              return campaign ? (
+                <span
+                  key={campaignId}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border"
+                  style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
+                >
+                  {campaign.name}
+                  {!isOriginalCampaign && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, campaignIds: prev.campaignIds.filter(id => id !== campaignId) }))}
+                    className="transition-colors"
+                    style={{ color: '#2563eb' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = '#1e40af'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = '#2563eb'; }}
+                  >
+                    ×
+                  </button>
+                  )}
+                </span>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+      <Input
+        label="Notes"
+        value={form.notes}
+        onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
+      />
+    </>
+  );
 
   return (
     <div>
@@ -424,103 +511,45 @@ export default function AccountsPage() {
           </div>
         </div>
       </Card>
-      {(showAddForm || editingId) && (
-        <RequirePermission permission={editingId ? canEditAccount : canAddAccount}>
+      {showAddForm && (
+        <RequirePermission permission={canAddAccount}>
           <Card className="mt-4">
-            <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>{editingId ? 'Edit Account' : 'Add Account'}</h2>
-            <form onSubmit={editingId ? handleUpdateAccount : handleAddAccount} className="space-y-3">
-            <Input
-              label="Name"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <Input
-              label="TikTok Handle"
-              value={form.tiktokHandle}
-              onChange={e => setForm(prev => ({ ...prev, tiktokHandle: e.target.value }))}
-              placeholder="@username"
-            />
-            <Select
-              label="Account Type"
-              value={form.accountType}
-              onChange={e => setForm(prev => ({ ...prev, accountType: e.target.value as 'CROSSBRAND' | 'NEW_PERSONA' | 'KOL' | 'PROXY' }))}
-              required
-            >
-              <option value="">Select type</option>
-              <option value="CROSSBRAND">CROSSBRAND</option>
-              <option value="NEW_PERSONA">New Persona</option>
-              <option value="KOL">KOL</option>
-              <option value="PROXY">Proxy</option>
-            </Select>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Campaigns</label>
-              <Select
-                value={selectedCampaign}
-                onChange={e => {
-                  const campaignId = e.target.value;
-                  if (campaignId && !form.campaignIds.includes(campaignId)) {
-                    setForm(prev => ({ ...prev, campaignIds: [...prev.campaignIds, campaignId] }));
-                  }
-                  setSelectedCampaign('');
-                }}
-              >
-                <option value="">Select a campaign to add</option>
-                {campaigns
-                  .filter(c => !form.campaignIds.includes(c.id))
-                  .map(campaign => (
-                    <option key={campaign.id} value={campaign.id}>
-                      {campaign.name} ({Array.isArray(campaign.categories) ? campaign.categories.join(', ') : ''})
-                    </option>
-                  ))}
-              </Select>
-              {form.campaignIds.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {form.campaignIds.map(campaignId => {
-                    const campaign = campaigns.find(c => c.id === campaignId);
-                    const isOriginalCampaign = editingId ? originalCampaignIds.includes(campaignId) : false;
-                    return campaign ? (
-                      <span
-                        key={campaignId}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border"
-                        style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}
-                      >
-                        {campaign.name}
-                        {!isOriginalCampaign && (
-                        <button
-                          type="button"
-                          onClick={() => setForm(prev => ({ ...prev, campaignIds: prev.campaignIds.filter(id => id !== campaignId) }))}
-                          className="transition-colors"
-                          style={{ color: '#2563eb' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = '#1e40af'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = '#2563eb'; }}
-                        >
-                          ×
-                        </button>
-                        )}
-                      </span>
-                    ) : null;
-                  })}
-                </div>
-              )}
-            </div>
-            <Input
-              label="Notes"
-              value={form.notes}
-              onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
-            />
-            <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
-                {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update Account' : 'Add Account')}
-              </Button>
-              <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
-                Cancel
-              </Button>
-            </div>
-          </form>
+            <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Add Account</h2>
+            <form onSubmit={handleAddAccount} className="space-y-3">
+              <AccountFormFields />
+              <div className="flex gap-2">
+                <Button type="submit" disabled={submitting} className="flex-1" color="green">
+                  {submitting ? 'Adding...' : 'Add Account'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} disabled={submitting}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
           </Card>
         </RequirePermission>
       )}
+      <RequirePermission permission={canEditAccount}>
+        <Dialog
+          open={!!editingId}
+          onClose={handleCancelEdit}
+          title="Edit Account"
+          footer={
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" form="edit-account-form" disabled={submitting} color="blue">
+                {submitting ? 'Updating...' : 'Update Account'}
+              </Button>
+            </>
+          }
+        >
+          <form id="edit-account-form" onSubmit={handleUpdateAccount} className="space-y-3">
+            <AccountFormFields />
+          </form>
+        </Dialog>
+      </RequirePermission>
       <div className="mt-4">
         {loading ? <div className="skeleton h-10 w-full" /> : (
           <TableWrap>

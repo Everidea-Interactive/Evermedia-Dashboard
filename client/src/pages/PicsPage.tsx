@@ -173,6 +173,7 @@ export default function PicsPage() {
   };
 
   const handleCancelEdit = () => {
+    if (submitting) return;
     resetForm();
     setEditingId(null);
   };
@@ -185,6 +186,44 @@ export default function PicsPage() {
         : [...prev.roles, roleName],
     }));
   };
+
+  const PicFormFields = () => (
+    <>
+      <Input
+        label="Name"
+        value={form.name}
+        onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+        required
+      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Roles</label>
+        <div className="flex flex-wrap gap-2">
+          {['TALENT', 'EDITOR', 'POSTING'].map(roleName => (
+            <label key={roleName} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.roles.includes(roleName)}
+                onChange={() => toggleRole(roleName)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm">{roleName}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={e => setForm(prev => ({ ...prev, active: e.target.checked }))}
+            className="rounded border-gray-300"
+          />
+          <span className="text-sm font-medium text-gray-700">Active</span>
+        </label>
+      </div>
+    </>
+  );
 
   return (
     <div>
@@ -252,54 +291,43 @@ export default function PicsPage() {
         </div>
       </Card>
       <RequirePermission permission={canManagePics}>
-        {(showAddForm || editingId) && (
+        {showAddForm && (
           <Card className="mt-4">
-            <h2 className="text-lg font-semibold mb-3">{editingId ? 'Edit PIC System' : 'Add PIC System'}</h2>
-          <form onSubmit={editingId ? handleUpdatePic : handleAddPic} className="space-y-3">
-            <Input
-              label="Name"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Roles</label>
-              <div className="flex flex-wrap gap-2">
-                {['TALENT', 'EDITOR', 'POSTING'].map(roleName => (
-                  <label key={roleName} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.roles.includes(roleName)}
-                      onChange={() => toggleRole(roleName)}
-                      className="rounded border-gray-300"
-                    />
-                    <span className="text-sm">{roleName}</span>
-                  </label>
-                ))}
+            <h2 className="text-lg font-semibold mb-3">Add PIC System</h2>
+            <form onSubmit={handleAddPic} className="space-y-3">
+              <PicFormFields />
+              <div className="flex gap-2">
+                <Button type="submit" disabled={submitting} className="flex-1" color="green">
+                  {submitting ? 'Adding...' : 'Add PIC System'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} disabled={submitting}>
+                  Cancel
+                </Button>
               </div>
-            </div>
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={e => setForm(prev => ({ ...prev, active: e.target.checked }))}
-                  className="rounded border-gray-300"
-                />
-                <span className="text-sm font-medium text-gray-700">Active</span>
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color={editingId ? 'blue' : 'green'}>
-                {submitting ? (editingId ? 'Updating...' : 'Adding...') : (editingId ? 'Update PIC System' : 'Add PIC System')}
-              </Button>
-              <Button type="button" variant="outline" onClick={editingId ? handleCancelEdit : () => setShowAddForm(false)} disabled={submitting}>
-                Cancel
-              </Button>
-            </div>
-          </form>
+            </form>
           </Card>
         )}
+      </RequirePermission>
+      <RequirePermission permission={canManagePics}>
+        <Dialog
+          open={!!editingId}
+          onClose={handleCancelEdit}
+          title="Edit PIC System"
+          footer={
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" form="edit-pic-form" disabled={submitting} color="blue">
+                {submitting ? 'Updating...' : 'Update PIC'}
+              </Button>
+            </>
+          }
+        >
+          <form id="edit-pic-form" onSubmit={handleUpdatePic} className="space-y-3">
+            <PicFormFields />
+          </form>
+        </Dialog>
       </RequirePermission>
       <div className="mt-4">
         {loading ? (
