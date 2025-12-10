@@ -215,172 +215,174 @@ export default function DailyPage() {
     return { totals, grandTotal };
   }, [dailyData, relevantPics]);
 
-  if (loading) {
-    return (
-      <div>
-        <div className="mb-4">
-          <h1 className="page-title">Daily</h1>
-        </div>
-        <div className="skeleton h-10 w-full" />
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
         backPath="/campaigns"
         backLabel="Back to campaigns"
         title={<h2 className="page-title">Daily</h2>}
-        action={
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Range:
-              </label>
-              <Select
-                value={dateRangeType}
-                onChange={(e) => setDateRangeType(e.target.value as 'today' | 'thisWeek' | 'thisMonth' | 'lastWeek' | 'lastMonth' | 'lifetime')}
-                className="text-sm py-1.5 min-w-[140px]"
-              >
-                <option value="today">Today</option>
-                <option value="thisWeek">This Week</option>
-                <option value="thisMonth">This Month</option>
-                <option value="lastWeek">Last Week</option>
-                <option value="lastMonth">Last Month</option>
-                <option value="lifetime">Lifetime</option>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Count Type:
-              </label>
-              <Select
-                value={countType}
-                onChange={(e) => setCountType(e.target.value as 'post' | 'edit')}
-                className="text-sm py-1.5 min-w-[120px]"
-              >
-                <option value="post">Post</option>
-                <option value="edit">Edit</option>
-              </Select>
-            </div>
-          </div>
-        }
       />
 
-      {relevantPics.length === 0 ? (
-        <Card>
-          <div className="text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
-            No {countType === 'post' ? 'Posting' : 'Editor'} PICs found. Please add PICs with {countType === 'post' ? 'POSTING' : 'EDITOR'} role.
-          </div>
-        </Card>
+      {loading ? (
+        <div className="skeleton h-10 w-full" />
       ) : (
         <Card>
-          <TableWrap className="sticky-table" style={stickyVars}>
-            <Table>
-              <THead>
-                <TR>
-                  <TH className="sticky-col sticky-col--no sticky-col--header">
-                    NO
-                  </TH>
-                  <TH className="sticky-col sticky-col--date sticky-col--header">
-                    POSTING DATE
-                  </TH>
-                  {relevantPics.map((pic) => {
-                    return (
-                      <TH
-                        key={pic.id}
-                        style={{
-                          backgroundColor: 'var(--bg-secondary)',
-                          minWidth: '100px',
-                        }}
-                      >
-                        {pic.name}
+          <div className="card-inner-table">
+            <div className="mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 sm:gap-4">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 w-full">
+                  <Select
+                    label={<span className="text-xs text-gray-500">Range</span>}
+                    value={dateRangeType}
+                    onChange={(e) =>
+                      setDateRangeType(
+                        e.target.value as
+                          | 'today'
+                          | 'thisWeek'
+                          | 'thisMonth'
+                          | 'lastWeek'
+                          | 'lastMonth'
+                          | 'lifetime',
+                      )
+                    }
+                    className="text-sm py-1.5 min-w-[140px]"
+                  >
+                    <option value="today">Today</option>
+                    <option value="thisWeek">This Week</option>
+                    <option value="thisMonth">This Month</option>
+                    <option value="lastWeek">Last Week</option>
+                    <option value="lastMonth">Last Month</option>
+                    <option value="lifetime">Lifetime</option>
+                  </Select>
+                  <Select
+                    label={<span className="text-xs text-gray-500">Count Type</span>}
+                    value={countType}
+                    onChange={(e) => setCountType(e.target.value as 'post' | 'edit')}
+                    className="text-sm py-1.5 min-w-[120px]"
+                  >
+                    <option value="post">Post</option>
+                    <option value="edit">Edit</option>
+                  </Select>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {countType === 'post'
+                    ? 'Counts by posting PIC within the selected date range.'
+                    : 'Counts by editor PIC within the selected date range.'}
+                </p>
+              </div>
+            </div>
+
+            {relevantPics.length === 0 ? (
+              <div className="text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
+                No {countType === 'post' ? 'Posting' : 'Editor'} PICs found. Please add PICs with{' '}
+                {countType === 'post' ? 'POSTING' : 'EDITOR'} role.
+              </div>
+            ) : (
+              <TableWrap className="sticky-table" style={stickyVars}>
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH className="sticky-col sticky-col--no sticky-col--header">
+                        NO
                       </TH>
-                    );
-                  })}
-                  <TH className="total-col total-col--header" style={{ minWidth: '120px' }}>
-                    TOTAL POST ALL
-                  </TH>
-                </TR>
-              </THead>
-              <tbody>
-                {/* Summary Row */}
-                <TR className="summary-row">
-                  <TD
-                    className="font-semibold sticky-col sticky-col--no sticky-col--summary"
-                    style={{
-                      color: '#10b981',
-                    }}
-                  >
-                    -
-                  </TD>
-                  <TD
-                    className="font-semibold sticky-col sticky-col--date sticky-col--summary"
-                    style={{
-                      color: '#10b981',
-                    }}
-                  >
-                    TOTAL
-                  </TD>
-                  {relevantPics.map((pic) => {
-                    const count = picTotals.totals[pic.id] || 0;
-                    return (
+                      <TH className="sticky-col sticky-col--date sticky-col--header">
+                        POSTING DATE
+                      </TH>
+                      {relevantPics.map((pic) => {
+                        return (
+                          <TH
+                            key={pic.id}
+                            style={{
+                              backgroundColor: 'var(--bg-secondary)',
+                              minWidth: '100px',
+                            }}
+                          >
+                            {pic.name}
+                          </TH>
+                        );
+                      })}
+                      <TH className="total-col total-col--header" style={{ minWidth: '120px' }}>
+                        TOTAL POST ALL
+                      </TH>
+                    </TR>
+                  </THead>
+                  <tbody>
+                    {/* Summary Row */}
+                    <TR className="summary-row">
                       <TD
-                        key={pic.id}
-                        className="font-semibold"
+                        className="font-semibold sticky-col sticky-col--no sticky-col--summary"
                         style={{
-                          backgroundColor: 'var(--bg-tertiary)',
                           color: '#10b981',
                         }}
                       >
-                        {formatNumber(count)}
+                        -
                       </TD>
-                    );
-                  })}
-                  <TD
-                    className="font-semibold underline total-col"
-                    style={{ color: '#10b981' }}
-                  >
-                    {formatNumber(picTotals.grandTotal)}
-                  </TD>
-                </TR>
-                
-                {/* Data Rows */}
-                {dailyData.length === 0 ? (
-                  <TR>
-                    <TD colSpan={relevantPics.length + 3} className="text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
-                      No data available
-                    </TD>
-                  </TR>
-                ) : (
-                  dailyData.map((day, index) => (
-                    <TR key={day.dateKey}>
-                      <TD className="sticky-col sticky-col--no">
-                        {index + 1}
-                      </TD>
-                      <TD className="sticky-col sticky-col--date">
-                        {day.date}
+                      <TD
+                        className="font-semibold sticky-col sticky-col--date sticky-col--summary"
+                        style={{
+                          color: '#10b981',
+                        }}
+                      >
+                        TOTAL
                       </TD>
                       {relevantPics.map((pic) => {
-                        const count = day.picCounts[pic.id] || 0;
+                        const count = picTotals.totals[pic.id] || 0;
                         return (
                           <TD
                             key={pic.id}
+                            className="font-semibold"
+                            style={{
+                              backgroundColor: 'var(--bg-tertiary)',
+                              color: '#10b981',
+                            }}
                           >
-                            {count > 0 ? formatNumber(count) : '0'}
+                            {formatNumber(count)}
                           </TD>
                         );
                       })}
-                      <TD className="underline total-col">
-                        {formatNumber(day.total)}
+                      <TD
+                        className="font-semibold underline total-col"
+                        style={{ color: '#10b981' }}
+                      >
+                        {formatNumber(picTotals.grandTotal)}
                       </TD>
                     </TR>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </TableWrap>
+
+                    {/* Data Rows */}
+                    {dailyData.length === 0 ? (
+                      <TR>
+                        <TD
+                          colSpan={relevantPics.length + 3}
+                          className="text-center py-8"
+                          style={{ color: 'var(--text-tertiary)' }}
+                        >
+                          No data available
+                        </TD>
+                      </TR>
+                    ) : (
+                      dailyData.map((day, index) => (
+                        <TR key={day.dateKey}>
+                          <TD className="sticky-col sticky-col--no">
+                            {index + 1}
+                          </TD>
+                          <TD className="sticky-col sticky-col--date">
+                            {day.date}
+                          </TD>
+                          {relevantPics.map((pic) => {
+                            const count = day.picCounts[pic.id] || 0;
+                            return <TD key={pic.id}>{count > 0 ? formatNumber(count) : '0'}</TD>;
+                          })}
+                          <TD className="underline total-col">
+                            {formatNumber(day.total)}
+                          </TD>
+                        </TR>
+                      ))
+                    )}
+                  </tbody>
+                </Table>
+              </TableWrap>
+            )}
+          </div>
         </Card>
       )}
     </div>
