@@ -451,64 +451,175 @@ export default function AccountsPage() {
         title={<h2 className="page-title">Accounts</h2>}
       />
       <Card>
-        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-1.5 sm:gap-2 w-full">
-            <Input
-              label={<span className="text-xs">Search</span>}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Name or handle"
-              className="text-sm py-1.5"
-            />
-            <Select
-              label={<span className="text-xs">Type</span>}
-              value={type}
-              onChange={e => setType(e.target.value)}
-              className="text-sm py-1.5"
-            >
-              <option value="">All</option>
-              <option value="CROSSBRAND">CROSSBRAND</option>
-              <option value="NEW_PERSONA">NEW_PERSONA</option>
-              <option value="KOL">KOL</option>
-              <option value="PROXY">PROXY</option>
-            </Select>
-            <Select
-              label={<span className="text-xs">Crossbrand</span>}
-              value={crossbrand}
-              onChange={e => setCrossbrand(e.target.value)}
-              className="text-sm py-1.5"
-            >
-              <option value="">All</option>
-              <option value="true">Only Crossbrand</option>
-              <option value="false">Only Single-brand</option>
-            </Select>
-            <Select
-              label={<span className="text-xs">Campaign</span>}
-              value={campaignFilter}
-              onChange={e => setCampaignFilter(e.target.value)}
-              className="text-sm py-1.5"
-            >
-              <option value="">All campaigns</option>
-              {campaigns.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button variant="outline" onClick={() => {
-              setSearch('');
-              setType('');
-              setCrossbrand('');
-              setCampaignFilter('');
-            }} className="text-sm py-1 px-2">
-              Reset Filters
-            </Button>
-            <RequirePermission permission={canAddAccount}>
-              <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId} className="text-sm py-1 px-2">
-                {showAddForm ? 'Cancel' : 'Add Account'}
+        <div className="card-inner-table">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-1.5 sm:gap-2 w-full">
+              <Input
+                label={<span className="text-xs">Search</span>}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Name or handle"
+                className="text-sm py-1.5"
+              />
+              <Select
+                label={<span className="text-xs">Type</span>}
+                value={type}
+                onChange={e => setType(e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All</option>
+                <option value="CROSSBRAND">CROSSBRAND</option>
+                <option value="NEW_PERSONA">NEW_PERSONA</option>
+                <option value="KOL">KOL</option>
+                <option value="PROXY">PROXY</option>
+              </Select>
+              <Select
+                label={<span className="text-xs">Crossbrand</span>}
+                value={crossbrand}
+                onChange={e => setCrossbrand(e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All</option>
+                <option value="true">Only Crossbrand</option>
+                <option value="false">Only Single-brand</option>
+              </Select>
+              <Select
+                label={<span className="text-xs">Campaign</span>}
+                value={campaignFilter}
+                onChange={e => setCampaignFilter(e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All campaigns</option>
+                {campaigns.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button variant="outline" onClick={() => {
+                setSearch('');
+                setType('');
+                setCrossbrand('');
+                setCampaignFilter('');
+              }} className="text-sm py-1 px-2">
+                Reset Filters
               </Button>
-            </RequirePermission>
+              <RequirePermission permission={canAddAccount}>
+                <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId} className="text-sm py-1 px-2">
+                  {showAddForm ? 'Cancel' : 'Add Account'}
+                </Button>
+              </RequirePermission>
+            </div>
           </div>
+          {loading ? <div className="skeleton h-10 w-full" /> : (
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR>
+                    {renderSortableHeader('Account', 'name')}
+                    {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
+                    {kpiDisplayCategories.map(cat =>
+                      renderSortableHeader(
+                        kpiLabels[cat],
+                        cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
+                        undefined,
+                        cat
+                      )
+                    )}
+                    {renderSortableHeader('Type', 'accountType')}
+                    {renderSortableHeader('Posts', 'postCount')}
+                    <TH className="!text-center">Actions</TH>
+                  </TR>
+                </THead>
+                <tbody>
+                  {items.length === 0 ? (
+                    <TR>
+                      <TD colSpan={8} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
+                        No accounts found
+                      </TD>
+                    </TR>
+                  ) : (
+                    items.map(a => {
+                      const kpiData = accountKpiMap.get(a.id);
+                      const getKpiEntry = (category: string) => kpiData?.[category] || { target: 0, actual: 0 };
+                      const postCount = a.postCount ?? 0;
+                      const kpiCount = a.kpiCount ?? 0;
+
+                      return (
+                        <TR key={a.id}>
+                          <TD>
+                            <div className="flex items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
+                                {a.tiktokHandle && <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
+                                {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
+                              </div>
+                            </div>
+                          </TD>
+                          <TD className="w-48 align-middle text-left">
+                            {a.campaigns && a.campaigns.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 justify-start">
+                                {a.campaigns.map(campaign => (
+                                  <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                    {campaign.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No campaigns</span>
+                            )}
+                          </TD>
+                          {kpiDisplayCategories.map(cat => {
+                            const entry = getKpiEntry(cat);
+                            return (
+                              <TD key={cat} className="align-middle">
+                                {kpiLoading ? (
+                                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                                ) : (
+                                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                    {entry.actual.toLocaleString()}/{entry.target.toLocaleString()}
+                                  </span>
+                                )}
+                              </TD>
+                            );
+                          })}
+                          <TD>
+                            <span className="text-xs font-semibold px-2 py-1 rounded-full border inline-block" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                              {a.accountType}
+                            </span>
+                          </TD>
+                          <TD>
+                            <div className="text-sm" style={{ color: 'var(--text-primary)' }}>{postCount} post(s)</div>
+                            <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpiCount} KPI(s)</div>
+                          </TD>
+                          <TD>
+                            <div className="flex gap-2 justify-center">
+                              <RequirePermission permission={canEditAccount}>
+                                <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="text-sm px-3 py-1.5">
+                                  Edit
+                                </Button>
+                              </RequirePermission>
+                              <RequirePermission permission={canDelete}>
+                                <Button 
+                                  variant="outline" 
+                                  color="red"
+                                  onClick={() => handleDeleteClick(a)} 
+                                  disabled={deletingIds.has(a.id)} 
+                                  className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
+                                </Button>
+                              </RequirePermission>
+                            </div>
+                          </TD>
+                        </TR>
+                      );
+                    })
+                  )}
+                </tbody>
+              </Table>
+            </TableWrap>
+          )}
         </div>
       </Card>
       {showAddForm && (
@@ -550,117 +661,6 @@ export default function AccountsPage() {
           </form>
         </Dialog>
       </RequirePermission>
-      <div className="mt-4">
-        {loading ? <div className="skeleton h-10 w-full" /> : (
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR>
-                  {renderSortableHeader('Account', 'name')}
-                  {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
-                  {kpiDisplayCategories.map(cat =>
-                    renderSortableHeader(
-                      kpiLabels[cat],
-                      cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
-                      undefined,
-                      cat
-                    )
-                  )}
-                  {renderSortableHeader('Type', 'accountType')}
-                  {renderSortableHeader('Posts', 'postCount')}
-                  <TH className="!text-center">Actions</TH>
-                </TR>
-              </THead>
-              <tbody>
-                {items.length === 0 ? (
-                  <TR>
-                    <TD colSpan={8} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
-                      No accounts found
-                    </TD>
-                  </TR>
-                ) : (
-                  items.map(a => {
-                    const kpiData = accountKpiMap.get(a.id);
-                    const getKpiEntry = (category: string) => kpiData?.[category] || { target: 0, actual: 0 };
-                    const postCount = a.postCount ?? 0;
-                    const kpiCount = a.kpiCount ?? 0;
-
-                    return (
-                      <TR key={a.id}>
-                        <TD>
-                          <div className="flex items-start gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
-                              {a.tiktokHandle && <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
-                              {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
-                            </div>
-                          </div>
-                        </TD>
-                        <TD className="w-48 align-middle text-left">
-                          {a.campaigns && a.campaigns.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 justify-start">
-                              {a.campaigns.map(campaign => (
-                                <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                  {campaign.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No campaigns</span>
-                          )}
-                        </TD>
-                        {kpiDisplayCategories.map(cat => {
-                          const entry = getKpiEntry(cat);
-                          return (
-                            <TD key={cat} className="align-middle">
-                              {kpiLoading ? (
-                                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
-                              ) : (
-                                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                                  {entry.actual.toLocaleString()}/{entry.target.toLocaleString()}
-                                </span>
-                              )}
-                            </TD>
-                          );
-                        })}
-                        <TD>
-                          <span className="text-xs font-semibold px-2 py-1 rounded-full border inline-block" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                            {a.accountType}
-                          </span>
-                        </TD>
-                        <TD>
-                          <div className="text-sm" style={{ color: 'var(--text-primary)' }}>{postCount} post(s)</div>
-                          <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpiCount} KPI(s)</div>
-                        </TD>
-                        <TD>
-                          <div className="flex gap-2 justify-center">
-                            <RequirePermission permission={canEditAccount}>
-                              <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="text-sm px-3 py-1.5">
-                                Edit
-                              </Button>
-                            </RequirePermission>
-                            <RequirePermission permission={canDelete}>
-                              <Button 
-                                variant="outline" 
-                                color="red"
-                                onClick={() => handleDeleteClick(a)} 
-                                disabled={deletingIds.has(a.id)} 
-                                className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
-                              </Button>
-                            </RequirePermission>
-                          </div>
-                        </TD>
-                      </TR>
-                    );
-                  })
-                )}
-              </tbody>
-            </Table>
-          </TableWrap>
-        )}
-      </div>
       <Dialog
         open={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
