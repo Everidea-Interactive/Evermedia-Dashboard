@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
@@ -10,12 +10,11 @@ import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
 import RequirePermission from '../components/RequirePermission';
 import PageHeader from '../components/PageHeader';
+import { TableWrap, Table, THead, TR, TH, TD } from '../components/ui/Table';
 
 type Pic = {
   id: string;
   name: string;
-  contact?: string;
-  notes?: string;
   active: boolean;
   roles: string[];
 };
@@ -23,7 +22,8 @@ type Pic = {
 export default function PicsPage() {
   const { token } = useAuth();
   const { canManagePics, canDelete } = usePermissions();
-  const [items, setItems] = useState<Pic[]>([]);
+  const [allPics, setAllPics] = useState<Pic[]>([]);
+  const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const [active, setActive] = useState('true');
   const [loading, setLoading] = useState(true);
@@ -35,31 +35,48 @@ export default function PicsPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [form, setForm] = useState({
     name: '',
-    contact: '',
-    notes: '',
     active: true,
     roles: [] as string[],
   });
 
   const fetchPics = () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (role) params.set('role', role);
-    if (active) params.set('active', active);
-    api(`/pics?${params.toString()}`, { token })
-      .then(setItems)
+    api(`/pics`, { token })
+      .then(data => {
+        setAllPics(data);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchPics();
-  }, [token, role, active]);
+  }, [token]);
+
+  const filteredItems = useMemo(() => {
+    let filtered = allPics;
+    if (role) {
+      filtered = filtered.filter(p => p.roles.some(r => r.toUpperCase() === role.toUpperCase()));
+    }
+    if (active) {
+      filtered = filtered.filter(p => {
+        if (active === 'true') return p.active === true;
+        if (active === 'false') return p.active === false;
+        return true;
+      });
+    }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.roles || []).some(r => r.toLowerCase().includes(q))
+      );
+    }
+    return filtered;
+  }, [allPics, search, role, active]);
 
   const resetForm = () => {
     setForm({
       name: '',
-      contact: '',
-      notes: '',
       active: true,
       roles: [],
     });
@@ -78,8 +95,6 @@ export default function PicsPage() {
         token,
         body: {
           name: form.name,
-          contact: form.contact || undefined,
-          notes: form.notes || undefined,
           active: form.active,
           roles: form.roles,
         },
@@ -99,8 +114,6 @@ export default function PicsPage() {
     setEditingId(pic.id);
     setForm({
       name: pic.name,
-      contact: pic.contact || '',
-      notes: pic.notes || '',
       active: pic.active,
       roles: [...pic.roles],
     });
@@ -120,8 +133,6 @@ export default function PicsPage() {
         token,
         body: {
           name: form.name,
-          contact: form.contact || undefined,
-          notes: form.notes || undefined,
           active: form.active,
           roles: form.roles,
         },
@@ -183,26 +194,61 @@ export default function PicsPage() {
         title={<h2 className="page-title">PICs</h2>}
       />
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Filters</h2>
-          <RequirePermission permission={canManagePics}>
-            <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
-              {showAddForm ? 'Cancel' : 'Add PIC System'}
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
+            <Input
+              label={<span className="text-xs">Search</span>}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Name or role"
+              className="text-sm py-1.5"
+            />
+            <Select
+              label={<span className="text-xs">Role</span>}
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              className="text-sm py-1.5"
+            >
+              <option value="">All roles</option>
+              <option value="TALENT">TALENT</option>
+              <option value="EDITOR">EDITOR</option>
+              <option value="POSTING">POSTING</option>
+            </Select>
+            <Select
+              label={<span className="text-xs">Active</span>}
+              value={active}
+              onChange={e => setActive(e.target.value)}
+              className="text-sm py-1.5"
+            >
+              <option value="">All</option>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearch('');
+                setRole('');
+                setActive('true');
+              }}
+              className="text-sm py-1 px-2"
+            >
+              Reset Filters
             </Button>
-          </RequirePermission>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Select label="Role" value={role} onChange={e => setRole(e.target.value)}>
-            <option value="">All</option>
-            <option>TALENT</option>
-            <option>EDITOR</option>
-            <option>POSTING</option>
-          </Select>
-          <Select label="Active" value={active} onChange={e => setActive(e.target.value)}>
-            <option value="">All</option>
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </Select>
+            <RequirePermission permission={canManagePics}>
+              <Button
+                variant="primary"
+                color="green"
+                onClick={() => setShowAddForm(!showAddForm)}
+                disabled={!!editingId}
+                className="text-sm py-1 px-2"
+              >
+                {showAddForm ? 'Cancel' : 'Add PIC System'}
+              </Button>
+            </RequirePermission>
+          </div>
         </div>
       </Card>
       <RequirePermission permission={canManagePics}>
@@ -215,16 +261,6 @@ export default function PicsPage() {
               value={form.name}
               onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
               required
-            />
-            <Input
-              label="Contact"
-              value={form.contact}
-              onChange={e => setForm(prev => ({ ...prev, contact: e.target.value }))}
-            />
-            <Input
-              label="Notes"
-              value={form.notes}
-              onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
             />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Roles</label>
@@ -269,37 +305,84 @@ export default function PicsPage() {
         {loading ? (
           <div className="skeleton h-10 w-full" />
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {items.map(p => (
-              <Card key={p.id}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-gray-500">Roles: {p.roles.join(', ')}</div>
-                  </div>
-                  <span className={`badge ${p.active ? 'bg-green-50 border-green-200 text-green-700' : ''}`}>
-                    {p.active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                {p.contact && <div className="text-sm text-gray-600 mt-2">{p.contact}</div>}
-                {p.notes && <div className="text-xs text-gray-500 mt-1">{p.notes}</div>}
-                <RequirePermission permission={canManagePics}>
-                  <div className="flex gap-2 mt-3">
-                    <RequirePermission permission={canManagePics}>
-                      <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="flex-1 text-sm py-1.5">
-                        Edit
-                      </Button>
-                    </RequirePermission>
-                    <RequirePermission permission={canDelete}>
-                      <Button variant="outline" color="red" onClick={() => handleDeleteClick(p.id, p.name)} disabled={deletingIds.has(p.id)} className="flex-1 text-sm py-1.5">
-                        {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
-                      </Button>
-                    </RequirePermission>
-                  </div>
-                </RequirePermission>
-              </Card>
-            ))}
-          </div>
+          <TableWrap>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>PIC</TH>
+                  <TH className="!text-center">Roles</TH>
+                  <TH>Status</TH>
+                  <TH className="!text-center">Actions</TH>
+                </TR>
+              </THead>
+              <tbody>
+                {filteredItems.length === 0 ? (
+                  <TR>
+                    <TD colSpan={4} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
+                      No PICs found
+                    </TD>
+                  </TR>
+                ) : (
+                  filteredItems.map(p => (
+                    <TR key={p.id}>
+                      <TD>
+                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
+                      </TD>
+                      <TD className="text-center">
+                        {p.roles.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {p.roles.map(roleName => (
+                              <span key={roleName} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                {roleName}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No roles</span>
+                        )}
+                      </TD>
+                      <TD>
+                        <span
+                          className="badge border"
+                          style={p.active ? {
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderColor: 'rgba(16, 185, 129, 0.3)',
+                            color: '#10b981',
+                          } : {
+                            backgroundColor: 'var(--bg-tertiary)',
+                            borderColor: 'var(--border-color)',
+                            color: 'var(--text-tertiary)',
+                          }}
+                        >
+                          {p.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </TD>
+                      <TD>
+                        <div className="flex gap-2 justify-center">
+                          <RequirePermission permission={canManagePics}>
+                            <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="text-sm px-3 py-1.5">
+                              Edit
+                            </Button>
+                          </RequirePermission>
+                          <RequirePermission permission={canDelete}>
+                            <Button
+                              variant="outline"
+                              color="red"
+                              onClick={() => handleDeleteClick(p.id, p.name)}
+                              disabled={deletingIds.has(p.id)}
+                              className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
+                            </Button>
+                          </RequirePermission>
+                        </div>
+                      </TD>
+                    </TR>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          </TableWrap>
         )}
       </div>
       <Dialog

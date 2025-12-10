@@ -59,12 +59,17 @@ export default function AccountsPage() {
   });
   const [selectedCampaign, setSelectedCampaign] = useState('');
   const [originalCampaignIds, setOriginalCampaignIds] = useState<string[]>([]);
+  type SortKey = 'name' | 'accountType' | 'postCount' | 'campaignCount' | 'views' | 'qtyPost' | 'fypCount';
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
+    key: 'name',
+    direction: 'asc',
+  });
 
   const kpiDisplayCategories: Array<'VIEWS' | 'QTY_POST' | 'FYP_COUNT'> = ['VIEWS', 'QTY_POST', 'FYP_COUNT'];
   const kpiLabels: Record<string, string> = {
-    VIEWS: 'Views',
-    QTY_POST: 'Qty Post',
-    FYP_COUNT: 'FYP Count',
+    VIEWS: 'KPI Views',
+    QTY_POST: 'KPI Qty Post',
+    FYP_COUNT: 'KPI FYP Count',
   };
 
   const applyClientFilters = useCallback((accounts: Account[]) => {
@@ -90,6 +95,39 @@ export default function AccountsPage() {
     }
     return filtered;
   }, [search, type, crossbrand, campaignFilter]);
+
+  const sortAccounts = useCallback((accounts: Account[]) => {
+    const getSortValue = (a: Account, key: SortKey) => {
+      switch (key) {
+        case 'name':
+          return a.name || '';
+        case 'accountType':
+          return a.accountType || '';
+        case 'postCount':
+          return a.postCount ?? 0;
+        case 'campaignCount':
+          return a.campaigns?.length ?? 0;
+        case 'views':
+          return accountKpiMap.get(a.id)?.VIEWS?.actual ?? 0;
+        case 'qtyPost':
+          return accountKpiMap.get(a.id)?.QTY_POST?.actual ?? 0;
+        case 'fypCount':
+          return accountKpiMap.get(a.id)?.FYP_COUNT?.actual ?? 0;
+        default:
+          return '';
+      }
+    };
+
+    return [...accounts].sort((a, b) => {
+      const aVal = getSortValue(a, sortConfig.key);
+      const bVal = getSortValue(b, sortConfig.key);
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const comparison = aVal.toString().localeCompare(bVal.toString(), undefined, { sensitivity: 'base', numeric: true });
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [sortConfig, accountKpiMap]);
 
   const fetchAccountKpis = async (accountsList: Account[]) => {
     const campaignIds = new Set<string>();
@@ -136,7 +174,7 @@ export default function AccountsPage() {
     try {
       const data = await api(`/accounts`, { token });
       setAllAccounts(data);
-      setItems(applyClientFilters(data));
+      setItems(sortAccounts(applyClientFilters(data)));
       await fetchAccountKpis(data);
     } catch (error) {
       console.error('Failed to fetch accounts', error);
@@ -154,8 +192,8 @@ export default function AccountsPage() {
   }, [token]);
 
   useEffect(() => {
-    setItems(applyClientFilters(allAccounts));
-  }, [applyClientFilters, allAccounts]);
+    setItems(sortAccounts(applyClientFilters(allAccounts)));
+  }, [applyClientFilters, sortAccounts, allAccounts]);
 
   useEffect(() => {
     api('/campaigns', { token }).then(setCampaigns).catch(() => setCampaigns([]));
@@ -287,6 +325,35 @@ export default function AccountsPage() {
     resetForm();
     setEditingId(null);
     setOriginalCampaignIds([]);
+  };
+
+  const handleSortToggle = (key: SortKey) => {
+    setSortConfig(prev => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDir = key === 'postCount' || key === 'campaignCount' || key === 'views' || key === 'qtyPost' || key === 'fypCount' ? 'desc' : 'asc';
+      return { key, direction: defaultDir };
+    });
+  };
+
+  const renderSortableHeader = (label: string, key: SortKey, className?: string, keyProp?: string) => {
+    const isActive = sortConfig.key === key;
+    const indicator = isActive ? (sortConfig.direction === 'asc' ? '▲' : '▼') : '↕';
+    return (
+      <TH className={className} key={keyProp ?? key}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(key)}
+          className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-xs ${isActive ? 'text-emerald-600' : 'opacity-40'}`}>
+            {indicator}
+          </span>
+        </button>
+      </TH>
+    );
   };
 
   return (
@@ -460,13 +527,18 @@ export default function AccountsPage() {
             <Table>
               <THead>
                 <TR>
-                  <TH>Account</TH>
-                  <TH className="w-48">Campaigns</TH>
-                  {kpiDisplayCategories.map(cat => (
-                    <TH key={cat}>{kpiLabels[cat]}</TH>
-                  ))}
-                  <TH>Type</TH>
-                  <TH>Posts & KPIs</TH>
+                  {renderSortableHeader('Account', 'name')}
+                  {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
+                  {kpiDisplayCategories.map(cat =>
+                    renderSortableHeader(
+                      kpiLabels[cat],
+                      cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
+                      undefined,
+                      cat
+                    )
+                  )}
+                  {renderSortableHeader('Type', 'accountType')}
+                  {renderSortableHeader('Posts', 'postCount')}
                   <TH className="!text-center">Actions</TH>
                 </TR>
               </THead>
