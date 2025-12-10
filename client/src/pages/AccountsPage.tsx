@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
@@ -10,6 +10,7 @@ import Dialog from '../components/ui/Dialog';
 import Toast from '../components/ui/Toast';
 import PageHeader from '../components/PageHeader';
 import RequirePermission from '../components/RequirePermission';
+import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 
 type Campaign = {
   id: string;
@@ -34,16 +35,20 @@ export default function AccountsPage() {
   const { token } = useAuth();
   const { canAddAccount, canEditAccount, canDelete } = usePermissions();
   const [items, setItems] = useState<Account[]>([]);
+  const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [accountKpiMap, setAccountKpiMap] = useState<Map<string, Record<string, { target: number; actual: number }>>>(new Map());
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
   const [crossbrand, setCrossbrand] = useState('');
+  const [campaignFilter, setCampaignFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [kpiLoading, setKpiLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; hasBlockers: boolean; blockerMessage?: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -54,21 +59,141 @@ export default function AccountsPage() {
   });
   const [selectedCampaign, setSelectedCampaign] = useState('');
   const [originalCampaignIds, setOriginalCampaignIds] = useState<string[]>([]);
+  type SortKey = 'name' | 'accountType' | 'postCount' | 'campaignCount' | 'views' | 'qtyPost' | 'fypCount';
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
+    key: 'name',
+    direction: 'asc',
+  });
 
-  const fetchAccounts = () => {
+  const kpiDisplayCategories: Array<'VIEWS' | 'QTY_POST' | 'FYP_COUNT'> = ['VIEWS', 'QTY_POST', 'FYP_COUNT'];
+  const kpiLabels: Record<string, string> = {
+    VIEWS: 'KPI Views',
+    QTY_POST: 'KPI Qty Post',
+    FYP_COUNT: 'KPI FYP Count',
+  };
+
+  const applyClientFilters = useCallback((accounts: Account[]) => {
+    let filtered = accounts;
+    if (search.trim()) {
+      const query = search.trim().toLowerCase();
+      filtered = filtered.filter(acc =>
+        acc.name.toLowerCase().includes(query) ||
+        (acc.tiktokHandle || '').toLowerCase().includes(query)
+      );
+    }
+    if (type) {
+      filtered = filtered.filter(acc => acc.accountType === type);
+    }
+    if (crossbrand) {
+      filtered = filtered.filter(acc => {
+        const isCross = acc.isCrossbrand ?? false;
+        return crossbrand === 'true' ? isCross : !isCross;
+      });
+    }
+    if (campaignFilter) {
+      filtered = filtered.filter(acc => (acc.campaigns || []).some(c => c.id === campaignFilter));
+    }
+    return filtered;
+  }, [search, type, crossbrand, campaignFilter]);
+
+  const sortAccounts = useCallback((accounts: Account[]) => {
+    const getSortValue = (a: Account, key: SortKey) => {
+      switch (key) {
+        case 'name':
+          return a.name || '';
+        case 'accountType':
+          return a.accountType || '';
+        case 'postCount':
+          return a.postCount ?? 0;
+        case 'campaignCount':
+          return a.campaigns?.length ?? 0;
+        case 'views':
+          return accountKpiMap.get(a.id)?.VIEWS?.actual ?? 0;
+        case 'qtyPost':
+          return accountKpiMap.get(a.id)?.QTY_POST?.actual ?? 0;
+        case 'fypCount':
+          return accountKpiMap.get(a.id)?.FYP_COUNT?.actual ?? 0;
+        default:
+          return '';
+      }
+    };
+
+    return [...accounts].sort((a, b) => {
+      const aVal = getSortValue(a, sortConfig.key);
+      const bVal = getSortValue(b, sortConfig.key);
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const comparison = aVal.toString().localeCompare(bVal.toString(), undefined, { sensitivity: 'base', numeric: true });
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [sortConfig, accountKpiMap]);
+
+  const fetchAccountKpis = async (accountsList: Account[]) => {
+    const campaignIds = new Set<string>();
+    accountsList.forEach((account) => {
+      (account.campaigns || []).forEach((c) => campaignIds.add(c.id));
+    });
+
+    if (campaignIds.size === 0) {
+      setAccountKpiMap(new Map());
+      return;
+    }
+
+    const nextMap = new Map<string, Record<string, { target: number; actual: number }>>();
+    const promises = Array.from(campaignIds).map(async (campaignId) => {
+      try {
+        const kpis = await api(`/campaigns/${campaignId}/kpis`, { token });
+        (kpis || []).forEach((k: any) => {
+          if (!k.accountId) return;
+          const accountId = k.accountId as string;
+          const category = k.category as string;
+          const target = Number(k.target ?? 0);
+          const actual = Number(k.actual ?? 0);
+          if (!nextMap.has(accountId)) {
+            nextMap.set(accountId, {});
+          }
+          const existing = nextMap.get(accountId)![category] || { target: 0, actual: 0 };
+          nextMap.get(accountId)![category] = {
+            target: existing.target + target,
+            actual: existing.actual + actual,
+          };
+        });
+      } catch (error) {
+        console.error(`Failed to fetch KPIs for campaign ${campaignId}:`, error);
+      }
+    });
+
+    await Promise.allSettled(promises);
+    setAccountKpiMap(nextMap);
+  };
+
+  const fetchAccounts = async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    if (type) params.set('accountType', type);
-    if (crossbrand) params.set('crossbrand', crossbrand);
-    api(`/accounts?${params.toString()}`, { token })
-      .then(setItems)
-      .finally(() => setLoading(false));
+    setKpiLoading(true);
+    try {
+      const data = await api(`/accounts`, { token });
+      setAllAccounts(data);
+      setItems(sortAccounts(applyClientFilters(data)));
+      await fetchAccountKpis(data);
+    } catch (error) {
+      console.error('Failed to fetch accounts', error);
+      setAllAccounts([]);
+      setItems([]);
+      setAccountKpiMap(new Map());
+    } finally {
+      setLoading(false);
+      setKpiLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchAccounts();
-  }, [token, search, type, crossbrand]);
+  }, [token]);
+
+  useEffect(() => {
+    setItems(sortAccounts(applyClientFilters(allAccounts)));
+  }, [applyClientFilters, sortAccounts, allAccounts]);
 
   useEffect(() => {
     api('/campaigns', { token }).then(setCampaigns).catch(() => setCampaigns([]));
@@ -162,22 +287,22 @@ export default function AccountsPage() {
     }
   };
 
-  const handleDeleteClick = (id: string, name: string) => {
-    const account = items.find(a => a.id === id);
-    if (account && ((account.postCount ?? 0) > 0 || (account.kpiCount ?? 0) > 0)) {
-      return; // Don't open dialog if account has posts or KPIs
+  const handleDeleteClick = (account: Account) => {
+    const postCount = account.postCount ?? 0;
+    const kpiCount = account.kpiCount ?? 0;
+    const hasBlockers = postCount > 0 || kpiCount > 0;
+    let blockerMessage: string | undefined;
+    if (hasBlockers) {
+      if (postCount > 0 && kpiCount > 0) blockerMessage = `Cannot delete: ${postCount} post(s) and ${kpiCount} KPI(s) associated`;
+      else if (postCount > 0) blockerMessage = `Cannot delete: ${postCount} post(s) associated`;
+      else if (kpiCount > 0) blockerMessage = `Cannot delete: ${kpiCount} KPI(s) associated`;
     }
-    setDeleteConfirm({ id, name });
+    setDeleteConfirm({ id: account.id, name: account.name, hasBlockers, blockerMessage });
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteConfirm) return;
+    if (!deleteConfirm || deleteConfirm.hasBlockers) return;
     const { id } = deleteConfirm;
-    const account = items.find(a => a.id === id);
-    if (account && ((account.postCount ?? 0) > 0 || (account.kpiCount ?? 0) > 0)) {
-      setDeleteConfirm(null);
-      return;
-    }
     setDeletingIds(prev => new Set(prev).add(id));
     setDeleteConfirm(null);
     try {
@@ -202,6 +327,35 @@ export default function AccountsPage() {
     setOriginalCampaignIds([]);
   };
 
+  const handleSortToggle = (key: SortKey) => {
+    setSortConfig(prev => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDir = key === 'postCount' || key === 'campaignCount' || key === 'views' || key === 'qtyPost' || key === 'fypCount' ? 'desc' : 'asc';
+      return { key, direction: defaultDir };
+    });
+  };
+
+  const renderSortableHeader = (label: string, key: SortKey, className?: string, keyProp?: string) => {
+    const isActive = sortConfig.key === key;
+    const indicator = isActive ? (sortConfig.direction === 'asc' ? '▲' : '▼') : '↕';
+    return (
+      <TH className={className} key={keyProp ?? key}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(key)}
+          className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-xs ${isActive ? 'text-emerald-600' : 'opacity-40'}`}>
+            {indicator}
+          </span>
+        </button>
+      </TH>
+    );
+  };
+
   return (
     <div>
       <PageHeader
@@ -210,28 +364,64 @@ export default function AccountsPage() {
         title={<h2 className="page-title">Accounts</h2>}
       />
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Filters</h2>
-          <RequirePermission permission={canAddAccount}>
-            <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
-              {showAddForm ? 'Cancel' : 'Add Account'}
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-1.5 sm:gap-2 w-full">
+            <Input
+              label={<span className="text-xs">Search</span>}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Name or handle"
+              className="text-sm py-1.5"
+            />
+            <Select
+              label={<span className="text-xs">Type</span>}
+              value={type}
+              onChange={e => setType(e.target.value)}
+              className="text-sm py-1.5"
+            >
+              <option value="">All</option>
+              <option value="CROSSBRAND">CROSSBRAND</option>
+              <option value="NEW_PERSONA">NEW_PERSONA</option>
+              <option value="KOL">KOL</option>
+              <option value="PROXY">PROXY</option>
+            </Select>
+            <Select
+              label={<span className="text-xs">Crossbrand</span>}
+              value={crossbrand}
+              onChange={e => setCrossbrand(e.target.value)}
+              className="text-sm py-1.5"
+            >
+              <option value="">All</option>
+              <option value="true">Only Crossbrand</option>
+              <option value="false">Only Single-brand</option>
+            </Select>
+            <Select
+              label={<span className="text-xs">Campaign</span>}
+              value={campaignFilter}
+              onChange={e => setCampaignFilter(e.target.value)}
+              className="text-sm py-1.5"
+            >
+              <option value="">All campaigns</option>
+              {campaigns.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button variant="outline" onClick={() => {
+              setSearch('');
+              setType('');
+              setCrossbrand('');
+              setCampaignFilter('');
+            }} className="text-sm py-1 px-2">
+              Reset Filters
             </Button>
-          </RequirePermission>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-          <div className="sm:col-span-2"><Input label="Search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Name or handle" /></div>
-          <Select label="Type" value={type} onChange={e => setType(e.target.value)}>
-            <option value="">All</option>
-            <option>CROSSBRAND</option>
-            <option>NEW_PERSONA</option>
-            <option>KOL</option>
-            <option>PROXY</option>
-          </Select>
-          <Select label="Crossbrand" value={crossbrand} onChange={e => setCrossbrand(e.target.value)}>
-            <option value="">All</option>
-            <option value="true">Only Crossbrand</option>
-            <option value="false">Only Single-brand</option>
-          </Select>
+            <RequirePermission permission={canAddAccount}>
+              <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId} className="text-sm py-1 px-2">
+                {showAddForm ? 'Cancel' : 'Add Account'}
+              </Button>
+            </RequirePermission>
+          </div>
         </div>
       </Card>
       {(showAddForm || editingId) && (
@@ -333,64 +523,113 @@ export default function AccountsPage() {
       )}
       <div className="mt-4">
         {loading ? <div className="skeleton h-10 w-full" /> : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {items.map(a => (
-              <Card key={a.id} className="h-full">
-                <div className="flex flex-col h-full">
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
-                    {a.isCrossbrand && <span className="badge" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>Crossbrand</span>}
-                  </div>
-                  {a.tiktokHandle && <div className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
-                  <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Type: {a.accountType}</div>
-                  {a.campaigns && a.campaigns.length > 0 && (
-                    <div className="mt-2">
-                      <div className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>Campaigns:</div>
-                      <div className="flex flex-wrap gap-1">
-                        {a.campaigns.map(campaign => (
-                          <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                            {campaign.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+          <TableWrap>
+            <Table>
+              <THead>
+                <TR>
+                  {renderSortableHeader('Account', 'name')}
+                  {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
+                  {kpiDisplayCategories.map(cat =>
+                    renderSortableHeader(
+                      kpiLabels[cat],
+                      cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
+                      undefined,
+                      cat
+                    )
                   )}
-                  {a.notes && <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
-                  <div className="mt-auto pt-3">
-                    <div className="flex gap-2">
-                      <RequirePermission permission={canEditAccount}>
-                        <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="flex-1 text-sm py-1.5">
-                          Edit
-                        </Button>
-                      </RequirePermission>
-                      <RequirePermission permission={canDelete}>
-                        <Button 
-                          variant="outline" 
-                          color="red"
-                          onClick={() => handleDeleteClick(a.id, a.name)} 
-                          disabled={deletingIds.has(a.id) || (a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0} 
-                          className="flex-1 text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
-                        </Button>
-                      </RequirePermission>
-                    </div>
-                    <RequirePermission permission={canDelete}>
-                      <div className="mt-2 text-xs min-h-[1.25rem]" style={{ color: '#dc2626' }}>
-                        {((a.postCount ?? 0) > 0 || (a.kpiCount ?? 0) > 0) && (
-                          <>
-                            {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.postCount} post(s) and ${a.kpiCount} KPI(s) associated`}
-                            {(a.postCount ?? 0) > 0 && (a.kpiCount ?? 0) === 0 && `Cannot delete: ${a.postCount} post(s) associated`}
-                            {(a.postCount ?? 0) === 0 && (a.kpiCount ?? 0) > 0 && `Cannot delete: ${a.kpiCount} KPI(s) associated`}
-                          </>
-                        )}
-                      </div>
-                    </RequirePermission>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                  {renderSortableHeader('Type', 'accountType')}
+                  {renderSortableHeader('Posts', 'postCount')}
+                  <TH className="!text-center">Actions</TH>
+                </TR>
+              </THead>
+              <tbody>
+                {items.length === 0 ? (
+                  <TR>
+                    <TD colSpan={8} className="text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
+                      No accounts found
+                    </TD>
+                  </TR>
+                ) : (
+                  items.map(a => {
+                    const kpiData = accountKpiMap.get(a.id);
+                    const getKpiEntry = (category: string) => kpiData?.[category] || { target: 0, actual: 0 };
+                    const postCount = a.postCount ?? 0;
+                    const kpiCount = a.kpiCount ?? 0;
+
+                    return (
+                      <TR key={a.id}>
+                        <TD>
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
+                              {a.tiktokHandle && <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
+                              {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
+                            </div>
+                          </div>
+                        </TD>
+                        <TD className="w-48 align-middle text-left">
+                          {a.campaigns && a.campaigns.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 justify-start">
+                              {a.campaigns.map(campaign => (
+                                <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                  {campaign.name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No campaigns</span>
+                          )}
+                        </TD>
+                        {kpiDisplayCategories.map(cat => {
+                          const entry = getKpiEntry(cat);
+                          return (
+                            <TD key={cat} className="align-middle">
+                              {kpiLoading ? (
+                                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                              ) : (
+                                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                  {entry.actual.toLocaleString()}/{entry.target.toLocaleString()}
+                                </span>
+                              )}
+                            </TD>
+                          );
+                        })}
+                        <TD>
+                          <span className="text-xs font-semibold px-2 py-1 rounded-full border inline-block" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                            {a.accountType}
+                          </span>
+                        </TD>
+                        <TD>
+                          <div className="text-sm" style={{ color: 'var(--text-primary)' }}>{postCount} post(s)</div>
+                          <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpiCount} KPI(s)</div>
+                        </TD>
+                        <TD>
+                          <div className="flex gap-2 justify-center">
+                            <RequirePermission permission={canEditAccount}>
+                              <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="text-sm px-3 py-1.5">
+                                Edit
+                              </Button>
+                            </RequirePermission>
+                            <RequirePermission permission={canDelete}>
+                              <Button 
+                                variant="outline" 
+                                color="red"
+                                onClick={() => handleDeleteClick(a)} 
+                                disabled={deletingIds.has(a.id)} 
+                                className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </RequirePermission>
+                          </div>
+                        </TD>
+                      </TR>
+                    );
+                  })
+                )}
+              </tbody>
+            </Table>
+          </TableWrap>
         )}
       </div>
       <Dialog
@@ -402,7 +641,12 @@ export default function AccountsPage() {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               Cancel
             </Button>
-            <Button variant="primary" color="red" onClick={handleDeleteConfirm}>
+            <Button
+              variant="primary"
+              color="red"
+              onClick={handleDeleteConfirm}
+              disabled={!deleteConfirm || deleteConfirm.hasBlockers || deletingIds.has(deleteConfirm.id)}
+            >
               Delete
             </Button>
           </>
@@ -412,7 +656,7 @@ export default function AccountsPage() {
           Are you sure you want to delete <strong>"{deleteConfirm?.name}"</strong>?
         </p>
         <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
-          This action cannot be undone. If this account has posts or KPIs associated with it, the deletion will fail.
+          This action cannot be undone. {deleteConfirm?.hasBlockers ? 'This account cannot be deleted while posts or KPIs are associated.' : 'All related links will be removed.'}
         </p>
       </Dialog>
       {toast && (

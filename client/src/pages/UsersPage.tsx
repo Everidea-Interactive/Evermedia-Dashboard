@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
@@ -29,6 +29,13 @@ export default function UsersPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  type SortKey = 'name' | 'email' | 'role' | 'createdAt';
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
+    key: 'name',
+    direction: 'asc',
+  });
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -191,6 +198,77 @@ export default function UsersPage() {
     }
   };
 
+  const handleSortToggle = (key: SortKey) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDir = key === 'createdAt' ? 'desc' : 'asc';
+      return { key, direction: defaultDir };
+    });
+  };
+
+  const renderSortableHeader = (label: string, key: SortKey, className?: string) => {
+    const isActive = sortConfig.key === key;
+    const indicator = isActive ? (sortConfig.direction === 'asc' ? '▲' : '▼') : '↕';
+    return (
+      <TH className={className}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(key)}
+          className="flex items-center gap-1 w-full text-left select-none hover:text-emerald-600 transition-colors"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-xs ${isActive ? 'text-emerald-600' : 'opacity-40'}`}>
+            {indicator}
+          </span>
+        </button>
+      </TH>
+    );
+  };
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = items.filter(u => {
+      const matchesSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      const matchesRole = !roleFilter || u.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+
+    const getSortValue = (u: User, key: SortKey) => {
+      switch (key) {
+        case 'name':
+          return u.name || '';
+        case 'email':
+          return u.email || '';
+        case 'role':
+          return u.role || '';
+        case 'createdAt':
+          return new Date(u.createdAt).getTime();
+        default:
+          return '';
+      }
+    };
+
+    const sorted = [...filtered].sort((a, b) => {
+      const aIsCurrent = a.id === currentUser?.id;
+      const bIsCurrent = b.id === currentUser?.id;
+      if (aIsCurrent && !bIsCurrent) return -1;
+      if (!aIsCurrent && bIsCurrent) return 1;
+
+      const aVal = getSortValue(a, sortConfig.key);
+      const bVal = getSortValue(b, sortConfig.key);
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const comparison = aVal.toString().localeCompare(bVal.toString(), undefined, { sensitivity: 'base', numeric: true });
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [items, search, roleFilter, sortConfig, currentUser]);
+
   return (
     <div>
       <PageHeader
@@ -199,11 +277,49 @@ export default function UsersPage() {
         title={<h2 className="page-title">User Management</h2>}
       />
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Users</h2>
-          <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} disabled={!!editingId}>
-            {showAddForm ? 'Cancel' : 'Add User'}
-          </Button>
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 w-full">
+            <Input
+              label={<span className="text-xs">Search</span>}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Name or email"
+              className="text-sm py-1.5"
+            />
+            <Select
+              label={<span className="text-xs">Role</span>}
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+              className="text-sm py-1.5"
+            >
+              <option value="">All roles</option>
+              <option value="ADMIN">ADMIN</option>
+              <option value="CAMPAIGN_MANAGER">CAMPAIGN_MANAGER</option>
+              <option value="EDITOR">EDITOR</option>
+              <option value="VIEWER">VIEWER</option>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearch('');
+                setRoleFilter('');
+              }}
+              className="text-sm py-1 px-2"
+            >
+              Reset Filters
+            </Button>
+            <Button
+              variant="primary"
+              color="green"
+              onClick={() => setShowAddForm(!showAddForm)}
+              disabled={!!editingId}
+              className="text-sm py-1 px-2"
+            >
+              {showAddForm ? 'Cancel' : 'Add User'}
+            </Button>
+          </div>
         </div>
       </Card>
       {(showAddForm || editingId) && (
@@ -263,15 +379,15 @@ export default function UsersPage() {
             <Table>
               <THead>
                 <TR>
-                  <TH>Name</TH>
-                  <TH>Email</TH>
-                  <TH>Role</TH>
-                  <TH>Created At</TH>
+                  {renderSortableHeader('Name', 'name')}
+                  {renderSortableHeader('Email', 'email')}
+                  {renderSortableHeader('Role', 'role')}
+                  {renderSortableHeader('Created At', 'createdAt')}
                   <TH>Actions</TH>
                 </TR>
               </THead>
               <tbody>
-                {items.map(user => {
+                {filteredUsers.map(user => {
                   const badgeStyle = getRoleBadgeColor(user.role);
                   const isCurrentUser = user.id === currentUser?.id;
                   return (
@@ -361,4 +477,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
