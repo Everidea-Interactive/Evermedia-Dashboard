@@ -26,12 +26,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 border-b" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', transition: 'background-color 0.2s ease, border-color 0.2s ease' }}>
         <div className="container-pro">
           {/* Main header bar */}
-          <div className="h-16 flex items-center justify-between">
+          <div className="h-16 flex items-center justify-between gap-2 min-w-0">
             {/* Logo and brand */}
             <Link
               to="/"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-3 rounded-lg px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+              className="flex items-center gap-3 rounded-lg px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 flex-shrink-0"
             >
               <img src="/favicon.svg" alt="Evermedia Dashboard" className="h-9 w-9 rounded-lg" />
               <div className="hidden sm:block">
@@ -40,11 +40,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-1 min-w-0 flex-1 overflow-x-auto scrollbar-hide">
               <NavLink
                 to="/campaigns"
                 className={({ isActive }) => {
-                  const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                  const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                   return isActive
                     ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                     : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -57,9 +57,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Campaigns
               </NavLink>
               <NavLink
+                to="/ads-dashboard"
+                className={({ isActive }) => {
+                  const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
+                  return isActive
+                    ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
+                    : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
+                }}
+                style={({ isActive }) => ({
+                  color: isActive ? '#2563eb' : 'var(--text-secondary)',
+                  backgroundColor: isActive ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                } as React.CSSProperties)}
+              >
+                Ads Dashboard
+              </NavLink>
+              <NavLink
                 to="/daily"
                 className={({ isActive }) => {
-                  const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                  const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                   return isActive
                     ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                     : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -74,7 +89,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLink
                 to="/posts/all"
                 className={({ isActive }) => {
-                  const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                  const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                   return isActive
                     ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                     : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -89,7 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLink
                 to="/accounts"
                 className={({ isActive }) => {
-                  const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                  const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                   return isActive
                     ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                     : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -104,7 +119,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLink
                 to="/pics"
                 className={({ isActive }) => {
-                  const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                  const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                   return isActive
                     ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                     : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -121,7 +136,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <NavLink
                     to="/users"
                     className={({ isActive }) => {
-                      const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                      const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                       return isActive
                         ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                         : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -136,7 +151,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <NavLink
                     to="/activity-logs"
                     className={({ isActive }) => {
-                      const base = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+                      const base = 'px-3 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0';
                       return isActive
                         ? `${base} text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400`
                         : `${base} hover:bg-gray-100 dark:hover:bg-gray-800`;
@@ -153,7 +168,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <RequirePermission permission={canAddPost}>
                 <Link
                   to="/posts/new"
-                  className="btn btn-primary text-sm ml-2"
+                  className="btn btn-primary text-sm ml-2 whitespace-nowrap flex-shrink-0"
                 >
                   Add new Post
                 </Link>
@@ -161,7 +176,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </nav>
 
             {/* Right side actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {/* Light toggle button */}
               <button
                 onClick={toggleTheme}
@@ -245,6 +260,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <MobileNavLink
                   to="/campaigns"
                   label="Campaigns"
+                  onClick={() => setMobileMenuOpen(false)}
+                />
+                <MobileNavLink
+                  to="/ads-dashboard"
+                  label="Ads Dashboard"
                   onClick={() => setMobileMenuOpen(false)}
                 />
                 <MobileNavLink

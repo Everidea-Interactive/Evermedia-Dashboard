@@ -478,7 +478,7 @@ export default function CampaignsPage() {
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Views</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.views?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-xl md:text-lg lg:text-2xl font-semibold break-words">{engagement?.views?.toLocaleString() ?? '-'}</div>
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Likes</div>
