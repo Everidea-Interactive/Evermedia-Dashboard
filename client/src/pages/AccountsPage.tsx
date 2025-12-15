@@ -16,6 +16,7 @@ type Campaign = {
   id: string;
   name: string;
   categories: string[];
+  status?: string;
 };
 
 type Account = {
@@ -130,18 +131,40 @@ export default function AccountsPage() {
   }, [sortConfig, accountKpiMap]);
 
   const fetchAccountKpis = async (accountsList: Account[]) => {
-    const campaignIds = new Set<string>();
+    // First, collect all campaign IDs from accounts
+    const allCampaignIds = new Set<string>();
     accountsList.forEach((account) => {
-      (account.campaigns || []).forEach((c) => campaignIds.add(c.id));
+      (account.campaigns || []).forEach((c) => allCampaignIds.add(c.id));
     });
 
-    if (campaignIds.size === 0) {
+    if (allCampaignIds.size === 0) {
+      setAccountKpiMap(new Map());
+      return;
+    }
+
+    // Fetch campaign details to filter for active campaigns only
+    let activeCampaignIds: string[] = [];
+    try {
+      const allCampaigns = await api('/campaigns', { token });
+      const activeCampaigns = (allCampaigns || []).filter((c: any) => c.status === 'ACTIVE');
+      activeCampaignIds = activeCampaigns.map((c: any) => c.id);
+    } catch (error) {
+      console.error('Failed to fetch campaigns for status filtering:', error);
+      // If we can't fetch campaigns, fall back to empty array (no KPIs will be shown)
+      setAccountKpiMap(new Map());
+      return;
+    }
+
+    // Filter to only include active campaigns that are associated with accounts
+    const campaignIds = Array.from(allCampaignIds).filter(id => activeCampaignIds.includes(id));
+
+    if (campaignIds.length === 0) {
       setAccountKpiMap(new Map());
       return;
     }
 
     const nextMap = new Map<string, Record<string, { target: number; actual: number }>>();
-    const promises = Array.from(campaignIds).map(async (campaignId) => {
+    const promises = campaignIds.map(async (campaignId) => {
       try {
         const kpis = await api(`/campaigns/${campaignId}/kpis`, { token });
         (kpis || []).forEach((k: any) => {

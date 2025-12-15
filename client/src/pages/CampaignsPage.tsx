@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import Card from '../components/ui/Card';
@@ -55,9 +55,18 @@ const sanitizeNumberInput = (value: string): string => {
   return num === '' ? '0' : num;
 };
 
+// Helper function to format month from date
+const formatMonth = (dateString: string): string => {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '-';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return months[date.getMonth()];
+};
+
 export default function CampaignsPage() {
   const { token } = useAuth();
   const { canManageCampaigns, canDelete } = usePermissions();
+  const location = useLocation();
   const [items, setItems] = useState<Campaign[]>([]);
   const [allItems, setAllItems] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -107,6 +116,25 @@ export default function CampaignsPage() {
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
+  const previousLocationRef = useRef<string>('');
+
+  const fetchKPIs = useCallback(async () => {
+    if (allItems.length === 0) return;
+    
+    // Fetch KPIs for all campaigns
+    const kpiMap = new Map<string, any[]>();
+    const kpiPromises = allItems.map(async (campaign: Campaign) => {
+      try {
+        const kpis = await api(`/campaigns/${campaign.id}/kpis`, { token });
+        kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis : []);
+      } catch (error) {
+        console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, error);
+        kpiMap.set(campaign.id, []);
+      }
+    });
+    await Promise.allSettled(kpiPromises);
+    setCampaignKpisMap(kpiMap);
+  }, [allItems, token]);
 
   const fetchCampaigns = () => {
     setLoading(true);
@@ -240,6 +268,35 @@ export default function CampaignsPage() {
       .then(setEngagement)
       .catch(() => setEngagement(null));
   }, [token]);
+
+  // Refresh KPIs when navigating back to campaigns page from detail page
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const previousPath = previousLocationRef.current;
+    
+    // If we're on the campaigns page and came from a campaign detail page, refresh KPIs
+    if (currentPath === '/campaigns' || currentPath === '/') {
+      if (previousPath && previousPath.startsWith('/campaigns/') && previousPath !== currentPath) {
+        fetchKPIs();
+      }
+    }
+    
+    previousLocationRef.current = currentPath;
+  }, [location.pathname, fetchKPIs]);
+
+  // Refresh KPIs when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && allItems.length > 0) {
+        fetchKPIs();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [allItems.length, fetchKPIs]);
 
   useEffect(() => {
     // Extract unique categories from all campaigns
@@ -683,6 +740,7 @@ export default function CampaignsPage() {
                       </button>
                     </TH>
                     <TH>KPI Overview</TH>
+                    <TH>Period</TH>
                     <TH>
                       <button
                         type="button"
@@ -756,6 +814,7 @@ export default function CampaignsPage() {
                             </div>
                           </div>
                         </TD>
+                        <TD>{formatMonth(c.startDate)}</TD>
                         <TD>{formatDate(c.startDate)}</TD>
                         <TD>{formatDate(c.endDate)}</TD>
                         <TD>

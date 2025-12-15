@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
-import { recalculateKPIs, recalculateCampaignKPIs } from '../utils/kpiRecalculation.js';
+import { recalculateKPIs, recalculateCampaignKPIs, recalculateCampaignGMV } from '../utils/kpiRecalculation.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -34,6 +34,10 @@ router.post('/', async (req: AuthRequest, res) => {
   // Recalculate KPIs to populate actual values from existing posts
   if (accountId) {
     await recalculateKPIs(campaignId, accountId);
+    // If creating an account-level GMV_IDR KPI, also update campaign-level GMV
+    if (category === 'GMV_IDR') {
+      await recalculateCampaignGMV(campaignId);
+    }
   } else {
     await recalculateCampaignKPIs(campaignId);
   }
@@ -90,6 +94,11 @@ router.put('/:id', async (req: AuthRequest, res) => {
   
   if (error || !kpi) return res.status(404).json({ error: 'Not found' });
   
+  // If an account's GMV_IDR actual was updated, recalculate campaign-level GMV
+  if (kpi.accountId && kpi.category === 'GMV_IDR' && actual !== undefined) {
+    await recalculateCampaignGMV(kpi.campaignId);
+  }
+  
   // Log activity with specific changed fields only
   // Only compare fields that were actually requested to be updated
   const fieldsToCompare = Object.keys(updateData).filter(field => !['createdAt', 'updatedAt', 'id'].includes(field));
@@ -136,6 +145,11 @@ router.delete('/:id', async (req: AuthRequest, res) => {
   
   const { error } = await supabase.from('KPI').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
+  
+  // If an account's GMV_IDR KPI was deleted, recalculate campaign-level GMV
+  if (kpi && kpi.accountId && kpi.category === 'GMV_IDR') {
+    await recalculateCampaignGMV(kpi.campaignId);
+  }
   
   // Log activity with specific fields
   if (kpi) {

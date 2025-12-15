@@ -16,6 +16,7 @@ import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 import EngagementVisualizer from '../components/EngagementVisualizer';
 import AccountKpiEditModal from '../components/AccountKpiEditModal';
+import AccountGmvEditModal from '../components/AccountGmvEditModal';
 import AccountDropdownFilter from '../components/AccountDropdownFilter';
 import Papa from 'papaparse';
 
@@ -88,6 +89,7 @@ export default function CampaignDetailPage() {
   const [deletingPost, setDeletingPost] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [editingAccountKpi, setEditingAccountKpi] = useState<string | null>(null);
+  const [editingAccountGmv, setEditingAccountGmv] = useState<string | null>(null);
   const [removeAccountConfirm, setRemoveAccountConfirm] = useState<{ id: string; name: string } | null>(null);
   const [postFilters, setPostFilters] = useState({
     accountId: '',
@@ -1497,6 +1499,9 @@ export default function CampaignDetailPage() {
                   <Button variant="outline" color="blue" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setEditingAccountKpi(account.id)}>
                     Edit KPIs
                   </Button>
+                  <Button variant="outline" color="blue" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setEditingAccountGmv(account.id)}>
+                    Edit GMV
+                  </Button>
                   <Button variant="ghost" color="red" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setRemoveAccountConfirm({ id: account.id, name: account.name })} disabled={accountRemoving[account.id]}>
                     {accountRemoving[account.id] ? 'Removing…' : 'Remove'}
                   </Button>
@@ -2642,6 +2647,15 @@ export default function CampaignDetailPage() {
           onClose={() => setEditingAccountKpi(null)}
           campaignId={id}
           accountId={editingAccountKpi}
+          onSuccess={handleRefreshCampaign}
+        />
+      )}
+      {id && editingAccountGmv && (
+        <AccountGmvEditModal
+          open={!!editingAccountGmv}
+          onClose={() => setEditingAccountGmv(null)}
+          campaignId={id}
+          accountId={editingAccountGmv}
           onSuccess={handleRefreshCampaign}
         />
       )}
