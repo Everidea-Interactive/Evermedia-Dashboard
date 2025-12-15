@@ -34,6 +34,10 @@ export default function AdsDashboardPage() {
     brandName: '',
     quotationNumber: '',
   });
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
 
   useEffect(() => {
     fetchData();
@@ -153,12 +157,32 @@ export default function AdsDashboardPage() {
     return applyFilters(allCampaignData);
   }, [allCampaignData, applyFilters]);
 
+  // Client-side pagination
+  const paginatedCampaignData = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return filteredCampaignData.slice(start, end);
+  }, [filteredCampaignData, pagination]);
+
+  const totalPages = Math.ceil(filteredCampaignData.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
   const handleClearFilters = () => {
     setFilters({
       name: '',
       brandName: '',
       quotationNumber: '',
     });
+    setPagination(prev => ({ ...prev, offset: 0 }));
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPagination(prev => ({ ...prev, offset: 0 })); // Reset to first page when filtering
+  };
+
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPagination({ limit: newLimit, offset: 0 });
   };
 
   const hasFilters = Boolean(
@@ -198,14 +222,14 @@ export default function AdsDashboardPage() {
               <Input
                 label={<span className="text-xs">Campaign Name</span>}
                 value={filters.name}
-                onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
+                onChange={e => handleFilterChange('name', e.target.value)}
                 placeholder="Search by name..."
                 className="text-sm py-1.5"
               />
               <Select 
                 label={<span className="text-xs">Brand Name</span>}
                 value={filters.brandName} 
-                onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
+                onChange={e => handleFilterChange('brandName', e.target.value)}
                 className="text-sm py-1.5"
               >
                 <option value="">All Brands</option>
@@ -216,7 +240,7 @@ export default function AdsDashboardPage() {
               <Input
                 label={<span className="text-xs">Quotation Number</span>}
                 value={filters.quotationNumber}
-                onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
+                onChange={e => handleFilterChange('quotationNumber', e.target.value)}
                 placeholder="Search by quotation..."
                 className="text-sm py-1.5"
               />
@@ -248,40 +272,87 @@ export default function AdsDashboardPage() {
               </p>
             </div>
           ) : (
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>No</TH>
-                    <TH>Campaign</TH>
-                    <TH>EoD</TH>
-                    <TH>Current View</TH>
-                    <TH>Remaining Views</TH>
-                    <TH>Budget Ads</TH>
-                    <TH>Rem. Budget Ads</TH>
-                    <TH>Today Budget</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {filteredCampaignData.map((data, index) => (
-                    <TR key={data.campaign.id}>
-                      <TD>{index + 1}</TD>
-                      <TD>
-                        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                          {data.campaign.name}
-                        </span>
-                      </TD>
-                      <TD>{data.eod}</TD>
-                      <TD>{formatNumber(data.currentViews)}</TD>
-                      <TD>{formatNumber(data.remainingViews)}</TD>
-                      <TD>{formatCurrency(data.budgetAds)}</TD>
-                      <TD>{formatCurrency(data.remBudgetAds)}</TD>
-                      <TD>{formatCurrency(data.todayBudget)}</TD>
+            <>
+              <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, filteredCampaignData.length)} of {filteredCampaignData.length}
+                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Rows per page:
+                  </label>
+                  <Select
+                    value={pagination.limit.toString()}
+                    onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                    className="text-sm py-1 px-2 w-20"
+                  >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </Select>
+                </div>
+              </div>
+              <TableWrap>
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>No</TH>
+                      <TH>Campaign</TH>
+                      <TH>EoD</TH>
+                      <TH>Current View</TH>
+                      <TH>Remaining Views</TH>
+                      <TH>Budget Ads</TH>
+                      <TH>Rem. Budget Ads</TH>
+                      <TH>Today Budget</TH>
                     </TR>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrap>
+                  </THead>
+                  <tbody>
+                    {paginatedCampaignData.map((data, index) => (
+                      <TR key={data.campaign.id}>
+                        <TD>{pagination.offset + index + 1}</TD>
+                        <TD>
+                          <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {data.campaign.name}
+                          </span>
+                        </TD>
+                        <TD>{data.eod}</TD>
+                        <TD>{formatNumber(data.currentViews)}</TD>
+                        <TD>{formatNumber(data.remainingViews)}</TD>
+                        <TD>{formatCurrency(data.budgetAds)}</TD>
+                        <TD>{formatCurrency(data.remBudgetAds)}</TD>
+                        <TD>{formatCurrency(data.todayBudget)}</TD>
+                      </TR>
+                    ))}
+                  </tbody>
+                </Table>
+              </TableWrap>
+              {totalPages > 1 && (
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                    disabled={pagination.offset === 0}
+                    className="text-sm"
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                    disabled={pagination.offset + pagination.limit >= filteredCampaignData.length}
+                    className="text-sm"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>
