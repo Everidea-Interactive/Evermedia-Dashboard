@@ -114,9 +114,12 @@ export default function CampaignsPage() {
   const [campaignKpisMap, setCampaignKpisMap] = useState<Map<string, any[]>>(new Map());
   const [selectedCampaignsForKpi, setSelectedCampaignsForKpi] = useState<string[]>([]);
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
+  const [campaignSearchTerm, setCampaignSearchTerm] = useState('');
+  const [debouncedCampaignSearch, setDebouncedCampaignSearch] = useState('');
   type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
   const previousLocationRef = useRef<string>('');
+  const campaignDropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchKPIs = useCallback(async () => {
     if (allItems.length === 0) return;
@@ -297,6 +300,39 @@ export default function CampaignsPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [allItems.length, fetchKPIs]);
+
+  // Debounce campaign search term
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCampaignSearch(campaignSearchTerm), 120);
+    return () => clearTimeout(timer);
+  }, [campaignSearchTerm]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (campaignDropdownRef.current && !campaignDropdownRef.current.contains(event.target as Node)) {
+        setShowCampaignDropdown(false);
+      }
+    };
+
+    if (showCampaignDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showCampaignDropdown]);
+
+  // Filter campaigns based on search term
+  const filteredCampaignsForKpi = useMemo(() => {
+    const query = debouncedCampaignSearch.trim().toLowerCase();
+    if (!query) {
+      return allItems;
+    }
+    return allItems.filter(campaign => 
+      campaign.name.toLowerCase().includes(query)
+    );
+  }, [allItems, debouncedCampaignSearch]);
 
   useEffect(() => {
     // Extract unique categories from all campaigns
@@ -563,10 +599,15 @@ export default function CampaignsPage() {
       {allItems.length > 0 && (
         <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>KPI Overview</h2>
-          <div className="relative w-full sm:w-auto sm:inline-block">
+          <div className="relative w-full sm:w-auto sm:inline-block" ref={campaignDropdownRef}>
             <button
               type="button"
-              onClick={() => setShowCampaignDropdown(!showCampaignDropdown)}
+              onClick={() => {
+                setShowCampaignDropdown(!showCampaignDropdown);
+                if (!showCampaignDropdown) {
+                  setCampaignSearchTerm('');
+                }
+              }}
               className="w-full sm:w-auto text-xs py-1 px-2 rounded-lg border transition-colors flex items-center gap-1.5"
               style={{ 
                 color: 'var(--text-primary)', 
@@ -585,24 +626,41 @@ export default function CampaignsPage() {
               <span className="flex-shrink-0">{showCampaignDropdown ? '▲' : '▼'}</span>
             </button>
             {showCampaignDropdown && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setShowCampaignDropdown(false)}
-                />
-                <div 
-                  className="absolute z-20 mt-1 w-full sm:w-auto border rounded-lg max-h-64 overflow-auto shadow-lg"
-                  style={{ 
-                    backgroundColor: 'var(--bg-secondary)', 
-                    borderColor: 'var(--border-color-dark)',
-                    minWidth: '160px'
-                  }}
-                >
+              <div 
+                className="absolute z-20 mt-1 w-full sm:w-auto border rounded-lg shadow-lg"
+                style={{ 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  borderColor: 'var(--border-color-dark)',
+                  minWidth: '160px'
+                }}
+              >
+                {/* Search Input */}
+                <div className="p-2 border-b" style={{ borderColor: 'var(--border-color-dark)' }}>
+                  <input
+                    type="text"
+                    className="w-full text-xs py-1.5 px-2 rounded border"
+                    style={{ 
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-tertiary)',
+                      borderColor: 'var(--border-color-dark)'
+                    }}
+                    placeholder="Search campaigns..."
+                    value={campaignSearchTerm}
+                    onChange={(e) => {
+                      setCampaignSearchTerm(e.target.value);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                    autoComplete="off"
+                  />
+                </div>
+                {/* Campaign List */}
+                <div className="max-h-64 overflow-auto">
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedCampaignsForKpi([]);
-                      setShowCampaignDropdown(false);
+                      setCampaignSearchTerm('');
                     }}
                     className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
                     style={{ 
@@ -614,31 +672,37 @@ export default function CampaignsPage() {
                     <span className="w-3 text-center flex-shrink-0 text-xs">{selectedCampaignsForKpi.length === 0 ? '✓' : ''}</span>
                     <span className="truncate">All Campaign</span>
                   </button>
-                  {allItems.map(campaign => {
-                    const isSelected = selectedCampaignsForKpi.includes(campaign.id);
-                    return (
-                      <button
-                        key={campaign.id}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedCampaignsForKpi(prev => prev.filter(id => id !== campaign.id));
-                          } else {
-                            setSelectedCampaignsForKpi(prev => [...prev, campaign.id]);
-                          }
-                        }}
-                        className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
-                        style={{ color: 'var(--text-primary)' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        <span className="w-3 text-center flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
-                        <span className="truncate">{campaign.name}</span>
-                      </button>
-                    );
-                  })}
+                  {filteredCampaignsForKpi.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      No campaigns found
+                    </div>
+                  ) : (
+                    filteredCampaignsForKpi.map(campaign => {
+                      const isSelected = selectedCampaignsForKpi.includes(campaign.id);
+                      return (
+                        <button
+                          key={campaign.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedCampaignsForKpi(prev => prev.filter(id => id !== campaign.id));
+                            } else {
+                              setSelectedCampaignsForKpi(prev => [...prev, campaign.id]);
+                            }
+                          }}
+                          className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
+                          style={{ color: 'var(--text-primary)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          <span className="w-3 text-center flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
+                          <span className="truncate">{campaign.name}</span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
