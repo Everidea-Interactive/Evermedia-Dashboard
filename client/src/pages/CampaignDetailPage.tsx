@@ -96,6 +96,7 @@ export default function CampaignDetailPage() {
     status: '',
     contentType: '',
     contentCategory: '',
+    campaignCategory: '',
     dateFrom: '',
     dateTo: '',
   });
@@ -207,6 +208,7 @@ export default function CampaignDetailPage() {
       status: '',
       contentType: '',
       contentCategory: '',
+      campaignCategory: '',
       dateFrom: '',
       dateTo: '',
     });
@@ -233,6 +235,11 @@ export default function CampaignDetailPage() {
 
       // Content category filter
       if (postFilters.contentCategory && post.contentCategory !== postFilters.contentCategory) {
+        return false;
+      }
+
+      // Campaign category filter
+      if (postFilters.campaignCategory && post.campaignCategory !== postFilters.campaignCategory) {
         return false;
       }
 
@@ -1597,6 +1604,17 @@ export default function CampaignDetailPage() {
                 <option value="Sosok/Quotes/Film">Sosok/Quotes/Film</option>
                 <option value="Storytell">Storytell</option>
                 <option value="Edukasi Product">Edukasi Product</option>
+              </Select>
+              <Select
+                label={<span className="text-xs">Campaign Category</span>}
+                value={postFilters.campaignCategory}
+                onChange={(e) => handleFilterChange('campaignCategory', e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All Campaign Categories</option>
+                {Array.isArray(campaign?.categories) && campaign.categories.filter(Boolean).sort().map((cat: string) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </Select>
               <Input
                 label={<span className="text-xs">Date From</span>}

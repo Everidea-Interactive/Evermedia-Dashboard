@@ -141,6 +141,7 @@ type PostFilters = {
   status: string;
   contentType: string;
   contentCategory: string;
+  campaignCategory: string;
   dateFrom: string;
   dateTo: string;
 };
@@ -185,6 +186,7 @@ const createDefaultPostFilters = (): PostFilters => ({
   status: '',
   contentType: '',
   contentCategory: '',
+  campaignCategory: '',
   dateFrom: '',
   dateTo: '',
 });
@@ -422,6 +424,7 @@ export default function PostsPage() {
       if (postFilters.status && post.status !== postFilters.status) return false;
       if (postFilters.contentType && post.contentType !== postFilters.contentType) return false;
       if (postFilters.contentCategory && post.contentCategory !== postFilters.contentCategory) return false;
+      if (postFilters.campaignCategory && post.campaignCategory !== postFilters.campaignCategory) return false;
 
       if (postFilters.dateFrom) {
         const postDate = post.postDate ? new Date(post.postDate).getTime() : 0;
@@ -1018,11 +1021,11 @@ export default function PostsPage() {
   };
 
   const campaignCategoryOptions = useMemo(() => {
-    if (!form.campaignId) return [];
-    const selectedCampaign = campaigns.find((c) => c.id === form.campaignId);
+    if (!campaignIdForPosts) return [];
+    const selectedCampaign = campaigns.find((c) => c.id === campaignIdForPosts);
     if (!selectedCampaign || !Array.isArray(selectedCampaign.categories)) return [];
     return selectedCampaign.categories.filter((cat) => cat).sort();
-  }, [campaigns, form.campaignId]);
+  }, [campaigns, campaignIdForPosts]);
 
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -2225,6 +2228,19 @@ export default function PostsPage() {
                     >
                       <option value="">All Categories</option>
                       {CONTENT_CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      label={<span className="text-xs">Campaign Category</span>}
+                      value={postFilters.campaignCategory}
+                      onChange={(e) => handleFilterChange('campaignCategory', e.target.value)}
+                      className="text-sm py-1.5"
+                    >
+                      <option value="">All Campaign Categories</option>
+                      {campaignCategoryOptions.map((category) => (
                         <option key={category} value={category}>
                           {category}
                         </option>
