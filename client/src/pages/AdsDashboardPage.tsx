@@ -88,8 +88,8 @@ export default function AdsDashboardPage() {
         // Calculate Budget Ads = Target Views/60*500
         const budgetAds = (targetViews / 60) * 500;
         
-        // Calculate Rem. Budget Ads = CurrentView/60*500
-        const remBudgetAds = (currentViews / 60) * 500;
+        // Calculate Rem. Budget Ads = RemainingViews/60*500
+        const remBudgetAds = (remainingViews / 60) * 500;
         
         // Calculate Today Budget = Rem. Budget Ads/EoD (avoid division by zero)
         const todayBudget = eod > 0 ? remBudgetAds / eod : 0;
