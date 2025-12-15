@@ -411,8 +411,8 @@ export default function CampaignsPage() {
     setAccountKpis({});
   };
 
-  const handleAddCampaign = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddCampaign = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!form.name.trim()) {
       setToast({ message: 'Campaign name is required', type: 'error' });
       return;
@@ -771,8 +771,8 @@ export default function CampaignsPage() {
                 Reset Filters
               </Button>
               <RequirePermission permission={canManageCampaigns}>
-                <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} className="text-sm py-1 px-2">
-                  {showAddForm ? 'Cancel' : 'Add Campaign'}
+                <Button variant="primary" color="green" onClick={() => setShowAddForm(true)} className="text-sm py-1 px-2">
+                  Add Campaign
                 </Button>
               </RequirePermission>
             </div>
@@ -921,9 +921,38 @@ export default function CampaignsPage() {
         </div>
       </Card>
       <RequirePermission permission={canManageCampaigns}>
-        {showAddForm && (
-        <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Add Campaign</h2>
+        <Dialog
+          open={showAddForm}
+          onClose={() => {
+            resetForm();
+            setShowAddForm(false);
+          }}
+          title="Add Campaign"
+          footer={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  resetForm();
+                  setShowAddForm(false);
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                color="green"
+                onClick={() => handleAddCampaign()}
+                disabled={submitting}
+              >
+                {submitting ? 'Adding...' : 'Add Campaign'}
+              </Button>
+            </>
+          }
+        >
           <form onSubmit={handleAddCampaign} className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Input
@@ -1184,20 +1213,8 @@ export default function CampaignsPage() {
                 </div>
               )}
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color="green">
-                {submitting ? 'Adding...' : 'Add Campaign'}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => {
-                resetForm();
-                setShowAddForm(false);
-              }} disabled={submitting}>
-                Cancel
-              </Button>
-            </div>
           </form>
-        </Card>
-        )}
+        </Dialog>
       </RequirePermission>
 
       <Dialog
