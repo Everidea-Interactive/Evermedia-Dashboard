@@ -193,3 +193,48 @@ export async function initializeAccountKPIs(campaignId: string, accountId: strin
   }
 }
 
+/**
+ * Recalculate campaign-level GMV_IDR by summing all account-level GMV_IDR values for the campaign.
+ * This is called when an account's GMV is manually updated.
+ */
+export async function recalculateCampaignGMV(campaignId: string) {
+  // Get all account-level GMV_IDR KPIs for this campaign
+  const { data: accountGmvKpis } = await supabase
+    .from('KPI')
+    .select('actual')
+    .eq('campaignId', campaignId)
+    .eq('category', 'GMV_IDR')
+    .not('accountId', 'is', null);
+  
+  // Sum all account GMV values
+  const totalGmv = (accountGmvKpis || []).reduce((sum, kpi) => sum + (kpi.actual || 0), 0);
+  
+  // Get campaign-level GMV_IDR KPI
+  const { data: campaignGmvKpis } = await supabase
+    .from('KPI')
+    .select('*')
+    .eq('campaignId', campaignId)
+    .eq('category', 'GMV_IDR')
+    .is('accountId', null);
+  
+  // Update campaign-level GMV_IDR KPI
+  if (campaignGmvKpis && campaignGmvKpis.length > 0) {
+    const campaignGmvKpiIds = campaignGmvKpis.map((k: any) => k.id);
+    await supabase
+      .from('KPI')
+      .update({ actual: totalGmv })
+      .in('id', campaignGmvKpiIds);
+  } else {
+    // Create campaign-level GMV_IDR KPI if it doesn't exist
+    await supabase
+      .from('KPI')
+      .insert({
+        campaignId,
+        accountId: null,
+        category: 'GMV_IDR',
+        target: 0,
+        actual: totalGmv,
+      });
+  }
+}
+

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import Card from '../components/ui/Card';
@@ -55,9 +55,18 @@ const sanitizeNumberInput = (value: string): string => {
   return num === '' ? '0' : num;
 };
 
+// Helper function to format month from date
+const formatMonth = (dateString: string): string => {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '-';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return months[date.getMonth()];
+};
+
 export default function CampaignsPage() {
   const { token } = useAuth();
   const { canManageCampaigns, canDelete } = usePermissions();
+  const location = useLocation();
   const [items, setItems] = useState<Campaign[]>([]);
   const [allItems, setAllItems] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -105,8 +114,30 @@ export default function CampaignsPage() {
   const [campaignKpisMap, setCampaignKpisMap] = useState<Map<string, any[]>>(new Map());
   const [selectedCampaignsForKpi, setSelectedCampaignsForKpi] = useState<string[]>([]);
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
+  const [campaignSearchTerm, setCampaignSearchTerm] = useState('');
+  const [debouncedCampaignSearch, setDebouncedCampaignSearch] = useState('');
   type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
+  const previousLocationRef = useRef<string>('');
+  const campaignDropdownRef = useRef<HTMLDivElement>(null);
+
+  const fetchKPIs = useCallback(async () => {
+    if (allItems.length === 0) return;
+    
+    // Fetch KPIs for all campaigns
+    const kpiMap = new Map<string, any[]>();
+    const kpiPromises = allItems.map(async (campaign: Campaign) => {
+      try {
+        const kpis = await api(`/campaigns/${campaign.id}/kpis`, { token });
+        kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis : []);
+      } catch (error) {
+        console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, error);
+        kpiMap.set(campaign.id, []);
+      }
+    });
+    await Promise.allSettled(kpiPromises);
+    setCampaignKpisMap(kpiMap);
+  }, [allItems, token]);
 
   const fetchCampaigns = () => {
     setLoading(true);
@@ -241,6 +272,68 @@ export default function CampaignsPage() {
       .catch(() => setEngagement(null));
   }, [token]);
 
+  // Refresh KPIs when navigating back to campaigns page from detail page
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const previousPath = previousLocationRef.current;
+    
+    // If we're on the campaigns page and came from a campaign detail page, refresh KPIs
+    if (currentPath === '/campaigns' || currentPath === '/') {
+      if (previousPath && previousPath.startsWith('/campaigns/') && previousPath !== currentPath) {
+        fetchKPIs();
+      }
+    }
+    
+    previousLocationRef.current = currentPath;
+  }, [location.pathname, fetchKPIs]);
+
+  // Refresh KPIs when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && allItems.length > 0) {
+        fetchKPIs();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [allItems.length, fetchKPIs]);
+
+  // Debounce campaign search term
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCampaignSearch(campaignSearchTerm), 120);
+    return () => clearTimeout(timer);
+  }, [campaignSearchTerm]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (campaignDropdownRef.current && !campaignDropdownRef.current.contains(event.target as Node)) {
+        setShowCampaignDropdown(false);
+      }
+    };
+
+    if (showCampaignDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showCampaignDropdown]);
+
+  // Filter campaigns based on search term
+  const filteredCampaignsForKpi = useMemo(() => {
+    const query = debouncedCampaignSearch.trim().toLowerCase();
+    if (!query) {
+      return allItems;
+    }
+    return allItems.filter(campaign => 
+      campaign.name.toLowerCase().includes(query)
+    );
+  }, [allItems, debouncedCampaignSearch]);
+
   useEffect(() => {
     // Extract unique categories from all campaigns
     const allCategories = new Set<string>();
@@ -318,8 +411,8 @@ export default function CampaignsPage() {
     setAccountKpis({});
   };
 
-  const handleAddCampaign = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddCampaign = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!form.name.trim()) {
       setToast({ message: 'Campaign name is required', type: 'error' });
       return;
@@ -506,10 +599,15 @@ export default function CampaignsPage() {
       {allItems.length > 0 && (
         <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>KPI Overview</h2>
-          <div className="relative w-full sm:w-auto sm:inline-block">
+          <div className="relative w-full sm:w-auto sm:inline-block" ref={campaignDropdownRef}>
             <button
               type="button"
-              onClick={() => setShowCampaignDropdown(!showCampaignDropdown)}
+              onClick={() => {
+                setShowCampaignDropdown(!showCampaignDropdown);
+                if (!showCampaignDropdown) {
+                  setCampaignSearchTerm('');
+                }
+              }}
               className="w-full sm:w-auto text-xs py-1 px-2 rounded-lg border transition-colors flex items-center gap-1.5"
               style={{ 
                 color: 'var(--text-primary)', 
@@ -528,24 +626,41 @@ export default function CampaignsPage() {
               <span className="flex-shrink-0">{showCampaignDropdown ? '▲' : '▼'}</span>
             </button>
             {showCampaignDropdown && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setShowCampaignDropdown(false)}
-                />
-                <div 
-                  className="absolute z-20 mt-1 w-full sm:w-auto border rounded-lg max-h-64 overflow-auto shadow-lg"
-                  style={{ 
-                    backgroundColor: 'var(--bg-secondary)', 
-                    borderColor: 'var(--border-color-dark)',
-                    minWidth: '160px'
-                  }}
-                >
+              <div 
+                className="absolute z-20 mt-1 w-full sm:w-auto border rounded-lg shadow-lg"
+                style={{ 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  borderColor: 'var(--border-color-dark)',
+                  minWidth: '160px'
+                }}
+              >
+                {/* Search Input */}
+                <div className="p-2 border-b" style={{ borderColor: 'var(--border-color-dark)' }}>
+                  <input
+                    type="text"
+                    className="w-full text-xs py-1.5 px-2 rounded border"
+                    style={{ 
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-tertiary)',
+                      borderColor: 'var(--border-color-dark)'
+                    }}
+                    placeholder="Search campaigns..."
+                    value={campaignSearchTerm}
+                    onChange={(e) => {
+                      setCampaignSearchTerm(e.target.value);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                    autoComplete="off"
+                  />
+                </div>
+                {/* Campaign List */}
+                <div className="max-h-64 overflow-auto">
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedCampaignsForKpi([]);
-                      setShowCampaignDropdown(false);
+                      setCampaignSearchTerm('');
                     }}
                     className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
                     style={{ 
@@ -557,31 +672,37 @@ export default function CampaignsPage() {
                     <span className="w-3 text-center flex-shrink-0 text-xs">{selectedCampaignsForKpi.length === 0 ? '✓' : ''}</span>
                     <span className="truncate">All Campaign</span>
                   </button>
-                  {allItems.map(campaign => {
-                    const isSelected = selectedCampaignsForKpi.includes(campaign.id);
-                    return (
-                      <button
-                        key={campaign.id}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedCampaignsForKpi(prev => prev.filter(id => id !== campaign.id));
-                          } else {
-                            setSelectedCampaignsForKpi(prev => [...prev, campaign.id]);
-                          }
-                        }}
-                        className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
-                        style={{ color: 'var(--text-primary)' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        <span className="w-3 text-center flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
-                        <span className="truncate">{campaign.name}</span>
-                      </button>
-                    );
-                  })}
+                  {filteredCampaignsForKpi.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      No campaigns found
+                    </div>
+                  ) : (
+                    filteredCampaignsForKpi.map(campaign => {
+                      const isSelected = selectedCampaignsForKpi.includes(campaign.id);
+                      return (
+                        <button
+                          key={campaign.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedCampaignsForKpi(prev => prev.filter(id => id !== campaign.id));
+                            } else {
+                              setSelectedCampaignsForKpi(prev => [...prev, campaign.id]);
+                            }
+                          }}
+                          className="w-full text-left px-2 py-1.5 text-xs transition-colors flex items-center gap-1.5"
+                          style={{ color: 'var(--text-primary)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.1)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          <span className="w-3 text-center flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
+                          <span className="truncate">{campaign.name}</span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -650,8 +771,8 @@ export default function CampaignsPage() {
                 Reset Filters
               </Button>
               <RequirePermission permission={canManageCampaigns}>
-                <Button variant="primary" color="green" onClick={() => setShowAddForm(!showAddForm)} className="text-sm py-1 px-2">
-                  {showAddForm ? 'Cancel' : 'Add Campaign'}
+                <Button variant="primary" color="green" onClick={() => setShowAddForm(true)} className="text-sm py-1 px-2">
+                  Add Campaign
                 </Button>
               </RequirePermission>
             </div>
@@ -683,6 +804,7 @@ export default function CampaignsPage() {
                       </button>
                     </TH>
                     <TH>KPI Overview</TH>
+                    <TH>Period</TH>
                     <TH>
                       <button
                         type="button"
@@ -756,6 +878,7 @@ export default function CampaignsPage() {
                             </div>
                           </div>
                         </TD>
+                        <TD>{formatMonth(c.startDate)}</TD>
                         <TD>{formatDate(c.startDate)}</TD>
                         <TD>{formatDate(c.endDate)}</TD>
                         <TD>
@@ -798,9 +921,38 @@ export default function CampaignsPage() {
         </div>
       </Card>
       <RequirePermission permission={canManageCampaigns}>
-        {showAddForm && (
-        <Card className="mt-4">
-          <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Add Campaign</h2>
+        <Dialog
+          open={showAddForm}
+          onClose={() => {
+            resetForm();
+            setShowAddForm(false);
+          }}
+          title="Add Campaign"
+          footer={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  resetForm();
+                  setShowAddForm(false);
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                color="green"
+                onClick={() => handleAddCampaign()}
+                disabled={submitting}
+              >
+                {submitting ? 'Adding...' : 'Add Campaign'}
+              </Button>
+            </>
+          }
+        >
           <form onSubmit={handleAddCampaign} className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Input
@@ -1061,20 +1213,8 @@ export default function CampaignsPage() {
                 </div>
               )}
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={submitting} className="flex-1" color="green">
-                {submitting ? 'Adding...' : 'Add Campaign'}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => {
-                resetForm();
-                setShowAddForm(false);
-              }} disabled={submitting}>
-                Cancel
-              </Button>
-            </div>
           </form>
-        </Card>
-        )}
+        </Dialog>
       </RequirePermission>
 
       <Dialog

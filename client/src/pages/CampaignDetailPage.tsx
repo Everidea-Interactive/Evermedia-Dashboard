@@ -16,6 +16,7 @@ import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 import PageHeader from '../components/PageHeader';
 import EngagementVisualizer from '../components/EngagementVisualizer';
 import AccountKpiEditModal from '../components/AccountKpiEditModal';
+import AccountGmvEditModal from '../components/AccountGmvEditModal';
 import AccountDropdownFilter from '../components/AccountDropdownFilter';
 import Papa from 'papaparse';
 
@@ -88,12 +89,14 @@ export default function CampaignDetailPage() {
   const [deletingPost, setDeletingPost] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [editingAccountKpi, setEditingAccountKpi] = useState<string | null>(null);
+  const [editingAccountGmv, setEditingAccountGmv] = useState<string | null>(null);
   const [removeAccountConfirm, setRemoveAccountConfirm] = useState<{ id: string; name: string } | null>(null);
   const [postFilters, setPostFilters] = useState({
     accountId: '',
     status: '',
     contentType: '',
     contentCategory: '',
+    campaignCategory: '',
     dateFrom: '',
     dateTo: '',
   });
@@ -205,6 +208,7 @@ export default function CampaignDetailPage() {
       status: '',
       contentType: '',
       contentCategory: '',
+      campaignCategory: '',
       dateFrom: '',
       dateTo: '',
     });
@@ -231,6 +235,11 @@ export default function CampaignDetailPage() {
 
       // Content category filter
       if (postFilters.contentCategory && post.contentCategory !== postFilters.contentCategory) {
+        return false;
+      }
+
+      // Campaign category filter
+      if (postFilters.campaignCategory && post.campaignCategory !== postFilters.campaignCategory) {
         return false;
       }
 
@@ -369,11 +378,11 @@ export default function CampaignDetailPage() {
       return;
     }
 
-    // Sort posts by postDate descending (most recent first) for export
+    // Sort posts by postDate ascending (oldest first) for export
     const sortedPostsForExport = [...allPosts].sort((a: any, b: any) => {
       const dateA = a.postDate ? new Date(a.postDate).getTime() : 0;
       const dateB = b.postDate ? new Date(b.postDate).getTime() : 0;
-      return dateB - dateA;
+      return dateA - dateB;
     });
 
     // Create CSV rows matching the image format
@@ -1499,6 +1508,9 @@ export default function CampaignDetailPage() {
                   <Button variant="outline" color="blue" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setEditingAccountKpi(account.id)}>
                     Edit KPIs
                   </Button>
+                  <Button variant="outline" color="blue" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setEditingAccountGmv(account.id)}>
+                    Edit GMV
+                  </Button>
                   <Button variant="ghost" color="red" className="text-xs px-2 sm:px-3 py-1.5 sm:py-1 flex-1 sm:flex-none" onClick={() => setRemoveAccountConfirm({ id: account.id, name: account.name })} disabled={accountRemoving[account.id]}>
                     {accountRemoving[account.id] ? 'Removing…' : 'Remove'}
                   </Button>
@@ -1594,6 +1606,17 @@ export default function CampaignDetailPage() {
                 <option value="Sosok/Quotes/Film">Sosok/Quotes/Film</option>
                 <option value="Storytell">Storytell</option>
                 <option value="Edukasi Product">Edukasi Product</option>
+              </Select>
+              <Select
+                label={<span className="text-xs">Campaign Category</span>}
+                value={postFilters.campaignCategory}
+                onChange={(e) => handleFilterChange('campaignCategory', e.target.value)}
+                className="text-sm py-1.5"
+              >
+                <option value="">All Campaign Categories</option>
+                {Array.isArray(campaign?.categories) && campaign.categories.filter(Boolean).sort().map((cat: string) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </Select>
               <Input
                 label={<span className="text-xs">Date From</span>}
@@ -2644,6 +2667,15 @@ export default function CampaignDetailPage() {
           onClose={() => setEditingAccountKpi(null)}
           campaignId={id}
           accountId={editingAccountKpi}
+          onSuccess={handleRefreshCampaign}
+        />
+      )}
+      {id && editingAccountGmv && (
+        <AccountGmvEditModal
+          open={!!editingAccountGmv}
+          onClose={() => setEditingAccountGmv(null)}
+          campaignId={id}
+          accountId={editingAccountGmv}
           onSuccess={handleRefreshCampaign}
         />
       )}
