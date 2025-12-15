@@ -13,6 +13,7 @@ export default function NavBar() {
           <Link to="/campaigns" className="font-semibold text-gray-900">Evermedia Dashboard</Link>
           <nav className="flex items-center gap-3 text-sm text-gray-600">
             <Link to="/campaigns" className="hover:text-black">Campaigns</Link>
+            <Link to="/ads-dashboard" className="hover:text-black">Ads Dashboard</Link>
             <Link to="/accounts" className="hover:text-black">Accounts</Link>
             <Link to="/pics" className="hover:text-black">PICs</Link>
             {canManageUsers() && (

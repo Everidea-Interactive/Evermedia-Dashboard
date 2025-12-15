@@ -24,6 +24,7 @@ const AccountsPage = lazy(() => import('./pages/AccountsPage.tsx'));
 const PicsPage = lazy(() => import('./pages/PicsPage.tsx'));
 const UsersPage = lazy(() => import('./pages/UsersPage.tsx'));
 const ActivityLogsPage = lazy(() => import('./pages/ActivityLogsPage.tsx'));
+const AdsDashboardPage = lazy(() => import('./pages/AdsDashboardPage.tsx'));
 
 // Loading fallback component
 function PageLoader() {
@@ -72,6 +73,7 @@ const router = createBrowserRouter([
   { path: '/campaigns/:id/accounts', element: <ProtectedLayout><CampaignAccountsPage /></ProtectedLayout> },
   { path: '/accounts', element: <ProtectedLayout><AccountsPage /></ProtectedLayout> },
   { path: '/pics', element: <ProtectedLayout><PicsPage /></ProtectedLayout> },
+  { path: '/ads-dashboard', element: <ProtectedLayout><AdsDashboardPage /></ProtectedLayout> },
   { 
     path: '/users', 
     element: (
