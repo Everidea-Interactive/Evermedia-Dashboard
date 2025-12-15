@@ -154,7 +154,10 @@ const parseBooleanFlag = (value?: string) => {
 const parseIntegerField = (value?: string) => {
   const trimmed = value?.trim();
   if (!trimmed) return 0;
-  const parsed = parseInt(trimmed, 10);
+  // Remove dots and commas (thousand separators) since all values are whole numbers
+  // e.g., "131.800" (meaning 131.8k) should become "131800"
+  const cleaned = trimmed.replace(/[.,]/g, '');
+  const parsed = parseInt(cleaned, 10);
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 const normalizeAccountType = (value?: string) => {
