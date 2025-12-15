@@ -378,11 +378,11 @@ export default function CampaignDetailPage() {
       return;
     }
 
-    // Sort posts by postDate descending (most recent first) for export
+    // Sort posts by postDate ascending (oldest first) for export
     const sortedPostsForExport = [...allPosts].sort((a: any, b: any) => {
       const dateA = a.postDate ? new Date(a.postDate).getTime() : 0;
       const dateB = b.postDate ? new Date(b.postDate).getTime() : 0;
-      return dateB - dateA;
+      return dateA - dateB;
     });
 
     // Create CSV rows matching the image format
