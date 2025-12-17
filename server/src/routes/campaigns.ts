@@ -455,6 +455,17 @@ router.get('/:id/posts', async (req, res) => {
   });
 });
 
+router.post('/:id/accounts/:accountId/recalculate-kpis', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req, res) => {
+  const { id, accountId } = req.params;
+  
+  try {
+    await recalculateKPIs(id, accountId);
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || 'Failed to recalculate KPIs' });
+  }
+});
+
 router.delete('/:id/accounts/:accountId', async (req, res) => {
   const { id, accountId } = req.params;
   

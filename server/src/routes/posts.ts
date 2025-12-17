@@ -20,7 +20,7 @@ function computeEngagement(p: any) {
 router.get('/', async (req, res) => {
   const { campaignId, accountId, status, category, dateFrom, dateTo, picTalentId, picEditorId, picPostingId } = req.query as any;
   let query = supabase.from('Post').select('*').order('postDate', { ascending: false }).order('createdAt', { ascending: false });
-  
+
   if (campaignId) query = query.eq('campaignId', campaignId);
   if (accountId) query = query.eq('accountId', accountId);
   if (status) query = query.ilike('status', `%${String(status)}%`);
@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
   if (picTalentId) query = query.eq('picTalentId', picTalentId);
   if (picEditorId) query = query.eq('picEditorId', picEditorId);
   if (picPostingId) query = query.eq('picPostingId', picPostingId);
-  
+
   const { data: posts, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   res.json((posts || []).map(computeEngagement));
@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
 
 router.get('/all', async (req, res) => {
   const { campaignId, dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
-  
+
   let query = supabase.from('Post').select('*').order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (campaignId) query = query.eq('campaignId', campaignId);
   if (accountId) query = query.eq('accountId', accountId);
@@ -49,29 +49,29 @@ router.get('/all', async (req, res) => {
   if (picTalentId) query = query.eq('picTalentId', picTalentId);
   if (picEditorId) query = query.eq('picEditorId', picEditorId);
   if (picPostingId) query = query.eq('picPostingId', picPostingId);
-  
+
   const { data: posts, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  
+
   // Fetch related data - parallelize independent queries
   const accountIds = [...new Set((posts || []).map((p: any) => p.accountId))];
   const picIds = [...new Set((posts || []).flatMap((p: any) => [p.picTalentId, p.picEditorId, p.picPostingId]).filter(Boolean))];
   const campaignIds = [...new Set((posts || []).map((p: any) => p.campaignId))];
-  
+
   const [accountsResult, picsResult, campaignsResult] = await Promise.all([
     supabase.from('Account').select('id, name').in('id', accountIds),
     supabase.from('PIC').select('id, name').in('id', picIds),
     supabase.from('Campaign').select('id, name').in('id', campaignIds),
   ]);
-  
+
   const accounts = accountsResult.data || [];
   const pics = picsResult.data || [];
   const campaigns = campaignsResult.data || [];
-  
+
   const accountMap = new Map((accounts || []).map((a: any) => [a.id, a]));
   const picMap = new Map((pics || []).map((p: any) => [p.id, p]));
   const campaignMap = new Map((campaigns || []).map((c: any) => [c.id, c]));
-  
+
   const mapped = (posts || []).map((p: any) => {
     const views = p.totalView || 0, likes = p.totalLike || 0, comments = p.totalComment || 0, shares = p.totalShare || 0, saves = p.totalSaved || 0;
     const er = views === 0 ? 0 : (likes + comments + shares + saves) / views;
@@ -90,7 +90,7 @@ router.get('/all', async (req, res) => {
 router.get('/campaign/:id', async (req, res) => {
   const id = req.params.id;
   const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
-  
+
   let query = supabase.from('Post').select('*').eq('campaignId', id).order('postDate', { ascending: false }).order('createdAt', { ascending: false });
   if (accountId) query = query.eq('accountId', accountId);
   if (status) query = query.ilike('status', `%${String(status)}%`);
@@ -100,7 +100,7 @@ router.get('/campaign/:id', async (req, res) => {
   if (picTalentId) query = query.eq('picTalentId', picTalentId);
   if (picEditorId) query = query.eq('picEditorId', picEditorId);
   if (picPostingId) query = query.eq('picPostingId', picPostingId);
-  
+
   const { data: posts, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   res.json((posts || []).map(computeEngagement));
@@ -130,14 +130,14 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     fypType,
   } = req.body as any;
   if (!campaignId || !accountId || !postDate || !postTitle) return res.status(400).json({ error: 'Missing fields' });
-  
+
   // Check if account is linked to campaign, and link it if not
   const { data: existingLinks, error: checkError } = await supabase
     .from('_CampaignToAccount')
     .select('*')
     .eq('A', campaignId)
     .eq('B', accountId);
-  
+
   // If no link exists, create it automatically
   let wasNewlyLinked = false;
   if (!existingLinks || existingLinks.length === 0) {
@@ -147,7 +147,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
         A: campaignId,
         B: accountId,
       });
-    
+
     if (linkError) {
       // If link already exists (race condition), that's fine, continue
       // Otherwise, return error
@@ -159,15 +159,15 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
       wasNewlyLinked = true;
     }
   }
-  
+
   // If account was newly linked via post creation, initialize/reset KPIs to 0
   if (wasNewlyLinked) {
     await initializeAccountKPIs(campaignId, accountId);
   }
-  
+
   const d = new Date(postDate);
   const postDay = d.toLocaleDateString('en-US', { weekday: 'long' });
-  
+
   const { data: post, error } = await supabase
     .from('Post')
     .insert({
@@ -195,9 +195,9 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     })
     .select()
     .single();
-  
+
   if (error) return res.status(500).json({ error: error.message });
-  
+
   // Recalculate KPIs after post creation
   if (post.campaignId) {
     // Recalculate for the account
@@ -207,7 +207,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     // Always recalculate campaign-level KPIs (where accountId is null)
     await recalculateCampaignKPIs(post.campaignId);
   }
-  
+
   // Log activity with specific fields
   const newValues = {
     postTitle: post.postTitle,
@@ -224,7 +224,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     adsOnMusic: post.adsOnMusic,
     yellowCart: post.yellowCart,
   };
-  
+
   await logActivity(req, {
     action: 'CREATE',
     entityType: 'Post',
@@ -233,7 +233,7 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req
     newValues,
     description: generateChangeDescription('CREATE', 'Post', getEntityName('Post', post), undefined, newValues),
   });
-  
+
   res.status(201).json(computeEngagement(post));
 });
 
@@ -244,23 +244,23 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
     data.postDate = d.toISOString();
     data.postDay = d.toLocaleDateString('en-US', { weekday: 'long' });
   }
-  
+
   // Get the post before update to know which campaign/account to update KPIs for
   const { data: oldPost } = await supabase
     .from('Post')
     .select('*')
     .eq('id', req.params.id)
     .single();
-  
+
   const { data: post, error } = await supabase
     .from('Post')
     .update(data)
     .eq('id', req.params.id)
     .select()
     .single();
-  
+
   if (error || !post) return res.status(404).json({ error: 'Not found' });
-  
+
   // Check if account is linked to campaign, and link it if not
   let wasNewlyLinked = false;
   if (post.campaignId && post.accountId) {
@@ -269,7 +269,7 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
       .select('*')
       .eq('A', post.campaignId)
       .eq('B', post.accountId);
-    
+
     // If no link exists, create it automatically
     if (!existingLinks || existingLinks.length === 0) {
       const { error: linkError } = await supabase
@@ -278,7 +278,7 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
           A: post.campaignId,
           B: post.accountId,
         });
-      
+
       if (linkError) {
         // If link already exists (race condition), that's fine, continue
         // Otherwise, log error but don't fail the update
@@ -291,46 +291,61 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
       }
     }
   }
-  
+
   // If account was newly linked via post update, initialize/reset KPIs to 0
   if (wasNewlyLinked && post.campaignId && post.accountId) {
     await initializeAccountKPIs(post.campaignId, post.accountId);
   }
-  
-  // Recalculate KPIs for the campaign and account after post update
+
+  // Recalculate for the new campaign and account
   if (post.campaignId) {
     // Recalculate for the new account
     if (post.accountId) {
       await recalculateKPIs(post.campaignId, post.accountId);
     }
-    
-    // If accountId changed, also recalculate for the old account
-    if (oldPost?.accountId && oldPost.accountId !== post.accountId) {
-      await recalculateKPIs(oldPost.campaignId, oldPost.accountId);
-    }
-    
-    // Always recalculate campaign-level KPIs (where accountId is null)
+
+    // Always recalculate campaign-level KPIs for the new campaign (where accountId is null)
     await recalculateCampaignKPIs(post.campaignId);
   }
-  
+
+  // Recalculate for the old campaign and account if they changed
+  if (oldPost?.campaignId) {
+    const campaignIdChanged = oldPost.campaignId !== post.campaignId;
+    const accountIdChanged = oldPost.accountId !== post.accountId;
+
+    // If campaignId changed, we need to recalculate the old campaign
+    if (campaignIdChanged) {
+      // Recalculate for the old account in the old campaign
+      if (oldPost.accountId) {
+        await recalculateKPIs(oldPost.campaignId, oldPost.accountId);
+      }
+
+      // Recalculate campaign-level KPIs for the old campaign
+      await recalculateCampaignKPIs(oldPost.campaignId);
+    } else if (accountIdChanged && oldPost.accountId) {
+      // If only accountId changed (same campaign), recalculate for the old account
+      await recalculateKPIs(oldPost.campaignId, oldPost.accountId);
+    }
+  }
+
   // Log activity with specific changed fields only
   const changedFields = computeChangedFields(
     oldPost,
     post,
     Object.keys(data)
   );
-  
+
   // Build oldValues and newValues objects from changedFields
   const oldValues: any = {};
   const newValues: any = {};
-  
+
   for (const [field, change] of Object.entries(changedFields)) {
     oldValues[field] = change.before;
     newValues[field] = change.after;
   }
-  
+
   const hasChanges = Object.keys(oldValues).length > 0;
-  
+
   // Only log if there are actual changes
   if (hasChanges) {
     await logActivity(req, {
@@ -343,7 +358,7 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
       description: generateChangeDescription('UPDATE', 'Post', getEntityName('Post', post), oldValues, newValues),
     });
   }
-  
+
   res.json(computeEngagement(post));
 });
 
@@ -355,10 +370,10 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async
     .select('*')
     .eq('id', req.params.id)
     .single();
-  
+
   const { error } = await supabase.from('Post').delete().eq('id', req.params.id);
   if (error) return res.status(404).json({ error: 'Not found' });
-  
+
   // Recalculate KPIs after post deletion
   if (post?.campaignId) {
     // Recalculate for the account
@@ -368,7 +383,7 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async
     // Always recalculate campaign-level KPIs (where accountId is null)
     await recalculateCampaignKPIs(post.campaignId);
   }
-  
+
   // Log activity with specific fields
   if (post) {
     const oldValues = {
@@ -377,7 +392,7 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async
       contentCategory: post.contentCategory,
       postDate: post.postDate,
     };
-    
+
     await logActivity(req, {
       action: 'DELETE',
       entityType: 'Post',
@@ -387,7 +402,7 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async
       description: generateChangeDescription('DELETE', 'Post', getEntityName('Post', post), oldValues),
     });
   }
-  
+
   res.json({ ok: true });
 });
 

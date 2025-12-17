@@ -1772,7 +1772,7 @@ export default function CampaignDetailPage() {
                             </TD>
                             <TD>{postPagination.offset + index + 1}</TD>
                             <TD className="!text-center">
-                              {p.totalView >= 10000 ? (
+                              {p.totalView >= 50000 ? (
                                 <div className="flex items-center justify-center gap-3">
                                   <label className="flex items-center gap-1.5 cursor-pointer select-none">
                                     <input

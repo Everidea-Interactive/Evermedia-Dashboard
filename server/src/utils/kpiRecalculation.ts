@@ -4,7 +4,7 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
   // Get all posts for this campaign and account
   const { data: posts } = await supabase
     .from('Post')
-    .select('totalView, contentType, yellowCart')
+    .select('totalView, contentType, yellowCart, fypType')
     .eq('campaignId', campaignId)
     .eq('accountId', accountId);
   
@@ -41,7 +41,7 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
     if (p.contentType === 'Video') {
       totals.VIDEO_COUNT += 1;
     }
-    // Count as FYP if views meet or exceed the threshold
+    // Count as FYP if views meet or exceed the threshold (regardless of fypType)
     if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
       totals.FYP_COUNT += 1;
     }
@@ -68,10 +68,15 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
   // Batch update all KPIs of the same category at once
   for (const [category, kpiIds] of updatesByCategory) {
     if (kpiIds.length > 0 && category in totals) {
-      await supabase
+      const { error } = await supabase
         .from('KPI')
         .update({ actual: totals[category] })
         .in('id', kpiIds);
+      
+      if (error) {
+        console.error(`Failed to update KPIs for category ${category} in campaign ${campaignId}, account ${accountId}:`, error);
+        // Continue with other updates even if one fails
+      }
     }
   }
 }
@@ -80,7 +85,7 @@ export async function recalculateCampaignKPIs(campaignId: string) {
   // Get all posts for this campaign
   const { data: posts } = await supabase
     .from('Post')
-    .select('totalView, contentType, yellowCart')
+    .select('totalView, contentType, yellowCart, fypType')
     .eq('campaignId', campaignId);
   
   // Get campaign to check targetViewsForFYP
@@ -116,7 +121,7 @@ export async function recalculateCampaignKPIs(campaignId: string) {
     if (p.contentType === 'Video') {
       totals.VIDEO_COUNT += 1;
     }
-    // Count as FYP if views meet or exceed the threshold
+    // Count as FYP if views meet or exceed the threshold (regardless of fypType)
     if (targetViewsForFYP !== null && targetViewsForFYP !== undefined && (p.totalView || 0) >= targetViewsForFYP) {
       totals.FYP_COUNT += 1;
     }
@@ -143,10 +148,15 @@ export async function recalculateCampaignKPIs(campaignId: string) {
   // Batch update all KPIs of the same category at once
   for (const [category, kpiIds] of updatesByCategory) {
     if (kpiIds.length > 0 && category in totals) {
-      await supabase
+      const { error } = await supabase
         .from('KPI')
         .update({ actual: totals[category] })
         .in('id', kpiIds);
+      
+      if (error) {
+        console.error(`Failed to update campaign-level KPIs for category ${category} in campaign ${campaignId}:`, error);
+        // Continue with other updates even if one fails
+      }
     }
   }
 }
@@ -154,7 +164,8 @@ export async function recalculateCampaignKPIs(campaignId: string) {
 /**
  * Initialize or reset KPIs for an account in a campaign.
  * This is called when an account is automatically added to a campaign via post creation.
- * All KPIs are set to target=0 and actual=0.
+ * Creates missing KPIs and resets actual values to 0 (preserves existing targets).
+ * The actual values will be recalculated from posts after this function is called.
  */
 export async function initializeAccountKPIs(campaignId: string, accountId: string) {
   const categories = ['VIEWS', 'QTY_POST', 'FYP_COUNT', 'VIDEO_COUNT', 'GMV_IDR', 'YELLOW_CART'];
@@ -168,13 +179,18 @@ export async function initializeAccountKPIs(campaignId: string, accountId: strin
   
   const existingCategories = new Set((existingKPIs || []).map((k: any) => k.category));
   
-  // Batch reset existing KPIs to target=0, actual=0
+  // Reset actual values to 0 for existing KPIs (preserve targets)
+  // This ensures that when recalculateKPIs is called, it will recalculate from scratch
   if (existingKPIs && existingKPIs.length > 0) {
     const existingKpiIds = existingKPIs.map((k: any) => k.id);
-    await supabase
+    const { error: updateError } = await supabase
       .from('KPI')
-      .update({ target: 0, actual: 0 })
+      .update({ actual: 0 })
       .in('id', existingKpiIds);
+    
+    if (updateError) {
+      console.error(`Failed to reset KPI actual values for campaign ${campaignId}, account ${accountId}:`, updateError);
+    }
   }
   
   // Batch create missing KPIs with target=0, actual=0
@@ -189,7 +205,10 @@ export async function initializeAccountKPIs(campaignId: string, accountId: strin
     }));
   
   if (missingKPIs.length > 0) {
-    await supabase.from('KPI').insert(missingKPIs);
+    const { error: insertError } = await supabase.from('KPI').insert(missingKPIs);
+    if (insertError) {
+      console.error(`Failed to create missing KPIs for campaign ${campaignId}, account ${accountId}:`, insertError);
+    }
   }
 }
 
@@ -220,13 +239,17 @@ export async function recalculateCampaignGMV(campaignId: string) {
   // Update campaign-level GMV_IDR KPI
   if (campaignGmvKpis && campaignGmvKpis.length > 0) {
     const campaignGmvKpiIds = campaignGmvKpis.map((k: any) => k.id);
-    await supabase
+    const { error: updateError } = await supabase
       .from('KPI')
       .update({ actual: totalGmv })
       .in('id', campaignGmvKpiIds);
+    
+    if (updateError) {
+      console.error(`Failed to update campaign-level GMV_IDR for campaign ${campaignId}:`, updateError);
+    }
   } else {
     // Create campaign-level GMV_IDR KPI if it doesn't exist
-    await supabase
+    const { error: insertError } = await supabase
       .from('KPI')
       .insert({
         campaignId,
@@ -235,6 +258,10 @@ export async function recalculateCampaignGMV(campaignId: string) {
         target: 0,
         actual: totalGmv,
       });
+    
+    if (insertError) {
+      console.error(`Failed to create campaign-level GMV_IDR for campaign ${campaignId}:`, insertError);
+    }
   }
 }
 
