@@ -92,10 +92,15 @@ export default function AccountsPage() {
       });
     }
     if (campaignFilter) {
-      filtered = filtered.filter(acc => (acc.campaigns || []).some(c => c.id === campaignFilter));
+      filtered = filtered.filter(acc => {
+        const accountCampaign = (acc.campaigns || []).find(c => c.id === campaignFilter);
+        if (!accountCampaign) return false;
+        const campaign = campaigns.find(cmp => cmp.id === campaignFilter);
+        return campaign?.status === 'ACTIVE';
+      });
     }
     return filtered;
-  }, [search, type, crossbrand, campaignFilter]);
+  }, [search, type, crossbrand, campaignFilter, campaigns]);
 
   const sortAccounts = useCallback((accounts: Account[]) => {
     const getSortValue = (a: Account, key: SortKey) => {
@@ -107,7 +112,10 @@ export default function AccountsPage() {
         case 'postCount':
           return a.postCount ?? 0;
         case 'campaignCount':
-          return a.campaigns?.length ?? 0;
+          return (a.campaigns || []).filter(c => {
+            const campaign = campaigns.find(cmp => cmp.id === c.id);
+            return campaign?.status === 'ACTIVE';
+          }).length;
         case 'views':
           return accountKpiMap.get(a.id)?.VIEWS?.actual ?? 0;
         case 'qtyPost':
@@ -128,7 +136,7 @@ export default function AccountsPage() {
       const comparison = aVal.toString().localeCompare(bVal.toString(), undefined, { sensitivity: 'base', numeric: true });
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
-  }, [sortConfig, accountKpiMap]);
+  }, [sortConfig, accountKpiMap, campaigns]);
 
   const fetchAccountKpis = async (accountsList: Account[]) => {
     // First, collect all campaign IDs from accounts
@@ -520,7 +528,7 @@ export default function AccountsPage() {
                 className="text-sm py-1.5"
               >
                 <option value="">All campaigns</option>
-                {campaigns.map(c => (
+                {campaigns.filter(c => c.status === 'ACTIVE').map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </Select>
@@ -556,7 +564,7 @@ export default function AccountsPage() {
                 <Table>
                   <THead>
                     <TR>
-                      {renderSortableHeader('Account', 'name')}
+                      {renderSortableHeader('Account', 'name', 'max-w-xs')}
                       {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
                       {kpiDisplayCategories.map(cat =>
                         renderSortableHeader(
@@ -580,27 +588,39 @@ export default function AccountsPage() {
 
                       return (
                         <TR key={a.id}>
-                          <TD>
+                          <TD className="max-w-xs">
                             <div className="flex items-start gap-2">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</div>
-                                {a.tiktokHandle && <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{a.tiktokHandle}</div>}
-                                {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }}>{a.notes}</div>}
+                                <div 
+                                  className="font-medium truncate" 
+                                  style={{ color: 'var(--text-primary)' }}
+                                  title={a.name}
+                                >
+                                  {a.name}
+                                </div>
+                                {a.tiktokHandle && <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }} title={a.tiktokHandle}>{a.tiktokHandle}</div>}
+                                {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }} title={a.notes}>{a.notes}</div>}
                               </div>
                             </div>
                           </TD>
                           <TD className="w-48 align-middle text-left">
-                            {a.campaigns && a.campaigns.length > 0 ? (
-                              <div className="flex flex-wrap gap-1 justify-start">
-                                {a.campaigns.map(campaign => (
-                                  <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                    {campaign.name}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No campaigns</span>
-                            )}
+                            {(() => {
+                              const activeCampaigns = (a.campaigns || []).filter(c => {
+                                const campaign = campaigns.find(cmp => cmp.id === c.id);
+                                return campaign?.status === 'ACTIVE';
+                              });
+                              return activeCampaigns.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 justify-start">
+                                  {activeCampaigns.map(campaign => (
+                                    <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                      {campaign.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No active campaigns</span>
+                              );
+                            })()}
                           </TD>
                           {kpiDisplayCategories.map(cat => {
                             const entry = getKpiEntry(cat);
