@@ -298,19 +298,37 @@ router.put('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (r
   }
   
   // Recalculate KPIs for the campaign and account after post update
+  // Handle both old and new campaigns/accounts to ensure KPIs are accurate
+  
+  // Recalculate for the new campaign and account
   if (post.campaignId) {
     // Recalculate for the new account
     if (post.accountId) {
       await recalculateKPIs(post.campaignId, post.accountId);
     }
     
-    // If accountId changed, also recalculate for the old account
-    if (oldPost?.accountId && oldPost.accountId !== post.accountId) {
+    // Always recalculate campaign-level KPIs for the new campaign (where accountId is null)
+    await recalculateCampaignKPIs(post.campaignId);
+  }
+  
+  // Recalculate for the old campaign and account if they changed
+  if (oldPost?.campaignId) {
+    const campaignIdChanged = oldPost.campaignId !== post.campaignId;
+    const accountIdChanged = oldPost.accountId !== post.accountId;
+    
+    // If campaignId changed, we need to recalculate the old campaign
+    if (campaignIdChanged) {
+      // Recalculate for the old account in the old campaign
+      if (oldPost.accountId) {
+        await recalculateKPIs(oldPost.campaignId, oldPost.accountId);
+      }
+      
+      // Recalculate campaign-level KPIs for the old campaign
+      await recalculateCampaignKPIs(oldPost.campaignId);
+    } else if (accountIdChanged && oldPost.accountId) {
+      // If only accountId changed (same campaign), recalculate for the old account
       await recalculateKPIs(oldPost.campaignId, oldPost.accountId);
     }
-    
-    // Always recalculate campaign-level KPIs (where accountId is null)
-    await recalculateCampaignKPIs(post.campaignId);
   }
   
   // Log activity with specific changed fields only
