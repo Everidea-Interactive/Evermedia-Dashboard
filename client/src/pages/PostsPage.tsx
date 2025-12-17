@@ -241,6 +241,7 @@ export default function PostsPage() {
   const [toast, setToast] = useState<FormMessage | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
   const [updatingEngagement, setUpdatingEngagement] = useState(false);
   const [engagementUpdateProgress, setEngagementUpdateProgress] = useState<{ current: number; total: number } | null>(null);
   const [engagementUpdateResult, setEngagementUpdateResult] = useState<EngagementUpdateResult | null>(null);
@@ -420,6 +421,11 @@ export default function PostsPage() {
     const fromAccounts = accounts.filter((account) => ids.has(account.id));
     return fromAccounts.length > 0 ? fromAccounts : accounts;
   }, [routeCampaignId, campaignAccounts, posts, accounts]);
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedPostIds(new Set());
+  }, [postFilters]);
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
@@ -1537,7 +1543,14 @@ export default function PostsPage() {
   };
 
   const handleDeleteClick = (post: Post) => {
+    setSelectedPostIds(new Set()); // Clear selection when deleting individual post
     setDeleteConfirm({ id: post.id, title: post.postTitle });
+  };
+
+  const handleBulkDeleteClick = () => {
+    if (selectedPostIds.size === 0) return;
+    const selectedPosts = sortedPosts.filter(p => selectedPostIds.has(p.id));
+    setDeleteConfirm({ id: selectedPosts[0].id, title: `${selectedPostIds.size} post${selectedPostIds.size !== 1 ? 's' : ''}` });
   };
 
   const handleDeleteConfirm = async () => {
@@ -1545,9 +1558,18 @@ export default function PostsPage() {
     const { id } = deleteConfirm;
     setDeleting(true);
     try {
-      await api(`/posts/${id}`, { method: 'DELETE', token });
-      await refreshPosts();
-      setToast({ type: 'success', text: 'Post deleted successfully' });
+      // If multiple posts are selected, delete all of them
+      if (selectedPostIds.size > 1) {
+        const idsToDelete = Array.from(selectedPostIds);
+        await Promise.all(idsToDelete.map(postId => api(`/posts/${postId}`, { method: 'DELETE', token })));
+        await refreshPosts();
+        setToast({ type: 'success', text: `${idsToDelete.length} posts deleted successfully` });
+        setSelectedPostIds(new Set());
+      } else {
+        await api(`/posts/${id}`, { method: 'DELETE', token });
+        await refreshPosts();
+        setToast({ type: 'success', text: 'Post deleted successfully' });
+      }
     } catch (error) {
       setToast({ type: 'error', text: (error as Error).message });
     } finally {
@@ -1555,6 +1577,29 @@ export default function PostsPage() {
       setDeleteConfirm(null);
     }
   };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedPostIds(new Set(sortedPosts.map(p => p.id)));
+    } else {
+      setSelectedPostIds(new Set());
+    }
+  };
+
+  const handleSelectPost = (postId: string, checked: boolean) => {
+    setSelectedPostIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(postId);
+      } else {
+        next.delete(postId);
+      }
+      return next;
+    });
+  };
+
+  const allSelected = sortedPosts.length > 0 && selectedPostIds.size === sortedPosts.length;
+  const someSelected = selectedPostIds.size > 0 && selectedPostIds.size < sortedPosts.length;
 
   const handleUpdateEngagementStats = async () => {
     if (!campaignIdForPosts) return;
@@ -2272,6 +2317,19 @@ export default function PostsPage() {
                     >
                       Reset Filters
                     </Button>
+                    {selectedPostIds.size > 0 && (
+                      <RequirePermission permission={canDeletePost}>
+                        <Button
+                          onClick={handleBulkDeleteClick}
+                          variant="outline"
+                          color="red"
+                          disabled={deleting}
+                          className="text-sm py-1 px-2"
+                        >
+                          Delete Selected ({selectedPostIds.size})
+                        </Button>
+                      </RequirePermission>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2289,6 +2347,17 @@ export default function PostsPage() {
                   <Table>
                     <THead>
                       <TR>
+                        <TH className="!text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(input) => {
+                              if (input) input.indeterminate = someSelected;
+                            }}
+                            onChange={(e) => handleSelectAll(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 dark:text-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
+                          />
+                        </TH>
                         <TH>NO</TH>
                         <TH className="!text-center">FYP TYPE</TH>
                         {renderSortableHeader('Account', 'account')}
@@ -2331,6 +2400,14 @@ export default function PostsPage() {
                         
                         return (
                           <TR key={p.id}>
+                            <TD className="!text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedPostIds.has(p.id)}
+                                onChange={(e) => handleSelectPost(p.id, e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 dark:text-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
+                              />
+                            </TD>
                             <TD>{i + 1}</TD>
                             <TD className="!text-center">
                               {p.totalView >= 10000 ? (
@@ -3118,6 +3195,7 @@ export default function PostsPage() {
         </p>
         <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
           This action cannot be undone. KPIs will be recalculated automatically after deletion.
+          {selectedPostIds.size > 1 && ` ${selectedPostIds.size} posts will be deleted.`}
         </p>
       </Dialog>
 
