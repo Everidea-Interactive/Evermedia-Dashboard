@@ -166,75 +166,6 @@ export default function CampaignDetailPage() {
     }
   }, [id, token]);
 
-  // Check and correct FYP KPI counts for accounts
-  const checkAndCorrectFypKpiCounts = useCallback(async () => {
-    if (!id || !campaign || allPosts.length === 0 || kpis.length === 0) return;
-
-    const targetViewsForFYP = campaign.targetViewsForFYP;
-    if (targetViewsForFYP === null || targetViewsForFYP === undefined) return;
-
-    // Group posts by accountId
-    const postsByAccount = new Map<string, any[]>();
-    allPosts.forEach((post: any) => {
-      if (post.accountId) {
-        if (!postsByAccount.has(post.accountId)) {
-          postsByAccount.set(post.accountId, []);
-        }
-        postsByAccount.get(post.accountId)!.push(post);
-      }
-    });
-
-    // Check each account's FYP_COUNT KPI
-    const accountsToRecalculate: string[] = [];
-    
-    for (const [accountId, accountPosts] of postsByAccount) {
-      // Calculate expected FYP_COUNT: posts where views >= threshold (regardless of fypType)
-      const expectedFypCount = accountPosts.filter((p: any) => {
-        const views = p.totalView || 0;
-        return views >= targetViewsForFYP;
-      }).length;
-
-      // Find the FYP_COUNT KPI for this account
-      const fypKpi = kpis.find((k: any) => 
-        k.accountId === accountId && 
-        k.category === 'FYP_COUNT' &&
-        k.campaignId === id
-      );
-
-      // If KPI exists and actual doesn't match expected, mark for recalculation
-      if (fypKpi && fypKpi.actual !== expectedFypCount) {
-        console.log(`FYP_COUNT mismatch for account ${accountId}: expected ${expectedFypCount}, actual ${fypKpi.actual}. Triggering recalculation.`);
-        accountsToRecalculate.push(accountId);
-      }
-    }
-
-    // Recalculate KPIs for accounts with mismatches
-    if (accountsToRecalculate.length > 0) {
-      try {
-        await Promise.all(
-          accountsToRecalculate.map((accountId) =>
-            api(`/campaigns/${id}/accounts/${accountId}/recalculate-kpis`, {
-              method: 'POST',
-              token,
-            }).catch((error) => {
-              console.error(`Failed to recalculate KPIs for account ${accountId}:`, error);
-            })
-          )
-        );
-        
-        // Refresh KPIs after recalculation (but don't include this function in dependencies to avoid loop)
-        const [kpisResult] = await Promise.allSettled([
-          api(`/campaigns/${id}/kpis`, { token }),
-        ]);
-        if (kpisResult.status === 'fulfilled') {
-          setKpis(kpisResult.value);
-        }
-      } catch (error) {
-        console.error('Failed to recalculate KPIs:', error);
-      }
-    }
-  }, [id, campaign, allPosts, kpis, token]);
-
   useEffect(() => {
     if (!id) return;
     api(`/campaigns/${id}`, { token }).then(setCampaign);
@@ -242,21 +173,6 @@ export default function CampaignDetailPage() {
     api('/pics?active=true', { token }).then(setPics).catch(() => {});
     api('/accounts', { token }).then(setAccounts).catch(() => {});
   }, [id, token, refreshDashboardMetrics]);
-
-  // Check and correct FYP KPI counts when campaign, posts, or KPIs change
-  // Use a ref to prevent infinite loops from recalculation triggering refresh
-  const checkingFypKpisRef = useRef(false);
-  useEffect(() => {
-    if (campaign && allPosts.length > 0 && kpis.length > 0 && !checkingFypKpisRef.current) {
-      checkingFypKpisRef.current = true;
-      void checkAndCorrectFypKpiCounts().finally(() => {
-        // Reset after a short delay to allow for recalculation
-        setTimeout(() => {
-          checkingFypKpisRef.current = false;
-        }, 1000);
-      });
-    }
-  }, [campaign?.id, campaign?.targetViewsForFYP, allPosts.length, kpis.length, checkAndCorrectFypKpiCounts]);
 
   const fetchPosts = useCallback(async () => {
     if (!id) return;
