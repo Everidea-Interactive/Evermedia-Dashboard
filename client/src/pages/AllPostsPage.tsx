@@ -196,6 +196,10 @@ export default function AllPostsPage() {
     type: 'success' | 'error' | 'partial';
   } | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectChangeInProgressRef = useRef<string | null>(null);
   const initialCellValueRef = useRef<string>('');
@@ -373,6 +377,16 @@ export default function AllPostsPage() {
     return nextPosts;
   }, [filteredPosts, sortConfig, getAccountName, getCampaignName, getPicName]);
 
+  // Client-side pagination
+  const paginatedPosts = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return sortedPosts.slice(start, end);
+  }, [sortedPosts, pagination]);
+
+  const totalPages = Math.ceil(sortedPosts.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
   const handleSortToggle = (key: SortKey) => {
     setSortConfig((prev) => {
       if (prev.key === key) {
@@ -407,6 +421,11 @@ export default function AllPostsPage() {
 
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, offset: 0 })); // Reset to first page when filtering
+  };
+
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPagination({ limit: newLimit, offset: 0 });
   };
 
   // Define the order of editable columns
@@ -1424,6 +1443,7 @@ export default function AllPostsPage() {
                         picEditorId: '',
                         picPostingId: '',
                       });
+                      setPagination(prev => ({ ...prev, offset: 0 }));
                     }}
                     variant="outline"
                     className="text-sm py-1 px-2"
@@ -1456,7 +1476,30 @@ export default function AllPostsPage() {
                 </p>
               </div>
             ) : (
-              <TableWrap>
+              <>
+                <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, sortedPosts.length)} of {sortedPosts.length}
+                    {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      Rows per page:
+                    </label>
+                    <Select
+                      value={pagination.limit.toString()}
+                      onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                      className="text-sm py-1 px-2 w-20"
+                    >
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
+                    </Select>
+                  </div>
+                </div>
+                <TableWrap>
                 <Table>
                   <THead>
                     <TR>
@@ -1498,7 +1541,7 @@ export default function AllPostsPage() {
                     </TR>
                   </THead>
                   <tbody>
-                    {sortedPosts.map((p, i) => {
+                    {paginatedPosts.map((p, i) => {
                       const picTalentName = getPicName(p.picTalentId, p.picTalent) || '—';
                       const picEditorName = getPicName(p.picEditorId, p.picEditor) || '—';
                       const picPostingName = getPicName(p.picPostingId, p.picPosting) || '—';
@@ -1521,7 +1564,7 @@ export default function AllPostsPage() {
                                 className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 dark:text-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
                               />
                             </TD>
-                            <TD>{i + 1}</TD>
+                            <TD>{pagination.offset + i + 1}</TD>
                             <TD className="!text-center">
                               {p.totalView >= 10000 ? (
                                 <div className="flex items-center justify-center gap-3">
@@ -2279,6 +2322,30 @@ export default function AllPostsPage() {
                   </tbody>
                 </Table>
               </TableWrap>
+              {totalPages > 1 && (
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                    disabled={pagination.offset === 0}
+                    className="text-sm"
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                    disabled={pagination.offset + pagination.limit >= sortedPosts.length}
+                    className="text-sm"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
             )}
           </div>
         </Card>
