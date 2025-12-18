@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -48,6 +49,9 @@ export default function UsersPage() {
     api('/users', { token })
       .then(setItems)
       .catch((error: any) => {
+        if (shouldIgnoreRequestError(error)) {
+          return;
+        }
         setToast({ message: error?.error || 'Failed to fetch users', type: 'error' });
         setItems([]);
       })

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
 import PageHeader from '../components/PageHeader';
@@ -64,6 +65,9 @@ export default function DailyPage() {
         setPosts(postsData as Post[]);
         setPics(picsData as PicOption[]);
       } catch (error) {
+        if (shouldIgnoreRequestError(error)) {
+          return;
+        }
         console.error('Failed to fetch data:', error);
       } finally {
         setLoading(false);

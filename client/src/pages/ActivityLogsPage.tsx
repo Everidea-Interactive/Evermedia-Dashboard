@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDateTime } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -67,6 +68,9 @@ export default function ActivityLogsPage() {
         setTotal(data.total);
       })
       .catch((error: any) => {
+        if (shouldIgnoreRequestError(error)) {
+          return;
+        }
         console.error('Failed to fetch activity logs:', error);
         setLogs([]);
         setTotal(0);
