@@ -341,12 +341,71 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
   res.json({ ok: true });
 });
 
+// Batch endpoint to fetch KPIs for multiple campaigns
+router.get('/kpis/batch', async (req, res) => {
+  const { campaignIds, accountId } = req.query as any;
+  
+  if (!campaignIds) {
+    return res.status(400).json({ error: 'campaignIds query parameter is required' });
+  }
+  
+  const ids = Array.isArray(campaignIds) ? campaignIds : campaignIds.split(',').filter(Boolean);
+  if (ids.length === 0) {
+    return res.json({});
+  }
+  
+  let query = supabase
+    .from('KPI')
+    .select('*')
+    .in('campaignId', ids);
+  
+  // Filter by accountId if provided
+  if (accountId !== undefined) {
+    if (accountId === null || accountId === 'null') {
+      query = query.is('accountId', null);
+    } else {
+      query = query.eq('accountId', accountId);
+    }
+  }
+  
+  const { data: kpis, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  
+  // Group KPIs by campaignId
+  const kpisByCampaign: Record<string, any[]> = {};
+  (kpis || []).forEach((k: any) => {
+    const target = k.target ?? 0;
+    const actual = k.actual ?? 0;
+    const kpi = { ...k, target, actual, remaining: target - actual };
+    if (!kpisByCampaign[k.campaignId]) {
+      kpisByCampaign[k.campaignId] = [];
+    }
+    kpisByCampaign[k.campaignId].push(kpi);
+  });
+  
+  res.json(kpisByCampaign);
+});
+
 router.get('/:id/kpis', async (req, res) => {
-  const { data: kpis, error } = await supabase
+  const { accountId } = req.query as any;
+  let query = supabase
     .from('KPI')
     .select('*')
     .eq('campaignId', req.params.id);
   
+  // Filter by accountId if provided
+  // accountId=null means campaign-level KPIs only (where accountId IS NULL)
+  // accountId=<id> means KPIs for that specific account
+  // No accountId means all KPIs (backward compatible)
+  if (accountId !== undefined) {
+    if (accountId === null || accountId === 'null') {
+      query = query.is('accountId', null);
+    } else {
+      query = query.eq('accountId', accountId);
+    }
+  }
+  
+  const { data: kpis, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   res.json((kpis || []).map((k: any) => {
     const target = k.target ?? 0;

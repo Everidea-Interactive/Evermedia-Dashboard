@@ -121,48 +121,218 @@ export default function CampaignsPage() {
   const previousLocationRef = useRef<string>('');
   const campaignDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Cache keys
+  const CACHE_KEYS = {
+    campaigns: 'campaigns_cache',
+    kpis: 'kpis_cache',
+    engagement: 'engagement_cache',
+  };
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  // Cache helper functions
+  const getCachedData = useCallback((key: string) => {
+    try {
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp > CACHE_TTL) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const setCachedData = useCallback((key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (error) {
+      console.warn('Failed to cache data:', error);
+    }
+  }, []);
+
+  const clearCache = useCallback(() => {
+    Object.values(CACHE_KEYS).forEach(key => localStorage.removeItem(key));
+  }, []);
+
+  // Fetch KPIs for a given list of campaigns (optimized with batch endpoint and caching)
+  const fetchKPIsForCampaigns = useCallback(async (campaigns: Campaign[], useCache = true) => {
+    if (campaigns.length === 0) return new Map<string, any[]>();
+    
+    const campaignIds = campaigns.map(c => c.id).sort().join(',');
+    const cacheKey = `${CACHE_KEYS.kpis}_${campaignIds}`;
+    
+      // Try cache first
+      if (useCache) {
+        const cached = getCachedData(cacheKey);
+        if (cached && typeof cached === 'object') {
+          const kpiMap = new Map<string, any[]>();
+          Object.entries(cached).forEach(([key, value]) => {
+            kpiMap.set(key, Array.isArray(value) ? value : []);
+          });
+          return kpiMap;
+        }
+      }
+    
+    try {
+      // Use batch endpoint for better performance
+      const kpisByCampaign = await api(`/campaigns/kpis/batch?campaignIds=${campaignIds}&accountId=null`, { token });
+      
+      // Convert to Map and filter to campaign-level only
+      const kpiMap = new Map<string, any[]>();
+      Object.entries(kpisByCampaign).forEach(([campaignId, kpis]: [string, any]) => {
+        const campaignLevelKpis = Array.isArray(kpis) 
+          ? kpis.filter((kpi: any) => !kpi.accountId)
+          : [];
+        kpiMap.set(campaignId, campaignLevelKpis);
+      });
+      
+      // Cache the result
+      const cacheData = Object.fromEntries(kpiMap);
+      setCachedData(cacheKey, cacheData);
+      
+      return kpiMap;
+    } catch (error) {
+      console.error('Failed to fetch KPIs:', error);
+      // Fallback to individual requests if batch fails
+      const kpiMap = new Map<string, any[]>();
+      const kpiPromises = campaigns.map(async (campaign: Campaign) => {
+        try {
+          const kpis = await api(`/campaigns/${campaign.id}/kpis?accountId=null`, { token });
+          kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis.filter((k: any) => !k.accountId) : []);
+        } catch (err) {
+          console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, err);
+          kpiMap.set(campaign.id, []);
+        }
+      });
+      await Promise.allSettled(kpiPromises);
+      return kpiMap;
+    }
+  }, [token, getCachedData, setCachedData]);
+
+  // Refresh KPIs for currently loaded campaigns
   const fetchKPIs = useCallback(async () => {
     if (allItems.length === 0) return;
+    const kpiMap = await fetchKPIsForCampaigns(allItems);
+    setCampaignKpisMap(kpiMap);
+  }, [allItems, fetchKPIsForCampaigns]);
+
+  // Fetch campaigns only (no KPIs) with caching
+  const fetchCampaigns = useCallback(async (useCache = true) => {
+    // Try cache first
+    if (useCache) {
+      const cached = getCachedData(CACHE_KEYS.campaigns);
+      if (cached) {
+        setAllItems(cached);
+        return cached;
+      }
+    }
     
-    // Fetch KPIs for all campaigns
-    const kpiMap = new Map<string, any[]>();
-    const kpiPromises = allItems.map(async (campaign: Campaign) => {
-      try {
-        const kpis = await api(`/campaigns/${campaign.id}/kpis`, { token });
-        kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis : []);
-      } catch (error) {
-        console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, error);
-        kpiMap.set(campaign.id, []);
+    try {
+      const data = await api('/campaigns', { token });
+      setAllItems(data);
+      setCachedData(CACHE_KEYS.campaigns, data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch campaigns:', error);
+      setAllItems([]);
+      return [];
+    }
+  }, [token, getCachedData, setCachedData]);
+
+  // Fetch all data: campaigns, KPIs, and engagement stats with optimistic loading
+  const fetchAllData = useCallback(async () => {
+    // Try to load from cache first for instant display
+    const cachedCampaigns = getCachedData(CACHE_KEYS.campaigns);
+    const cachedEngagement = getCachedData(CACHE_KEYS.engagement);
+    
+    if (cachedCampaigns) {
+      setAllItems(cachedCampaigns);
+      // Try to load cached KPIs
+      const cachedKpis = getCachedData(`${CACHE_KEYS.kpis}_${cachedCampaigns.map((c: Campaign) => c.id).sort().join(',')}`);
+      if (cachedKpis && typeof cachedKpis === 'object') {
+        const kpiMap = new Map<string, any[]>();
+        Object.entries(cachedKpis).forEach(([key, value]) => {
+          kpiMap.set(key, Array.isArray(value) ? value : []);
+        });
+        setCampaignKpisMap(kpiMap);
+      }
+    }
+    
+    if (cachedEngagement) {
+      setEngagement(cachedEngagement);
+    }
+    
+    setLoading(true);
+    try {
+      // Fetch fresh data in parallel
+      const [campaigns, engagementData] = await Promise.allSettled([
+        fetchCampaigns(false), // Skip cache, fetch fresh
+        api('/campaigns/all/engagement', { token }).catch(() => null),
+      ]);
+
+      const campaignsList = campaigns.status === 'fulfilled' ? campaigns.value : [];
+      
+      // Fetch KPIs for the campaigns we just loaded
+      if (campaignsList.length > 0) {
+        const kpiMap = await fetchKPIsForCampaigns(campaignsList, false); // Skip cache, fetch fresh
+        setCampaignKpisMap(kpiMap);
+      }
+
+      // Set engagement data (views will be overridden by calculatedEngagement)
+      if (engagementData.status === 'fulfilled' && engagementData.value) {
+        setEngagement(engagementData.value);
+        setCachedData(CACHE_KEYS.engagement, engagementData.value);
+      }
+    } catch (error) {
+      console.error('Failed to fetch all data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, fetchCampaigns, fetchKPIsForCampaigns, getCachedData, setCachedData]);
+
+  // Calculate engagement stats from campaign-level KPIs (to match KPI Overview exactly)
+  // Views come from campaign-level KPIs, other metrics from engagement API
+  const calculatedEngagement = useMemo(() => {
+    const campaignsToUse = allItems; // Always use all campaigns for engagement stats
+
+    // Calculate views from campaign-level KPIs (same source as KPI Overview)
+    let totalViews = 0;
+    campaignsToUse.forEach(campaign => {
+      const kpis = campaignKpisMap.get(campaign.id) || [];
+      const campaignLevelKpis = kpis.filter((kpi: any) => !kpi.accountId);
+      const viewsKpi = campaignLevelKpis.find((k: any) => k.category === 'VIEWS');
+      if (viewsKpi) {
+        totalViews += viewsKpi.actual || 0;
       }
     });
-    await Promise.allSettled(kpiPromises);
-    setCampaignKpisMap(kpiMap);
-  }, [allItems, token]);
 
-  const fetchCampaigns = () => {
-    setLoading(true);
-    // Always fetch all campaigns to ensure filter options (brands, categories) show all available values
-    api('/campaigns', { token })
-      .then(async (data) => {
-        setAllItems(data);
-        applyFilters(data);
-        
-        // Fetch KPIs for all campaigns
-        const kpiMap = new Map<string, any[]>();
-        const kpiPromises = data.map(async (campaign: Campaign) => {
-          try {
-            const kpis = await api(`/campaigns/${campaign.id}/kpis`, { token });
-            kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis : []);
-          } catch (error) {
-            console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, error);
-            kpiMap.set(campaign.id, []);
-          }
-        });
-        await Promise.allSettled(kpiPromises);
-        setCampaignKpisMap(kpiMap);
-      })
-      .finally(() => setLoading(false));
-  };
+    // Use engagement state for other metrics (likes, comments, shares, saves)
+    // but override views with the calculated value from KPIs
+    const baseEngagement = engagement || {
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      saves: 0,
+      engagementRate: 0,
+      projectNumbersCount: allItems.length,
+    };
+
+    const totalEngagement = baseEngagement.likes + baseEngagement.comments + baseEngagement.shares + baseEngagement.saves;
+    const engagementRate = totalViews === 0 ? 0 : Number((totalEngagement / totalViews).toFixed(4));
+
+    return {
+      views: totalViews, // From campaign-level KPIs (matches KPI Overview)
+      likes: baseEngagement.likes,
+      comments: baseEngagement.comments,
+      shares: baseEngagement.shares,
+      saves: baseEngagement.saves,
+      engagementRate,
+      projectNumbersCount: allItems.length,
+    };
+  }, [allItems, campaignKpisMap, engagement]);
 
   const applyFilters = useCallback((campaigns: Campaign[]) => {
     const filtered = campaigns.filter((c) => {
@@ -254,9 +424,10 @@ export default function CampaignsPage() {
     );
   };
 
+  // Initial data load - fetch campaigns, KPIs, and engagement in parallel
   useEffect(() => {
-    fetchCampaigns();
-  }, [token]);
+    fetchAllData();
+  }, [token, fetchAllData]);
 
   useEffect(() => {
     applyFilters(allItems);
@@ -264,12 +435,6 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
-  }, [token]);
-
-  useEffect(() => {
-    api('/campaigns/all/engagement', { token })
-      .then(setEngagement)
-      .catch(() => setEngagement(null));
   }, [token]);
 
   // Refresh KPIs when navigating back to campaigns page from detail page
@@ -365,9 +530,9 @@ export default function CampaignsPage() {
 
     campaignsToAggregate.forEach(campaign => {
       const kpis = campaignKpisMap.get(campaign.id) || [];
-      // Only aggregate campaign-level KPIs (where accountId is null)
-      const campaignKpis = kpis.filter((k: any) => !k.accountId);
-      campaignKpis.forEach((kpi: any) => {
+      // Ensure only campaign-level KPIs are used (accountId is null or undefined)
+      const campaignLevelKpis = kpis.filter((kpi: any) => !kpi.accountId);
+      campaignLevelKpis.forEach((kpi: any) => {
         const existing = kpiTotals.get(kpi.category) ?? { target: 0, actual: 0 };
         kpiTotals.set(kpi.category, {
           target: existing.target + (kpi.target ?? 0),
@@ -502,10 +667,9 @@ export default function CampaignsPage() {
 
       resetForm();
       setShowAddForm(false);
-      fetchCampaigns();
-      api('/campaigns/all/engagement', { token })
-        .then(setEngagement)
-        .catch(() => setEngagement(null));
+      // Clear cache and refresh all data after adding campaign
+      clearCache();
+      fetchAllData();
       setToast({ message: 'Campaign and KPIs added successfully', type: 'success' });
     } catch (error: any) {
       setToast({ message: error?.error || 'Failed to add campaign', type: 'error' });
@@ -525,10 +689,9 @@ export default function CampaignsPage() {
     setDeleteConfirm(null);
     try {
       await api(`/campaigns/${id}`, { method: 'DELETE', token });
-      fetchCampaigns();
-      api('/campaigns/all/engagement', { token })
-        .then(setEngagement)
-        .catch(() => setEngagement(null));
+      // Clear cache and refresh all data after deleting campaign
+      clearCache();
+      fetchAllData();
       setToast({ message: 'Campaign deleted successfully', type: 'success' });
     } catch (error: any) {
       const errorMessage = error?.error || error?.message || 'Failed to delete campaign';
@@ -558,7 +721,7 @@ export default function CampaignsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-2 sm:gap-3 mb-4 sm:mb-6">
         <Card>
           <div className="section-title text-xs sm:text-sm">Project Numbers</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.projectNumbersCount?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{calculatedEngagement.projectNumbersCount.toLocaleString()}</div>
         </Card>
         <Card 
           className="cursor-pointer transition-opacity hover:opacity-80"
@@ -571,27 +734,27 @@ export default function CampaignsPage() {
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Views</div>
-          <div className="mt-1 text-lg sm:text-xl md:text-lg lg:text-2xl font-semibold break-words">{engagement?.views?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-xl md:text-lg lg:text-2xl font-semibold break-words">{calculatedEngagement.views.toLocaleString()}</div>
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Likes</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.likes?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{calculatedEngagement.likes.toLocaleString()}</div>
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Comments</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.comments?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{calculatedEngagement.comments.toLocaleString()}</div>
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Shares</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.shares?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{calculatedEngagement.shares.toLocaleString()}</div>
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Saved</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.saves?.toLocaleString() ?? '-'}</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{calculatedEngagement.saves.toLocaleString()}</div>
         </Card>
         <Card>
           <div className="section-title text-xs sm:text-sm">Engagement Rate</div>
-          <div className="mt-1 text-lg sm:text-2xl font-semibold">{engagement?.engagementRate ? (engagement.engagementRate * 100).toFixed(2) + '%' : '-'}</div>
+          <div className="mt-1 text-lg sm:text-2xl font-semibold">{calculatedEngagement.engagementRate ? (calculatedEngagement.engagementRate * 100).toFixed(2) + '%' : '-'}</div>
         </Card>
       </div>
 
@@ -841,7 +1004,7 @@ export default function CampaignsPage() {
                 <tbody>
                   {sortedItems.map((c) => {
                     const kpis = campaignKpisMap.get(c.id) || [];
-                    // Get campaign-level KPIs (where accountId is null)
+                    // Ensure only campaign-level KPIs are used (accountId is null or undefined)
                     const campaignKpis = kpis.filter((k: any) => !k.accountId);
                     
                     // Create a map of category to { target, actual }
