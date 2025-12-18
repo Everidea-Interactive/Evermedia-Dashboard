@@ -10,87 +10,132 @@ function engagementRate(sum: { views: number; likes: number; comments: number; s
   return views === 0 ? 0 : Number(((likes + comments + shares + saves) / views).toFixed(4));
 }
 
+// Helper function to fetch all posts with pagination
+async function fetchAllPosts(selectFields: string, filterFn?: (query: any) => any): Promise<any[]> {
+  const allPosts: any[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase
+      .from('Post')
+      .select(selectFields)
+      .order('id', { ascending: true }) // Ensure consistent pagination ordering
+      .range(offset, offset + pageSize - 1);
+    
+    if (filterFn) {
+      query = filterFn(query);
+    }
+    
+    const { data: posts, error } = await query;
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (posts && posts.length > 0) {
+      allPosts.push(...posts);
+      offset += pageSize;
+      hasMore = posts.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allPosts;
+}
+
 router.get('/campaigns/:id/dashboard/engagement', async (req, res) => {
   const campaignId = req.params.id;
-  const { data: posts, error } = await supabase
-    .from('Post')
-    .select('totalView, totalLike, totalComment, totalShare, totalSaved')
-    .eq('campaignId', campaignId);
   
-  if (error) return res.status(500).json({ error: error.message });
-  
-  const sum = (posts || []).reduce(
-    (acc: any, p: any) => {
-      acc.views += p.totalView || 0;
-      acc.likes += p.totalLike || 0;
-      acc.comments += p.totalComment || 0;
-      acc.shares += p.totalShare || 0;
-      acc.saves += p.totalSaved || 0;
-      return acc;
-    },
-    { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 }
-  );
-  res.json({ ...sum, engagementRate: engagementRate(sum) });
+  try {
+    // Fetch all posts with pagination to handle campaigns with more than 1000 posts
+    const posts = await fetchAllPosts(
+      'totalView, totalLike, totalComment, totalShare, totalSaved',
+      (query) => query.eq('campaignId', campaignId)
+    );
+    
+    const sum = posts.reduce(
+      (acc: any, p: any) => {
+        acc.views += p.totalView || 0;
+        acc.likes += p.totalLike || 0;
+        acc.comments += p.totalComment || 0;
+        acc.shares += p.totalShare || 0;
+        acc.saves += p.totalSaved || 0;
+        return acc;
+      },
+      { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 }
+    );
+    res.json({ ...sum, engagementRate: engagementRate(sum) });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 router.get('/campaigns/:id/dashboard/categories', async (req, res) => {
   const campaignId = req.params.id;
-  const { data: posts, error } = await supabase
-    .from('Post')
-    .select('campaignCategory, totalView')
-    .eq('campaignId', campaignId);
+  
+  try {
+    // Fetch all posts with pagination to handle campaigns with more than 1000 posts
+    const posts = await fetchAllPosts(
+      'campaignCategory, totalView',
+      (query) => query.eq('campaignId', campaignId)
+    );
 
-  if (error) return res.status(500).json({ error: error.message });
+    const totals = posts.reduce((map: Map<string, { posts: number; views: number }>, post: any) => {
+      const category = (post.campaignCategory || '').trim() || 'Uncategorized';
+      const current = map.get(category) ?? { posts: 0, views: 0 };
+      const views = typeof post.totalView === 'number' ? post.totalView : Number(post.totalView) || 0;
+      map.set(category, { posts: current.posts + 1, views: current.views + views });
+      return map;
+    }, new Map<string, { posts: number; views: number }>());
 
-  const totals = (posts || []).reduce((map: Map<string, { posts: number; views: number }>, post: any) => {
-    const category = (post.campaignCategory || '').trim() || 'Uncategorized';
-    const current = map.get(category) ?? { posts: 0, views: 0 };
-    const views = typeof post.totalView === 'number' ? post.totalView : Number(post.totalView) || 0;
-    map.set(category, { posts: current.posts + 1, views: current.views + views });
-    return map;
-  }, new Map<string, { posts: number; views: number }>());
+    const data = Array.from(totals.entries()).map(([category, stats]) => ({
+      category,
+      posts: stats.posts,
+      views: stats.views,
+    }));
 
-  const data = Array.from(totals.entries()).map(([category, stats]) => ({
-    category,
-    posts: stats.posts,
-    views: stats.views,
-  }));
-
-  data.sort((a, b) => b.posts - a.posts || b.views - a.views || a.category.localeCompare(b.category));
-  res.json(data);
+    data.sort((a, b) => b.posts - a.posts || b.views - a.views || a.category.localeCompare(b.category));
+    res.json(data);
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 router.get('/campaigns/all/engagement', async (req, res) => {
-  const { data: posts, error } = await supabase
-    .from('Post')
-    .select('totalView, totalLike, totalComment, totalShare, totalSaved');
-  
-  if (error) return res.status(500).json({ error: error.message });
-  
-  const sum = (posts || []).reduce(
-    (acc: any, p: any) => {
-      acc.views += p.totalView || 0;
-      acc.likes += p.totalLike || 0;
-      acc.comments += p.totalComment || 0;
-      acc.shares += p.totalShare || 0;
-      acc.saves += p.totalSaved || 0;
-      return acc;
-    },
-    { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 }
-  );
-  
-  // Get total count of all campaigns
-  const { count: campaignsCount, error: campaignsError } = await supabase
-    .from('Campaign')
-    .select('*', { count: 'exact', head: true });
-  
-  if (campaignsError) return res.status(500).json({ error: campaignsError.message });
-  
-  res.json({ 
-    ...sum, 
-    engagementRate: engagementRate(sum),
-    projectNumbersCount: campaignsCount || 0
-  });
+  try {
+    // Fetch all posts with pagination to handle databases with more than 1000 posts
+    const posts = await fetchAllPosts('totalView, totalLike, totalComment, totalShare, totalSaved');
+    
+    const sum = posts.reduce(
+      (acc: any, p: any) => {
+        acc.views += p.totalView || 0;
+        acc.likes += p.totalLike || 0;
+        acc.comments += p.totalComment || 0;
+        acc.shares += p.totalShare || 0;
+        acc.saves += p.totalSaved || 0;
+        return acc;
+      },
+      { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 }
+    );
+    
+    // Get total count of all campaigns
+    const { count: campaignsCount, error: campaignsError } = await supabase
+      .from('Campaign')
+      .select('*', { count: 'exact', head: true });
+    
+    if (campaignsError) return res.status(500).json({ error: campaignsError.message });
+    
+    res.json({ 
+      ...sum, 
+      engagementRate: engagementRate(sum),
+      projectNumbersCount: campaignsCount || 0
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 router.get('/campaigns/:id/dashboard/kpi', async (req, res) => {

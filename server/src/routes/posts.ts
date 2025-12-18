@@ -17,21 +17,74 @@ function computeEngagement(p: any) {
   return { ...p, engagementRate: Number(rate.toFixed(4)) };
 }
 
+const POST_PAGE_SIZE = 1000;
+
+type PostFilters = {
+  campaignId?: string;
+  accountId?: string;
+  status?: string;
+  category?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  picTalentId?: string;
+  picEditorId?: string;
+  picPostingId?: string;
+};
+
+const applyPostFilters = (query: any, filters: PostFilters) => {
+  if (filters.campaignId) query = query.eq('campaignId', filters.campaignId);
+  if (filters.accountId) query = query.eq('accountId', filters.accountId);
+  if (filters.status) query = query.ilike('status', `%${String(filters.status)}%`);
+  if (filters.category) query = query.ilike('contentCategory', `%${String(filters.category)}%`);
+  if (filters.dateFrom) query = query.gte('postDate', String(filters.dateFrom));
+  if (filters.dateTo) query = query.lte('postDate', String(filters.dateTo));
+  if (filters.picTalentId) query = query.eq('picTalentId', filters.picTalentId);
+  if (filters.picEditorId) query = query.eq('picEditorId', filters.picEditorId);
+  if (filters.picPostingId) query = query.eq('picPostingId', filters.picPostingId);
+  return query;
+};
+
+const buildPostQuery = (filters: PostFilters) =>
+  applyPostFilters(
+    supabase
+      .from('Post')
+      .select('*')
+      .order('postDate', { ascending: false })
+      .order('createdAt', { ascending: false }),
+    filters,
+  );
+
+async function fetchAllPosts(filters: PostFilters) {
+  const allPosts: any[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data: posts, error } = await buildPostQuery(filters).range(offset, offset + POST_PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+
+    const batch = posts || [];
+    allPosts.push(...batch);
+
+    if (batch.length < POST_PAGE_SIZE) break;
+    offset += POST_PAGE_SIZE;
+  }
+
+  return { data: allPosts, error: null };
+}
+
 router.get('/', async (req, res) => {
   const { campaignId, accountId, status, category, dateFrom, dateTo, picTalentId, picEditorId, picPostingId } = req.query as any;
-  let query = supabase.from('Post').select('*').order('postDate', { ascending: false }).order('createdAt', { ascending: false });
-
-  if (campaignId) query = query.eq('campaignId', campaignId);
-  if (accountId) query = query.eq('accountId', accountId);
-  if (status) query = query.ilike('status', `%${String(status)}%`);
-  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
-  if (dateFrom) query = query.gte('postDate', String(dateFrom));
-  if (dateTo) query = query.lte('postDate', String(dateTo));
-  if (picTalentId) query = query.eq('picTalentId', picTalentId);
-  if (picEditorId) query = query.eq('picEditorId', picEditorId);
-  if (picPostingId) query = query.eq('picPostingId', picPostingId);
-
-  const { data: posts, error } = await query;
+  const { data: posts, error } = await fetchAllPosts({
+    campaignId,
+    accountId,
+    status,
+    category,
+    dateFrom,
+    dateTo,
+    picTalentId,
+    picEditorId,
+    picPostingId,
+  });
   if (error) return res.status(500).json({ error: error.message });
   res.json((posts || []).map(computeEngagement));
 });
@@ -39,18 +92,17 @@ router.get('/', async (req, res) => {
 router.get('/all', async (req, res) => {
   const { campaignId, dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
 
-  let query = supabase.from('Post').select('*').order('postDate', { ascending: false }).order('createdAt', { ascending: false });
-  if (campaignId) query = query.eq('campaignId', campaignId);
-  if (accountId) query = query.eq('accountId', accountId);
-  if (status) query = query.ilike('status', `%${String(status)}%`);
-  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
-  if (dateFrom) query = query.gte('postDate', String(dateFrom));
-  if (dateTo) query = query.lte('postDate', String(dateTo));
-  if (picTalentId) query = query.eq('picTalentId', picTalentId);
-  if (picEditorId) query = query.eq('picEditorId', picEditorId);
-  if (picPostingId) query = query.eq('picPostingId', picPostingId);
-
-  const { data: posts, error } = await query;
+  const { data: posts, error } = await fetchAllPosts({
+    campaignId,
+    accountId,
+    status,
+    category,
+    dateFrom,
+    dateTo,
+    picTalentId,
+    picEditorId,
+    picPostingId,
+  });
   if (error) return res.status(500).json({ error: error.message });
 
   // Fetch related data - parallelize independent queries
@@ -91,17 +143,17 @@ router.get('/campaign/:id', async (req, res) => {
   const id = req.params.id;
   const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category } = req.query as any;
 
-  let query = supabase.from('Post').select('*').eq('campaignId', id).order('postDate', { ascending: false }).order('createdAt', { ascending: false });
-  if (accountId) query = query.eq('accountId', accountId);
-  if (status) query = query.ilike('status', `%${String(status)}%`);
-  if (category) query = query.ilike('contentCategory', `%${String(category)}%`);
-  if (dateFrom) query = query.gte('postDate', String(dateFrom));
-  if (dateTo) query = query.lte('postDate', String(dateTo));
-  if (picTalentId) query = query.eq('picTalentId', picTalentId);
-  if (picEditorId) query = query.eq('picEditorId', picEditorId);
-  if (picPostingId) query = query.eq('picPostingId', picPostingId);
-
-  const { data: posts, error } = await query;
+  const { data: posts, error } = await fetchAllPosts({
+    campaignId: id,
+    accountId,
+    status,
+    category,
+    dateFrom,
+    dateTo,
+    picTalentId,
+    picEditorId,
+    picPostingId,
+  });
   if (error) return res.status(500).json({ error: error.message });
   res.json((posts || []).map(computeEngagement));
 });

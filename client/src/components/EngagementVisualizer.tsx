@@ -138,7 +138,7 @@ export default function EngagementVisualizer({ engagement, posts }: EngagementVi
                 borderRadius: '6px',
                 color: 'var(--text-primary)'
               }}
-              formatter={(value: number) => value.toLocaleString()}
+              formatter={(value: any) => typeof value === 'number' ? value.toLocaleString() : value}
             />
             <Legend />
             <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
