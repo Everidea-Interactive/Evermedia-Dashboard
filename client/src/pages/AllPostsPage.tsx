@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { formatDate, parseDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -223,6 +224,9 @@ export default function AllPostsPage() {
       const data = await api('/posts/all', { token });
       setPosts(data as Post[]);
     } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       console.error('Failed to fetch posts:', error);
       setPosts([]);
     } finally {

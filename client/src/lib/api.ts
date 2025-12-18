@@ -3,6 +3,29 @@ import { clearAllCache, getApiCacheKey, type CacheOptions, withCache } from './c
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const API_URL = API_BASE_URL;
 
+const AUTO_CACHE_PATHS = new Set<string>([
+  '/campaigns',
+  '/campaigns/all/engagement',
+  '/campaigns?status=ACTIVE',
+  '/posts/all',
+  '/accounts',
+  '/pics',
+  '/pics?active=true',
+]);
+
+function getAutoCacheOptions(path: string): CacheOptions | null {
+  if (AUTO_CACHE_PATHS.has(path)) {
+    return { mode: 'default', key: getApiCacheKey(path) };
+  }
+  if (path.startsWith('/campaigns/kpis/batch?')) {
+    return { mode: 'default', key: getApiCacheKey(path) };
+  }
+  if (/^\/campaigns\/[^/]+\/kpis/.test(path)) {
+    return { mode: 'default', key: getApiCacheKey(path) };
+  }
+  return null;
+}
+
 // Global handler for 401 errors
 let onUnauthorized: (() => Promise<void> | void) | null = null;
 
@@ -59,7 +82,8 @@ export async function api(
 ) {
   const url = `${API_URL}/api${path}`;
   const methodUpper = method.toUpperCase();
-  const cacheKey = cache?.key ?? getApiCacheKey(path);
+  const cacheConfig = cache ?? getAutoCacheOptions(path);
+  const cacheKey = cacheConfig?.key ?? getApiCacheKey(path);
 
   // Helper to perform a fetch with a specific token value
   const doFetch = async (authToken: string | null) => {
@@ -110,8 +134,8 @@ export async function api(
     return res.json();
   };
 
-  if (methodUpper === 'GET' && cache?.mode !== 'no-store') {
-    return withCache(cacheKey, fetcher, cache);
+  if (methodUpper === 'GET' && cacheConfig?.mode !== 'no-store' && cacheConfig) {
+    return withCache(cacheKey, fetcher, cacheConfig);
   }
 
   const data = await fetcher();

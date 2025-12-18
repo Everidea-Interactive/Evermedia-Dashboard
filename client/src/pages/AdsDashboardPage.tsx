@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -107,6 +108,9 @@ export default function AdsDashboardPage() {
       
       setAllCampaignData(data);
     } catch (error: any) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       console.error('Failed to fetch ads dashboard data:', error);
       setAllCampaignData([]);
     } finally {

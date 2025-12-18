@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -157,6 +158,10 @@ export default function AccountsPage() {
       const activeCampaigns = (allCampaigns || []).filter((c: any) => c.status === 'ACTIVE');
       activeCampaignIds = activeCampaigns.map((c: any) => c.id);
     } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        setAccountKpiMap(new Map());
+        return;
+      }
       console.error('Failed to fetch campaigns for status filtering:', error);
       // If we can't fetch campaigns, fall back to empty array (no KPIs will be shown)
       setAccountKpiMap(new Map());
@@ -191,6 +196,9 @@ export default function AccountsPage() {
           };
         });
       } catch (error) {
+        if (shouldIgnoreRequestError(error)) {
+          return;
+        }
         console.error(`Failed to fetch KPIs for campaign ${campaignId}:`, error);
       }
     });
@@ -208,6 +216,9 @@ export default function AccountsPage() {
       setItems(sortAccounts(applyClientFilters(data)));
       await fetchAccountKpis(data);
     } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       console.error('Failed to fetch accounts', error);
       setAllAccounts([]);
       setItems([]);

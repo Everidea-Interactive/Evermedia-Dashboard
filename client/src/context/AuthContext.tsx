@@ -1,6 +1,7 @@
-import { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { api, setUnauthorizedHandler } from '../lib/api';
 import { clearAllCache } from '../lib/cache';
+import { preloadAppData } from '../lib/preload';
 
 type User = { id: string; name: string; email: string; role: 'ADMIN'|'CAMPAIGN_MANAGER'|'EDITOR'|'VIEWER' };
 
@@ -24,12 +25,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const str = localStorage.getItem('user');
     return str ? JSON.parse(str) : null;
   });
+  const preloadedUserRef = useRef<string | null>(null);
 
   const logout = useCallback(() => {
     setToken(null);
     setRefreshToken(null);
     setExpiresAt(null);
     setUser(null);
+    preloadedUserRef.current = null;
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('tokenExpiresAt');
@@ -85,6 +88,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const id = setTimeout(() => refreshSession(), secondsUntilRefresh * 1000);
     return () => clearTimeout(id);
   }, [token, refreshToken, expiresAt, refreshSession]);
+
+  useEffect(() => {
+    if (!token || !user?.id) return;
+    if (preloadedUserRef.current === user.id) return;
+    preloadedUserRef.current = user.id;
+    void preloadAppData(token);
+  }, [token, user?.id]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await api('/auth/login', { method: 'POST', body: { email, password } });

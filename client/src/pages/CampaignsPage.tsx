@@ -4,6 +4,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { getApiCacheKey, getCachedValue, invalidateCacheByPrefix } from '../lib/cache';
 import { formatDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import { Link, useLocation } from 'react-router-dom';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -23,6 +24,7 @@ const categoryLabels: Record<string, string> = {
   GMV_IDR: 'GMV (IDR)',
   YELLOW_CART: 'Yellow Cart',
 };
+const EMPTY_KPI = { target: 0, actual: 0 };
 
 const statusPills: Record<string, { bg: string; border: string; text: string }> = {
   ACTIVE: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' },
@@ -128,6 +130,10 @@ export default function CampaignsPage() {
   const [debouncedCampaignSearch, setDebouncedCampaignSearch] = useState('');
   type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
   const previousLocationRef = useRef<string>('');
   const campaignDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -172,6 +178,9 @@ export default function CampaignsPage() {
       
       return kpiMap;
     } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return new Map<string, any[]>();
+      }
       console.error('Failed to fetch KPIs:', error);
       // Fallback to individual requests if batch fails
       const kpiMap = new Map<string, any[]>();
@@ -183,6 +192,10 @@ export default function CampaignsPage() {
           });
           kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis.filter((k: any) => !k.accountId) : []);
         } catch (err) {
+          if (shouldIgnoreRequestError(err)) {
+            kpiMap.set(campaign.id, []);
+            return;
+          }
           console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, err);
           kpiMap.set(campaign.id, []);
         }
@@ -218,6 +231,9 @@ export default function CampaignsPage() {
       setAllItems(data);
       return data;
     } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return [];
+      }
       console.error('Failed to fetch campaigns:', error);
       setAllItems([]);
       return [];
@@ -273,6 +289,9 @@ export default function CampaignsPage() {
         setEngagement(engagementData.value);
       }
     } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       console.error('Failed to fetch all data:', error);
     } finally {
       setLoading(false);
@@ -360,6 +379,7 @@ export default function CampaignsPage() {
       }
       return { key, direction: 'asc' };
     });
+    setPagination(prev => ({ ...prev, offset: 0 }));
   };
 
   const sortedItems = useMemo(() => {
@@ -397,6 +417,37 @@ export default function CampaignsPage() {
     });
   }, [items, sortConfig]);
 
+  const campaignKpiSummary = useMemo(() => {
+    const summary = new Map<string, { views: { target: number; actual: number }; qtyPost: { target: number; actual: number }; fypCount: { target: number; actual: number } }>();
+    campaignKpisMap.forEach((kpis, campaignId) => {
+      const kpiTotals = new Map<string, { target: number; actual: number }>();
+      kpis
+        .filter((k: any) => !k.accountId)
+        .forEach((k: any) => {
+          const existing = kpiTotals.get(k.category) ?? { target: 0, actual: 0 };
+          kpiTotals.set(k.category, {
+            target: existing.target + (k.target ?? 0),
+            actual: existing.actual + (k.actual ?? 0),
+          });
+        });
+      summary.set(campaignId, {
+        views: kpiTotals.get('VIEWS') ?? EMPTY_KPI,
+        qtyPost: kpiTotals.get('QTY_POST') ?? EMPTY_KPI,
+        fypCount: kpiTotals.get('FYP_COUNT') ?? EMPTY_KPI,
+      });
+    });
+    return summary;
+  }, [campaignKpisMap]);
+
+  const paginatedItems = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return sortedItems.slice(start, end);
+  }, [sortedItems, pagination]);
+
+  const totalPages = Math.ceil(sortedItems.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
   const renderSortIndicator = (key: SortKey) => {
     const isActive = !!sortConfig && sortConfig.key === key;
     const indicator = isActive
@@ -418,6 +469,19 @@ export default function CampaignsPage() {
   useEffect(() => {
     applyFilters(allItems);
   }, [filters, allItems, applyFilters]);
+
+  useEffect(() => {
+    if (sortedItems.length === 0) {
+      if (pagination.offset !== 0) {
+        setPagination(prev => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((sortedItems.length - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination(prev => ({ ...prev, offset: maxOffset }));
+    }
+  }, [sortedItems.length, pagination.limit, pagination.offset]);
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
@@ -541,6 +605,16 @@ export default function CampaignsPage() {
       brandName: '',
       quotationNumber: '',
     });
+    setPagination(prev => ({ ...prev, offset: 0 }));
+  };
+
+  const handleFilterChange = (field: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, offset: 0 }));
+  };
+
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPagination({ limit: newLimit, offset: 0 });
   };
 
   const resetForm = () => {
@@ -892,14 +966,14 @@ export default function CampaignsPage() {
               <Input
                 label={<span className="text-xs">Campaign Name</span>}
                 value={filters.name}
-                onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))}
+                onChange={e => handleFilterChange('name', e.target.value)}
                 placeholder="Search by name..."
                 className="text-sm py-1.5"
               />
               <Select 
                 label={<span className="text-xs">Brand Name</span>}
                 value={filters.brandName} 
-                onChange={e => setFilters(prev => ({ ...prev, brandName: e.target.value }))}
+                onChange={e => handleFilterChange('brandName', e.target.value)}
                 className="text-sm py-1.5"
               >
                 <option value="">All Brands</option>
@@ -910,7 +984,7 @@ export default function CampaignsPage() {
               <Input
                 label={<span className="text-xs">Quotation Number</span>}
                 value={filters.quotationNumber}
-                onChange={e => setFilters(prev => ({ ...prev, quotationNumber: e.target.value }))}
+                onChange={e => handleFilterChange('quotationNumber', e.target.value)}
                 placeholder="Search by quotation..."
                 className="text-sm py-1.5"
               />
@@ -926,7 +1000,7 @@ export default function CampaignsPage() {
               </RequirePermission>
             </div>
           </div>
-          {loading ? (
+          {loading && sortedItems.length === 0 ? (
             <div className="skeleton h-10 w-full" />
           ) : sortedItems.length === 0 ? (
             <div className="py-12 text-center">
@@ -938,134 +1012,168 @@ export default function CampaignsPage() {
               </p>
             </div>
           ) : (
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>
-                      <button
-                        type="button"
-                        onClick={() => handleSort('name')}
-                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                      >
-                        <span>Name</span>
-                        {renderSortIndicator('name')}
-                      </button>
-                    </TH>
-                    <TH>KPI Overview</TH>
-                    <TH>Period</TH>
-                    <TH>
-                      <button
-                        type="button"
-                        onClick={() => handleSort('startDate')}
-                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                      >
-                        <span>Start</span>
-                        {renderSortIndicator('startDate')}
-                      </button>
-                    </TH>
-                    <TH>
-                      <button
-                        type="button"
-                        onClick={() => handleSort('endDate')}
-                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                      >
-                        <span>End</span>
-                        {renderSortIndicator('endDate')}
-                      </button>
-                    </TH>
-                    <TH>
-                      <button
-                        type="button"
-                        onClick={() => handleSort('status')}
-                        className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
-                      >
-                        <span>Status</span>
-                        {renderSortIndicator('status')}
-                      </button>
-                    </TH>
-                    <TH className="!text-center">Actions</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {sortedItems.map((c) => {
-                    const kpis = campaignKpisMap.get(c.id) || [];
-                    // Ensure only campaign-level KPIs are used (accountId is null or undefined)
-                    const campaignKpis = kpis.filter((k: any) => !k.accountId);
-                    
-                    // Create a map of category to { target, actual }
-                    const kpiMap = new Map<string, { target: number; actual: number }>();
-                    campaignKpis.forEach((k: any) => {
-                      const existing = kpiMap.get(k.category) ?? { target: 0, actual: 0 };
-                      kpiMap.set(k.category, {
-                        target: existing.target + (k.target ?? 0),
-                        actual: existing.actual + (k.actual ?? 0),
-                      });
-                    });
-                    
-                    // Get the three KPIs to display: VIEWS, QTY_POST, FYP_COUNT
-                    const viewsKpi = kpiMap.get('VIEWS') ?? { target: 0, actual: 0 };
-                    const qtyPostKpi = kpiMap.get('QTY_POST') ?? { target: 0, actual: 0 };
-                    const fypCountKpi = kpiMap.get('FYP_COUNT') ?? { target: 0, actual: 0 };
-                    
-                    return (
-                      <TR key={c.id}>
-                        <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
-                        <TD>
-                          <div className="flex items-center gap-2 flex-nowrap">
-                            <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>VIEWS</div>
-                              <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{viewsKpi.actual.toLocaleString()}/{viewsKpi.target.toLocaleString()}</div>
+            <>
+              <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, sortedItems.length)} of {sortedItems.length}
+                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                  {loading && ' - Refreshing...'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Rows per page:
+                  </label>
+                  <Select
+                    value={pagination.limit.toString()}
+                    onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                    className="text-sm py-1 px-2 w-20"
+                  >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </Select>
+                </div>
+              </div>
+              <TableWrap>
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>
+                        <button
+                          type="button"
+                          onClick={() => handleSort('name')}
+                          className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                        >
+                          <span>Name</span>
+                          {renderSortIndicator('name')}
+                        </button>
+                      </TH>
+                      <TH>KPI Overview</TH>
+                      <TH>Period</TH>
+                      <TH>
+                        <button
+                          type="button"
+                          onClick={() => handleSort('startDate')}
+                          className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                        >
+                          <span>Start</span>
+                          {renderSortIndicator('startDate')}
+                        </button>
+                      </TH>
+                      <TH>
+                        <button
+                          type="button"
+                          onClick={() => handleSort('endDate')}
+                          className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                        >
+                          <span>End</span>
+                          {renderSortIndicator('endDate')}
+                        </button>
+                      </TH>
+                      <TH>
+                        <button
+                          type="button"
+                          onClick={() => handleSort('status')}
+                          className="flex items-center gap-1 cursor-pointer select-none hover:text-emerald-600 transition-colors"
+                        >
+                          <span>Status</span>
+                          {renderSortIndicator('status')}
+                        </button>
+                      </TH>
+                      <TH className="!text-center">Actions</TH>
+                    </TR>
+                  </THead>
+                  <tbody>
+                    {paginatedItems.map((c) => {
+                      const kpiSummary = campaignKpiSummary.get(c.id);
+                      const viewsKpi = kpiSummary?.views ?? EMPTY_KPI;
+                      const qtyPostKpi = kpiSummary?.qtyPost ?? EMPTY_KPI;
+                      const fypCountKpi = kpiSummary?.fypCount ?? EMPTY_KPI;
+                      
+                      return (
+                        <TR key={c.id}>
+                          <TD><Link to={`/campaigns/${c.id}`} className="hover:underline font-medium transition-colors" style={{ color: '#2563eb' }}>{c.name}</Link></TD>
+                          <TD>
+                            <div className="flex items-center gap-2 flex-nowrap">
+                              <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                                <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>VIEWS</div>
+                                <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{viewsKpi.actual.toLocaleString()}/{viewsKpi.target.toLocaleString()}</div>
+                              </div>
+                              <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                                <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>QTY POST</div>
+                                <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{qtyPostKpi.actual.toLocaleString()}/{qtyPostKpi.target.toLocaleString()}</div>
+                              </div>
+                              <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                                <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>FYP COUNT</div>
+                                <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{fypCountKpi.actual.toLocaleString()}/{fypCountKpi.target.toLocaleString()}</div>
+                              </div>
                             </div>
-                            <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>QTY POST</div>
-                              <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{qtyPostKpi.actual.toLocaleString()}/{qtyPostKpi.target.toLocaleString()}</div>
+                          </TD>
+                          <TD>{formatMonth(c.startDate)}</TD>
+                          <TD>{formatDate(c.startDate)}</TD>
+                          <TD>{formatDate(c.endDate)}</TD>
+                          <TD>
+                            <span 
+                              className="badge border" 
+                              style={statusPills[c.status] ? {
+                                backgroundColor: statusPills[c.status].bg,
+                                borderColor: statusPills[c.status].border,
+                                color: statusPills[c.status].text
+                              } : {}}
+                            >
+                              {c.status}
+                            </span>
+                          </TD>
+                          <TD>
+                            <div className="flex gap-1.5 justify-center">
+                              <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
+                                View
+                              </Link>
+                              <RequirePermission permission={canDelete}>
+                                <Button
+                                  variant="outline"
+                                  color="red"
+                                  onClick={() => handleDeleteClick(c.id, c.name)}
+                                  disabled={deletingIds.has(c.id)}
+                                  className="text-xs px-1.5 py-0.5"
+                                >
+                                  {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
+                                </Button>
+                              </RequirePermission>
                             </div>
-                            <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>FYP COUNT</div>
-                              <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{fypCountKpi.actual.toLocaleString()}/{fypCountKpi.target.toLocaleString()}</div>
-                            </div>
-                          </div>
-                        </TD>
-                        <TD>{formatMonth(c.startDate)}</TD>
-                        <TD>{formatDate(c.startDate)}</TD>
-                        <TD>{formatDate(c.endDate)}</TD>
-                        <TD>
-                          <span 
-                            className="badge border" 
-                            style={statusPills[c.status] ? {
-                              backgroundColor: statusPills[c.status].bg,
-                              borderColor: statusPills[c.status].border,
-                              color: statusPills[c.status].text
-                            } : {}}
-                          >
-                            {c.status}
-                          </span>
-                        </TD>
-                        <TD>
-                          <div className="flex gap-1.5 justify-center">
-                            <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
-                              View
-                            </Link>
-                            <RequirePermission permission={canDelete}>
-                              <Button
-                                variant="outline"
-                                color="red"
-                                onClick={() => handleDeleteClick(c.id, c.name)}
-                                disabled={deletingIds.has(c.id)}
-                                className="text-xs px-1.5 py-0.5"
-                              >
-                                {deletingIds.has(c.id) ? 'Deleting...' : 'Delete'}
-                              </Button>
-                            </RequirePermission>
-                          </div>
-                        </TD>
-                      </TR>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </TableWrap>
+                          </TD>
+                        </TR>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrap>
+              {totalPages > 1 && (
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                    disabled={pagination.offset === 0}
+                    className="text-sm"
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                    disabled={pagination.offset + pagination.limit >= sortedItems.length}
+                    className="text-sm"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>

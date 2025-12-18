@@ -5,6 +5,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
 import { formatDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Dialog from '../components/ui/Dialog';
@@ -161,7 +162,9 @@ export default function CampaignDetailPage() {
     if (categoriesResult.status === 'fulfilled') {
       setCategoryOverview(Array.isArray(categoriesResult.value) ? categoriesResult.value : []);
     } else {
-      console.error('Failed to refresh category overview:', categoriesResult.reason);
+      if (!shouldIgnoreRequestError(categoriesResult.reason)) {
+        console.error('Failed to refresh category overview:', categoriesResult.reason);
+      }
       setCategoryOverview([]);
     }
   }, [id, token]);
@@ -187,6 +190,9 @@ export default function CampaignDetailPage() {
         setAllPosts(Array.isArray(response) ? response : []);
       }
     } catch (error: any) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       console.error('Failed to fetch posts:', error);
       setAllPosts([]);
     } finally {
