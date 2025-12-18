@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { getApiCacheKey, getCachedValue, invalidateCacheByPrefix } from '../lib/cache';
 import { formatDate } from '../lib/dateUtils';
 import { Link, useLocation } from 'react-router-dom';
 import Input from '../components/ui/Input';
@@ -30,6 +31,13 @@ const statusPills: Record<string, { bg: string; border: string; text: string }> 
   COMPLETED: { bg: 'var(--bg-tertiary)', border: 'var(--border-color)', text: 'var(--text-secondary)' },
 };
 
+const CAMPAIGN_CACHE_KEYS = {
+  campaigns: getApiCacheKey('/campaigns'),
+  engagement: getApiCacheKey('/campaigns/all/engagement'),
+  kpisBatch: (campaignIds: string) =>
+    getApiCacheKey(`/campaigns/kpis/batch?campaignIds=${campaignIds}&accountId=null`),
+};
+
 type Campaign = {
   id: string;
   name: string;
@@ -39,6 +47,16 @@ type Campaign = {
   status: string;
   quotationNumber?: string | null;
   brandName?: string | null;
+};
+
+type EngagementSnapshot = {
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  engagementRate: number;
+  projectNumbersCount?: number;
 };
 
 type Account = {
@@ -81,15 +99,7 @@ export default function CampaignsPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [engagement, setEngagement] = useState<{
-    views: number;
-    likes: number;
-    comments: number;
-    shares: number;
-    saves: number;
-    engagementRate: number;
-    projectNumbersCount?: number;
-  } | null>(null);
+  const [engagement, setEngagement] = useState<EngagementSnapshot | null>(null);
   const [form, setForm] = useState({
     name: '',
     categories: [] as string[],
@@ -121,40 +131,8 @@ export default function CampaignsPage() {
   const previousLocationRef = useRef<string>('');
   const campaignDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Cache keys
-  const CACHE_KEYS = {
-    campaigns: 'campaigns_cache',
-    kpis: 'kpis_cache',
-    engagement: 'engagement_cache',
-  };
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-  // Cache helper functions
-  const getCachedData = useCallback((key: string) => {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) return null;
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp > CACHE_TTL) {
-        localStorage.removeItem(key);
-        return null;
-      }
-      return data;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const setCachedData = useCallback((key: string, data: any) => {
-    try {
-      localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-    } catch (error) {
-      console.warn('Failed to cache data:', error);
-    }
-  }, []);
-
   const clearCache = useCallback(() => {
-    Object.values(CACHE_KEYS).forEach(key => localStorage.removeItem(key));
+    invalidateCacheByPrefix(CAMPAIGN_CACHE_KEYS.campaigns);
   }, []);
 
   // Fetch KPIs for a given list of campaigns (optimized with batch endpoint and caching)
@@ -162,11 +140,11 @@ export default function CampaignsPage() {
     if (campaigns.length === 0) return new Map<string, any[]>();
     
     const campaignIds = campaigns.map(c => c.id).sort().join(',');
-    const cacheKey = `${CACHE_KEYS.kpis}_${campaignIds}`;
+    const cacheKey = CAMPAIGN_CACHE_KEYS.kpisBatch(campaignIds);
     
       // Try cache first
       if (useCache) {
-        const cached = getCachedData(cacheKey);
+        const cached = getCachedValue<Record<string, any[]>>(cacheKey);
         if (cached && typeof cached === 'object') {
           const kpiMap = new Map<string, any[]>();
           Object.entries(cached).forEach(([key, value]) => {
@@ -178,7 +156,10 @@ export default function CampaignsPage() {
     
     try {
       // Use batch endpoint for better performance
-      const kpisByCampaign = await api(`/campaigns/kpis/batch?campaignIds=${campaignIds}&accountId=null`, { token });
+      const kpisByCampaign = await api(`/campaigns/kpis/batch?campaignIds=${campaignIds}&accountId=null`, {
+        token,
+        cache: { key: cacheKey, mode: useCache ? 'default' : 'reload' },
+      });
       
       // Convert to Map and filter to campaign-level only
       const kpiMap = new Map<string, any[]>();
@@ -189,10 +170,6 @@ export default function CampaignsPage() {
         kpiMap.set(campaignId, campaignLevelKpis);
       });
       
-      // Cache the result
-      const cacheData = Object.fromEntries(kpiMap);
-      setCachedData(cacheKey, cacheData);
-      
       return kpiMap;
     } catch (error) {
       console.error('Failed to fetch KPIs:', error);
@@ -200,7 +177,10 @@ export default function CampaignsPage() {
       const kpiMap = new Map<string, any[]>();
       const kpiPromises = campaigns.map(async (campaign: Campaign) => {
         try {
-          const kpis = await api(`/campaigns/${campaign.id}/kpis?accountId=null`, { token });
+          const kpis = await api(`/campaigns/${campaign.id}/kpis?accountId=null`, {
+            token,
+            cache: { mode: useCache ? 'default' : 'reload' },
+          });
           kpiMap.set(campaign.id, Array.isArray(kpis) ? kpis.filter((k: any) => !k.accountId) : []);
         } catch (err) {
           console.error(`Failed to fetch KPIs for campaign ${campaign.id}:`, err);
@@ -210,7 +190,7 @@ export default function CampaignsPage() {
       await Promise.allSettled(kpiPromises);
       return kpiMap;
     }
-  }, [token, getCachedData, setCachedData]);
+  }, [token]);
 
   // Refresh KPIs for currently loaded campaigns
   const fetchKPIs = useCallback(async () => {
@@ -223,7 +203,7 @@ export default function CampaignsPage() {
   const fetchCampaigns = useCallback(async (useCache = true) => {
     // Try cache first
     if (useCache) {
-      const cached = getCachedData(CACHE_KEYS.campaigns);
+      const cached = getCachedValue<Campaign[]>(CAMPAIGN_CACHE_KEYS.campaigns);
       if (cached) {
         setAllItems(cached);
         return cached;
@@ -231,27 +211,31 @@ export default function CampaignsPage() {
     }
     
     try {
-      const data = await api('/campaigns', { token });
+      const data = await api('/campaigns', {
+        token,
+        cache: { key: CAMPAIGN_CACHE_KEYS.campaigns, mode: useCache ? 'default' : 'reload' },
+      });
       setAllItems(data);
-      setCachedData(CACHE_KEYS.campaigns, data);
       return data;
     } catch (error) {
       console.error('Failed to fetch campaigns:', error);
       setAllItems([]);
       return [];
     }
-  }, [token, getCachedData, setCachedData]);
+  }, [token]);
 
   // Fetch all data: campaigns, KPIs, and engagement stats with optimistic loading
   const fetchAllData = useCallback(async () => {
     // Try to load from cache first for instant display
-    const cachedCampaigns = getCachedData(CACHE_KEYS.campaigns);
-    const cachedEngagement = getCachedData(CACHE_KEYS.engagement);
+    const cachedCampaigns = getCachedValue<Campaign[]>(CAMPAIGN_CACHE_KEYS.campaigns);
+    const cachedEngagement = getCachedValue<EngagementSnapshot>(CAMPAIGN_CACHE_KEYS.engagement);
     
     if (cachedCampaigns) {
       setAllItems(cachedCampaigns);
       // Try to load cached KPIs
-      const cachedKpis = getCachedData(`${CACHE_KEYS.kpis}_${cachedCampaigns.map((c: Campaign) => c.id).sort().join(',')}`);
+      const cachedKpis = getCachedValue<Record<string, any[]>>(
+        CAMPAIGN_CACHE_KEYS.kpisBatch(cachedCampaigns.map((c: Campaign) => c.id).sort().join(','))
+      );
       if (cachedKpis && typeof cachedKpis === 'object') {
         const kpiMap = new Map<string, any[]>();
         Object.entries(cachedKpis).forEach(([key, value]) => {
@@ -270,7 +254,10 @@ export default function CampaignsPage() {
       // Fetch fresh data in parallel
       const [campaigns, engagementData] = await Promise.allSettled([
         fetchCampaigns(false), // Skip cache, fetch fresh
-        api('/campaigns/all/engagement', { token }).catch(() => null),
+        api('/campaigns/all/engagement', {
+          token,
+          cache: { key: CAMPAIGN_CACHE_KEYS.engagement, mode: 'reload' },
+        }).catch(() => null),
       ]);
 
       const campaignsList = campaigns.status === 'fulfilled' ? campaigns.value : [];
@@ -284,14 +271,13 @@ export default function CampaignsPage() {
       // Set engagement data (views will be overridden by calculatedEngagement)
       if (engagementData.status === 'fulfilled' && engagementData.value) {
         setEngagement(engagementData.value);
-        setCachedData(CACHE_KEYS.engagement, engagementData.value);
       }
     } catch (error) {
       console.error('Failed to fetch all data:', error);
     } finally {
       setLoading(false);
     }
-  }, [token, fetchCampaigns, fetchKPIsForCampaigns, getCachedData, setCachedData]);
+  }, [token, fetchCampaigns, fetchKPIsForCampaigns]);
 
   // Calculate engagement stats from campaign-level KPIs (to match KPI Overview exactly)
   // Views come from campaign-level KPIs, other metrics from engagement API

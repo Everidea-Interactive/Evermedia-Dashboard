@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
 import { api, setUnauthorizedHandler } from '../lib/api';
+import { clearAllCache } from '../lib/cache';
 
 type User = { id: string; name: string; email: string; role: 'ADMIN'|'CAMPAIGN_MANAGER'|'EDITOR'|'VIEWER' };
 
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('tokenExpiresAt');
     localStorage.removeItem('user');
+    clearAllCache();
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -86,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await api('/auth/login', { method: 'POST', body: { email, password } });
+    clearAllCache();
     setToken(res.token);
     setRefreshToken(res.refreshToken);
     setExpiresAt(res.expiresAt || null);

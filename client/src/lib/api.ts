@@ -1,3 +1,5 @@
+import { clearAllCache, getApiCacheKey, type CacheOptions, withCache } from './cache';
+
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const API_URL = API_BASE_URL;
 
@@ -13,6 +15,7 @@ export type ApiOptions = {
   body?: any;
   token?: string | null;
   headers?: Record<string, string>;
+  cache?: CacheOptions;
 };
 
 // Helper to validate token format (basic JWT structure check)
@@ -50,8 +53,13 @@ function getLatestToken(providedToken?: string | null): string | null {
   return null;
 }
 
-export async function api(path: string, { method = 'GET', body, token, headers = {} }: ApiOptions = {}) {
+export async function api(
+  path: string,
+  { method = 'GET', body, token, headers = {}, cache }: ApiOptions = {}
+) {
   const url = `${API_URL}/api${path}`;
+  const methodUpper = method.toUpperCase();
+  const cacheKey = cache?.key ?? getApiCacheKey(path);
 
   // Helper to perform a fetch with a specific token value
   const doFetch = async (authToken: string | null) => {
@@ -66,37 +74,49 @@ export async function api(path: string, { method = 'GET', body, token, headers =
     });
   };
 
-  // Always use the latest token from localStorage to handle refresh scenarios
-  // This is especially important for long-running operations like imports
-  let currentToken = getLatestToken(token);
-  let res = await doFetch(currentToken);
+  const fetcher = async () => {
+    // Always use the latest token from localStorage to handle refresh scenarios
+    // This is especially important for long-running operations like imports
+    let currentToken = getLatestToken(token);
+    let res = await doFetch(currentToken);
 
-  if (!res.ok && res.status === 401) {
-    // Trigger global unauthorized handler (typically refresh session)
-    if (onUnauthorized) {
-      await onUnauthorized();
+    if (!res.ok && res.status === 401) {
+      // Trigger global unauthorized handler (typically refresh session)
+      if (onUnauthorized) {
+        await onUnauthorized();
+      }
+
+      // Get the latest token again after refresh attempt
+      const refreshedToken = getLatestToken(token);
+      if (refreshedToken) {
+        // Retry with refreshed token (even if same, in case refresh fixed the issue)
+        res = await doFetch(refreshedToken);
+      } else {
+        // If no token available after refresh, the error from the original request will be thrown below
+      }
     }
 
-    // Get the latest token again after refresh attempt
-    const refreshedToken = getLatestToken(token);
-    if (refreshedToken) {
-      // Retry with refreshed token (even if same, in case refresh fixed the issue)
-      res = await doFetch(refreshedToken);
-    } else {
-      // If no token available after refresh, the error from the original request will be thrown below
+    if (!res.ok) {
+      let msg = `Request failed (${res.status})`;
+      try {
+        const e = await res.json();
+        msg = e.error || msg;
+      } catch {
+        // ignore JSON parse errors and fall back to default message
+      }
+      throw new Error(msg);
     }
+
+    return res.json();
+  };
+
+  if (methodUpper === 'GET' && cache?.mode !== 'no-store') {
+    return withCache(cacheKey, fetcher, cache);
   }
 
-  if (!res.ok) {
-    let msg = `Request failed (${res.status})`;
-    try {
-      const e = await res.json();
-      msg = e.error || msg;
-    } catch {
-      // ignore JSON parse errors and fall back to default message
-    }
-    throw new Error(msg);
+  const data = await fetcher();
+  if (methodUpper !== 'GET') {
+    clearAllCache();
   }
-
-  return res.json();
+  return data;
 }
