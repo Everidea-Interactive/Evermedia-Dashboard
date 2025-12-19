@@ -168,7 +168,7 @@ export default function CampaignDetailPage() {
     if (POSTS_CACHE_KEY) {
       const cachedPosts = getCachedValue<any[]>(POSTS_CACHE_KEY);
       if (cachedPosts) {
-        setAllPosts(cachedPosts);
+        setAllPosts(Array.isArray(cachedPosts) ? cachedPosts : []);
         setPostsLoading(false);
       }
     }
@@ -192,17 +192,22 @@ export default function CampaignDetailPage() {
   ]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
 
-  const refreshDashboardMetrics = useCallback(async () => {
+  const refreshDashboardMetrics = useCallback(async (options?: { recalculate?: boolean }) => {
     if (!id) return;
+    const shouldRecalculate = options?.recalculate;
+    const kpiPath = shouldRecalculate
+      ? `/campaigns/${id}/kpis?recalculate=true`
+      : `/campaigns/${id}/kpis`;
     const [kpisResult, engagementResult, categoriesResult] = await Promise.allSettled([
-      api(`/campaigns/${id}/kpis`, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'default' } : undefined }),
+      // Always reload so KPI data isn't served from cache
+      api(kpiPath, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'reload' } : undefined }),
       api(`/campaigns/${id}/dashboard/engagement`, {
         token,
-        cache: DASHBOARD_ENGAGEMENT_CACHE_KEY ? { key: DASHBOARD_ENGAGEMENT_CACHE_KEY, mode: 'default' } : undefined,
+        cache: DASHBOARD_ENGAGEMENT_CACHE_KEY ? { key: DASHBOARD_ENGAGEMENT_CACHE_KEY, mode: 'reload' } : undefined,
       }),
       api(`/campaigns/${id}/dashboard/categories`, {
         token,
-        cache: DASHBOARD_CATEGORIES_CACHE_KEY ? { key: DASHBOARD_CATEGORIES_CACHE_KEY, mode: 'default' } : undefined,
+        cache: DASHBOARD_CATEGORIES_CACHE_KEY ? { key: DASHBOARD_CATEGORIES_CACHE_KEY, mode: 'reload' } : undefined,
       }),
     ]);
 
@@ -235,9 +240,13 @@ export default function CampaignDetailPage() {
   useEffect(() => {
     if (!id) return;
     api(`/campaigns/${id}`, { token, cache: CAMPAIGN_CACHE_KEY ? { key: CAMPAIGN_CACHE_KEY, mode: 'default' } : undefined }).then(setCampaign);
-    void refreshDashboardMetrics();
+    void refreshDashboardMetrics({ recalculate: true });
+    const followUpId = setTimeout(() => {
+      void refreshDashboardMetrics();
+    }, 3000);
     api('/pics?active=true', { token, cache: { key: PICS_CACHE_KEY, mode: 'default' } }).then(setPics).catch(() => {});
     api('/accounts', { token, cache: { key: ACCOUNTS_CACHE_KEY, mode: 'default' } }).then(setAccounts).catch(() => {});
+    return () => clearTimeout(followUpId);
   }, [id, token, refreshDashboardMetrics]);
 
   const fetchPosts = useCallback(async () => {
@@ -245,22 +254,26 @@ export default function CampaignDetailPage() {
     const cachedPosts = POSTS_CACHE_KEY ? getCachedValue<any[]>(POSTS_CACHE_KEY) : null;
     const hasCache = Array.isArray(cachedPosts) && cachedPosts.length > 0;
     if (hasCache && !hasHydratedFromCacheRef.current) {
-      setAllPosts(cachedPosts);
+      setAllPosts(Array.isArray(cachedPosts) ? cachedPosts : []);
       setPostsLoading(false);
     } else {
       setPostsLoading(!hasCache);
     }
     try {
       // Fetch all posts without filters or pagination for client-side filtering
+      // Use 'reload' mode to ensure we get all posts (not limited by cache)
       const response = await api(`/campaigns/${id}/posts`, {
         token,
-        cache: POSTS_CACHE_KEY ? { key: POSTS_CACHE_KEY, mode: 'default' } : undefined,
+        cache: POSTS_CACHE_KEY ? { key: POSTS_CACHE_KEY, mode: 'reload' } : undefined,
       });
-      if (response.posts) {
-        setAllPosts(response.posts);
+      // Ensure we always set an array
+      if (response && typeof response === 'object' && 'posts' in response) {
+        setAllPosts(Array.isArray(response.posts) ? response.posts : []);
+      } else if (Array.isArray(response)) {
+        // Fallback for old API format (direct array)
+        setAllPosts(response);
       } else {
-        // Fallback for old API format
-        setAllPosts(Array.isArray(response) ? response : []);
+        setAllPosts([]);
       }
     } catch (error: any) {
       if (shouldIgnoreRequestError(error)) {
@@ -306,6 +319,9 @@ export default function CampaignDetailPage() {
   }, [postFilters]);
 
   const filteredPosts = useMemo(() => {
+    if (!Array.isArray(allPosts)) {
+      return [];
+    }
     return allPosts.filter((post: any) => {
       // Account filter
       if (postFilters.accountId && post.accountId !== postFilters.accountId) {
@@ -477,7 +493,7 @@ export default function CampaignDetailPage() {
   };
 
   const handleExportCampaign = useCallback(() => {
-    if (!campaign || allPosts.length === 0) {
+    if (!campaign || !Array.isArray(allPosts) || allPosts.length === 0) {
       setToast({ message: 'No posts to export', type: 'error' });
       return;
     }
@@ -626,12 +642,15 @@ export default function CampaignDetailPage() {
       });
 
       // Update the post in the list
-      setAllPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
-        if (p.id === postId) {
-          return { ...updatedPost, account: p.account, picTalent: p.picTalent, picEditor: p.picEditor, picPosting: p.picPosting };
-        }
-        return p;
-      }));
+      setAllPosts((prevPosts: any[]) => {
+        if (!Array.isArray(prevPosts)) return [];
+        return prevPosts.map((p: any) => {
+          if (p.id === postId) {
+            return { ...updatedPost, account: p.account, picTalent: p.picTalent, picEditor: p.picEditor, picPosting: p.picPosting };
+          }
+          return p;
+        });
+      });
 
       // Refresh KPIs and engagement
       await refreshDashboardMetrics();
@@ -648,6 +667,7 @@ export default function CampaignDetailPage() {
   const handleCellBlur = async (postId: string, field: string, skipClose?: boolean, overrideValue?: string): Promise<any | null> => {
     if (!editingCell || editingCell.postId !== postId || editingCell.field !== field) return null;
     
+    if (!Array.isArray(allPosts)) return null;
     const post = allPosts.find((p: any) => p.id === postId);
     if (!post) return null;
 
@@ -707,8 +727,10 @@ export default function CampaignDetailPage() {
     };
 
     // Optimistically update local state so the table shows the new value immediately
-    setAllPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
-      if (p.id !== postId) return p;
+    setAllPosts((prevPosts: any[]) => {
+      if (!Array.isArray(prevPosts)) return [];
+      return prevPosts.map((p: any) => {
+        if (p.id !== postId) return p;
       const updated: any = { ...p };
       if (field === 'postDate') {
         updated.postDate = new Date(valueToUse).toISOString();
@@ -746,7 +768,8 @@ export default function CampaignDetailPage() {
         updated[field] = newValue;
       }
       return updated;
-    }));
+      });
+    });
 
     setSavingCell(`${postId}-${field}`);
     try {
@@ -813,12 +836,15 @@ export default function CampaignDetailPage() {
       };
 
       // Update the post in the list
-      setAllPosts((prevPosts: any[]) => prevPosts.map((p: any) => {
-        if (p.id === postId) {
-          return updatedPostWithRelations;
-        }
-        return p;
-      }));
+      setAllPosts((prevPosts: any[]) => {
+        if (!Array.isArray(prevPosts)) return [];
+        return prevPosts.map((p: any) => {
+          if (p.id === postId) {
+            return updatedPostWithRelations;
+          }
+          return p;
+        });
+      });
 
       // Refresh KPIs and engagement
       await refreshDashboardMetrics();
@@ -827,7 +853,10 @@ export default function CampaignDetailPage() {
       return updatedPostWithRelations;
     } catch (error: any) {
       // Revert optimistic update on failure
-      setAllPosts((prevPosts: any[]) => prevPosts.map((p: any) => (p.id === postId ? post : p)));
+      setAllPosts((prevPosts: any[]) => {
+        if (!Array.isArray(prevPosts)) return [];
+        return prevPosts.map((p: any) => (p.id === postId ? post : p));
+      });
       setToast({ message: error?.message || 'Failed to update post', type: 'error' });
       return null;
     } finally {
@@ -1317,8 +1346,14 @@ export default function CampaignDetailPage() {
     setRetryingUpdateRows({});
   };
 
-  const totalViews = useMemo(() => allPosts.reduce((acc, p) => acc + (p.totalView ?? 0), 0), [allPosts]);
-  const totalLikes = useMemo(() => allPosts.reduce((acc, p) => acc + (p.totalLike ?? 0), 0), [allPosts]);
+  const totalViews = useMemo(() => {
+    if (!Array.isArray(allPosts)) return 0;
+    return allPosts.reduce((acc, p) => acc + (p.totalView ?? 0), 0);
+  }, [allPosts]);
+  const totalLikes = useMemo(() => {
+    if (!Array.isArray(allPosts)) return 0;
+    return allPosts.reduce((acc, p) => acc + (p.totalLike ?? 0), 0);
+  }, [allPosts]);
   const campaignKpiSummary = useMemo(() => {
     const map = new Map<string, { target: number; actual: number }>();
     // Only include campaign-level KPIs (where accountId is null)
@@ -1337,7 +1372,7 @@ export default function CampaignDetailPage() {
       
       // For QTY_POST, calculate actual from posts for current campaign only
       if (k.category === 'QTY_POST') {
-        const postCount = allPosts.filter((p: any) => p.accountId === k.accountId).length;
+        const postCount = Array.isArray(allPosts) ? allPosts.filter((p: any) => p.accountId === k.accountId).length : 0;
         map.get(k.accountId)![k.category] = { target: k.target ?? 0, actual: postCount };
       } else {
         map.get(k.accountId)![k.category] = { target: k.target ?? 0, actual: k.actual ?? 0 };

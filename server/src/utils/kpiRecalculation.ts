@@ -1,12 +1,45 @@
 import { supabase } from '../supabase.js';
 
+// Helper function to fetch all posts in batches
+async function fetchAllPostsForKPI(campaignId: string, accountId?: string) {
+  const allPosts: any[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase
+      .from('Post')
+      .select('totalView, contentType, yellowCart, fypType')
+      .eq('campaignId', campaignId)
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    
+    if (accountId) {
+      query = query.eq('accountId', accountId);
+    }
+    
+    const { data: posts, error } = await query;
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (posts && posts.length > 0) {
+      allPosts.push(...posts);
+      offset += pageSize;
+      hasMore = posts.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allPosts;
+}
+
 export async function recalculateKPIs(campaignId: string, accountId: string) {
-  // Get all posts for this campaign and account
-  const { data: posts } = await supabase
-    .from('Post')
-    .select('totalView, contentType, yellowCart, fypType')
-    .eq('campaignId', campaignId)
-    .eq('accountId', accountId);
+  // Get all posts for this campaign and account (fetch in batches to handle >1000 posts)
+  const posts = await fetchAllPostsForKPI(campaignId, accountId);
   
   // Get campaign to check targetViewsForFYP
   const { data: campaign } = await supabase
@@ -29,14 +62,13 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
   // Calculate totals from posts
   const totals: Record<string, number> = {
     VIEWS: 0,
-    QTY_POST: posts?.length || 0,
+    QTY_POST: posts.length,
     FYP_COUNT: 0,
     VIDEO_COUNT: 0,
-    GMV_IDR: 0,
     YELLOW_CART: 0,
   };
-  
-  (posts || []).forEach((p: any) => {
+
+  posts.forEach((p: any) => {
     totals.VIEWS += p.totalView || 0;
     if (p.contentType === 'Video') {
       totals.VIDEO_COUNT += 1;
@@ -82,11 +114,8 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
 }
 
 export async function recalculateCampaignKPIs(campaignId: string) {
-  // Get all posts for this campaign
-  const { data: posts } = await supabase
-    .from('Post')
-    .select('totalView, contentType, yellowCart, fypType')
-    .eq('campaignId', campaignId);
+  // Get all posts for this campaign (fetch in batches to handle >1000 posts)
+  const posts = await fetchAllPostsForKPI(campaignId);
   
   // Get campaign to check targetViewsForFYP
   const { data: campaign } = await supabase
@@ -109,14 +138,13 @@ export async function recalculateCampaignKPIs(campaignId: string) {
   // Calculate totals from all posts in the campaign
   const totals: Record<string, number> = {
     VIEWS: 0,
-    QTY_POST: posts?.length || 0,
+    QTY_POST: posts.length,
     FYP_COUNT: 0,
     VIDEO_COUNT: 0,
-    GMV_IDR: 0,
     YELLOW_CART: 0,
   };
-  
-  (posts || []).forEach((p: any) => {
+
+  posts.forEach((p: any) => {
     totals.VIEWS += p.totalView || 0;
     if (p.contentType === 'Video') {
       totals.VIDEO_COUNT += 1;

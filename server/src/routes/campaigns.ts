@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
-import { recalculateKPIs } from '../utils/kpiRecalculation.js';
+import { recalculateCampaignKPIs, recalculateKPIs } from '../utils/kpiRecalculation.js';
 import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const normalizeQuotationNumber = (value: any): string | null | undefined => {
@@ -33,6 +33,12 @@ const haveSameAccountSets = (first: string[], second: string[]): boolean => {
     if (!secondSet.has(id)) return false;
   }
   return true;
+};
+
+const isTruthyParam = (value: unknown): boolean => {
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
 };
 
 const router = Router();
@@ -341,9 +347,42 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
   res.json({ ok: true });
 });
 
+router.get('/posts/counts', async (req, res) => {
+  const { campaignIds } = req.query as any;
+  if (!campaignIds) {
+    return res.status(400).json({ error: 'campaignIds query parameter is required' });
+  }
+
+  const ids = Array.isArray(campaignIds) ? campaignIds : String(campaignIds).split(',').filter(Boolean);
+  if (ids.length === 0) {
+    return res.json({});
+  }
+
+  const counts: Record<string, number> = {};
+  await Promise.all(ids.map(async (campaignId: string) => {
+    try {
+      const { count, error } = await supabase
+        .from('Post')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaignId', campaignId);
+
+      if (error) {
+        console.error(`Failed to count posts for campaign ${campaignId}:`, error);
+        return;
+      }
+
+      counts[campaignId] = count ?? 0;
+    } catch (error) {
+      console.error(`Failed to count posts for campaign ${campaignId}:`, error);
+    }
+  }));
+
+  res.json(counts);
+});
+
 // Batch endpoint to fetch KPIs for multiple campaigns
 router.get('/kpis/batch', async (req, res) => {
-  const { campaignIds, accountId } = req.query as any;
+  const { campaignIds, accountId, recalculate } = req.query as any;
   
   if (!campaignIds) {
     return res.status(400).json({ error: 'campaignIds query parameter is required' });
@@ -352,6 +391,23 @@ router.get('/kpis/batch', async (req, res) => {
   const ids = Array.isArray(campaignIds) ? campaignIds : campaignIds.split(',').filter(Boolean);
   if (ids.length === 0) {
     return res.json({});
+  }
+
+  if (isTruthyParam(recalculate)) {
+    const isCampaignLevel = accountId === undefined || accountId === null || accountId === 'null';
+    void (async () => {
+      for (const campaignId of ids) {
+        try {
+          if (isCampaignLevel) {
+            await recalculateCampaignKPIs(campaignId);
+          } else {
+            await recalculateKPIs(campaignId, String(accountId));
+          }
+        } catch (error) {
+          console.error(`Failed to recalculate KPIs for campaign ${campaignId}:`, error);
+        }
+      }
+    })();
   }
   
   let query = supabase
@@ -387,7 +443,7 @@ router.get('/kpis/batch', async (req, res) => {
 });
 
 router.get('/:id/kpis', async (req, res) => {
-  const { accountId } = req.query as any;
+  const { accountId, recalculate } = req.query as any;
   let query = supabase
     .from('KPI')
     .select('*')
@@ -397,6 +453,20 @@ router.get('/:id/kpis', async (req, res) => {
   // accountId=null means campaign-level KPIs only (where accountId IS NULL)
   // accountId=<id> means KPIs for that specific account
   // No accountId means all KPIs (backward compatible)
+  if (isTruthyParam(recalculate)) {
+    const isCampaignLevel = accountId === undefined || accountId === null || accountId === 'null';
+    void (async () => {
+      try {
+        if (isCampaignLevel) {
+          await recalculateCampaignKPIs(req.params.id);
+        } else {
+          await recalculateKPIs(req.params.id, String(accountId));
+        }
+      } catch (error) {
+        console.error(`Failed to recalculate KPIs for campaign ${req.params.id}:`, error);
+      }
+    })();
+  }
   if (accountId !== undefined) {
     if (accountId === null || accountId === 'null') {
       query = query.is('accountId', null);
@@ -414,50 +484,77 @@ router.get('/:id/kpis', async (req, res) => {
   }));
 });
 
+// Helper function to build base query with filters
+function buildPostQuery(id: string, filters: any) {
+  let query = supabase.from('Post').select('*').eq('campaignId', id);
+  
+  if (filters.accountId) {
+    query = query.eq('accountId', filters.accountId);
+  }
+  if (filters.status) {
+    query = query.ilike('status', `%${String(filters.status)}%`);
+  }
+  if (filters.category) {
+    query = query.ilike('contentCategory', `%${String(filters.category)}%`);
+  }
+  if (filters.contentType) {
+    query = query.ilike('contentType', `%${String(filters.contentType)}%`);
+  }
+  if (filters.dateFrom) {
+    query = query.gte('postDate', String(filters.dateFrom));
+  }
+  if (filters.dateTo) {
+    query = query.lte('postDate', String(filters.dateTo));
+  }
+  if (filters.picTalentId) {
+    query = query.eq('picTalentId', filters.picTalentId);
+  }
+  if (filters.picEditorId) {
+    query = query.eq('picEditorId', filters.picEditorId);
+  }
+  if (filters.picPostingId) {
+    query = query.eq('picPostingId', filters.picPostingId);
+  }
+  
+  return query;
+}
+
 // Convenience: /api/campaigns/:id/posts with filters and pagination
 router.get('/:id/posts', async (req, res) => {
   const id = req.params.id;
   const { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category, contentType, limit, offset } = req.query as any;
   
-  // Build base query for filtering
+  const filters = { dateFrom, dateTo, picTalentId, picEditorId, picPostingId, accountId, status, category, contentType };
+  
+  // Build base query for filtering (for count)
   let countQuery = supabase.from('Post').select('*', { count: 'exact', head: true }).eq('campaignId', id);
-  let query = supabase.from('Post').select('*').eq('campaignId', id);
   
   if (accountId) {
     countQuery = countQuery.eq('accountId', accountId);
-    query = query.eq('accountId', accountId);
   }
   if (status) {
     countQuery = countQuery.ilike('status', `%${String(status)}%`);
-    query = query.ilike('status', `%${String(status)}%`);
   }
   if (category) {
     countQuery = countQuery.ilike('contentCategory', `%${String(category)}%`);
-    query = query.ilike('contentCategory', `%${String(category)}%`);
   }
   if (contentType) {
     countQuery = countQuery.ilike('contentType', `%${String(contentType)}%`);
-    query = query.ilike('contentType', `%${String(contentType)}%`);
   }
   if (dateFrom) {
     countQuery = countQuery.gte('postDate', String(dateFrom));
-    query = query.gte('postDate', String(dateFrom));
   }
   if (dateTo) {
     countQuery = countQuery.lte('postDate', String(dateTo));
-    query = query.lte('postDate', String(dateTo));
   }
   if (picTalentId) {
     countQuery = countQuery.eq('picTalentId', picTalentId);
-    query = query.eq('picTalentId', picTalentId);
   }
   if (picEditorId) {
     countQuery = countQuery.eq('picEditorId', picEditorId);
-    query = query.eq('picEditorId', picEditorId);
   }
   if (picPostingId) {
     countQuery = countQuery.eq('picPostingId', picPostingId);
-    query = query.eq('picPostingId', picPostingId);
   }
   
   // Get total count
@@ -467,12 +564,51 @@ router.get('/:id/posts', async (req, res) => {
   // Apply pagination
   const limitNum = limit ? parseInt(String(limit), 10) : undefined;
   const offsetNum = offset ? parseInt(String(offset), 10) : undefined;
-  if (limitNum !== undefined) query = query.limit(limitNum);
-  if (offsetNum !== undefined) query = query.range(offsetNum, offsetNum + (limitNum || 0) - 1);
   
-  // Apply ordering
-  const { data: posts, error } = await query.order('postDate', { ascending: false }).order('createdAt', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  let posts: any[] = [];
+  
+  // If no limit is specified, fetch all posts in batches to handle campaigns with more than 1000 posts
+  if (limitNum === undefined) {
+    const pageSize = 1000;
+    let currentOffset = 0; // Always start from 0 when fetching all posts
+    let hasMore = true;
+    
+    while (hasMore) {
+      let query = buildPostQuery(id, filters)
+        .order('postDate', { ascending: false })
+        .order('createdAt', { ascending: false })
+        .range(currentOffset, currentOffset + pageSize - 1);
+      
+      const { data: batchPosts, error: batchError } = await query;
+      
+      if (batchError) {
+        return res.status(500).json({ error: batchError.message });
+      }
+      
+      if (batchPosts && batchPosts.length > 0) {
+        posts.push(...batchPosts);
+        currentOffset += pageSize;
+        hasMore = batchPosts.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+  } else {
+    // Use existing pagination logic when limit is specified
+    let query = buildPostQuery(id, filters)
+      .order('postDate', { ascending: false })
+      .order('createdAt', { ascending: false });
+    
+    if (offsetNum !== undefined) {
+      query = query.range(offsetNum, offsetNum + limitNum - 1);
+    } else {
+      query = query.limit(limitNum);
+    }
+    
+    const { data: paginatedPosts, error: queryError } = await query;
+    if (queryError) return res.status(500).json({ error: queryError.message });
+    posts = paginatedPosts || [];
+  }
   
   // Fetch related data - parallelize independent queries
   const accountIds = [...new Set((posts || []).map((p: any) => p.accountId))];
