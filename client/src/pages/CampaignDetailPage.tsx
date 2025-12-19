@@ -5,6 +5,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
 import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
 import { formatDate } from '../lib/dateUtils';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -110,6 +111,18 @@ export default function CampaignDetailPage() {
   const [engagementUpdateProgress, setEngagementUpdateProgress] = useState<{ current: number; total: number } | null>(null);
   const [engagementUpdateResult, setEngagementUpdateResult] = useState<EngagementUpdateResult | null>(null);
   const [retryingUpdateRows, setRetryingUpdateRows] = useState<Record<string, boolean>>({});
+  const hasHydratedFromCacheRef = useRef(false);
+  const CAMPAIGN_CACHE_KEY = id ? getApiCacheKey(`/campaigns/${id}`) : '';
+  const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
+  const ACCOUNTS_CACHE_KEY = getApiCacheKey('/accounts');
+  const POSTS_CACHE_KEY = id ? getApiCacheKey(`/campaigns/${id}/posts`) : '';
+  const KPIS_CACHE_KEY = id ? getApiCacheKey(`/campaigns/${id}/kpis`) : '';
+  const DASHBOARD_ENGAGEMENT_CACHE_KEY = id
+    ? getApiCacheKey(`/campaigns/${id}/dashboard/engagement`)
+    : '';
+  const DASHBOARD_CATEGORIES_CACHE_KEY = id
+    ? getApiCacheKey(`/campaigns/${id}/dashboard/categories`)
+    : '';
 
   type SortKey =
     | 'postDate'
@@ -137,26 +150,76 @@ export default function CampaignDetailPage() {
   };
 
   const DESC_SORT_KEYS: SortKey[] = ['postDate', 'totalView', 'totalLike', 'totalComment', 'totalShare', 'totalSaved', 'engagementRate', 'adsOnMusic', 'yellowCart'];
+
+  useEffect(() => {
+    if (!id || !token || hasHydratedFromCacheRef.current) return;
+    if (CAMPAIGN_CACHE_KEY) {
+      const cachedCampaign = getCachedValue<any>(CAMPAIGN_CACHE_KEY);
+      if (cachedCampaign) setCampaign(cachedCampaign);
+    }
+    const cachedPics = getCachedValue<any[]>(PICS_CACHE_KEY);
+    if (cachedPics) setPics(cachedPics);
+    const cachedAccounts = getCachedValue<any[]>(ACCOUNTS_CACHE_KEY);
+    if (cachedAccounts) setAccounts(cachedAccounts);
+    if (KPIS_CACHE_KEY) {
+      const cachedKpis = getCachedValue<any[]>(KPIS_CACHE_KEY);
+      if (cachedKpis) setKpis(cachedKpis);
+    }
+    if (POSTS_CACHE_KEY) {
+      const cachedPosts = getCachedValue<any[]>(POSTS_CACHE_KEY);
+      if (cachedPosts) {
+        setAllPosts(cachedPosts);
+        setPostsLoading(false);
+      }
+    }
+    if (DASHBOARD_ENGAGEMENT_CACHE_KEY) {
+      const cachedEngagement = getCachedValue<any>(DASHBOARD_ENGAGEMENT_CACHE_KEY);
+      if (cachedEngagement) setEngagement(cachedEngagement);
+    }
+    if (DASHBOARD_CATEGORIES_CACHE_KEY) {
+      const cachedCategories = getCachedValue<any[]>(DASHBOARD_CATEGORIES_CACHE_KEY);
+      if (cachedCategories) setCategoryOverview(cachedCategories);
+    }
+    hasHydratedFromCacheRef.current = true;
+  }, [
+    id,
+    token,
+    CAMPAIGN_CACHE_KEY,
+    KPIS_CACHE_KEY,
+    POSTS_CACHE_KEY,
+    DASHBOARD_ENGAGEMENT_CACHE_KEY,
+    DASHBOARD_CATEGORIES_CACHE_KEY,
+  ]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
 
   const refreshDashboardMetrics = useCallback(async () => {
     if (!id) return;
     const [kpisResult, engagementResult, categoriesResult] = await Promise.allSettled([
-      api(`/campaigns/${id}/kpis`, { token }),
-      api(`/campaigns/${id}/dashboard/engagement`, { token }),
-      api(`/campaigns/${id}/dashboard/categories`, { token }),
+      api(`/campaigns/${id}/kpis`, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'default' } : undefined }),
+      api(`/campaigns/${id}/dashboard/engagement`, {
+        token,
+        cache: DASHBOARD_ENGAGEMENT_CACHE_KEY ? { key: DASHBOARD_ENGAGEMENT_CACHE_KEY, mode: 'default' } : undefined,
+      }),
+      api(`/campaigns/${id}/dashboard/categories`, {
+        token,
+        cache: DASHBOARD_CATEGORIES_CACHE_KEY ? { key: DASHBOARD_CATEGORIES_CACHE_KEY, mode: 'default' } : undefined,
+      }),
     ]);
 
     if (kpisResult.status === 'fulfilled') {
       setKpis(kpisResult.value);
     } else {
-      console.error('Failed to refresh KPIs:', kpisResult.reason);
+      if (!shouldIgnoreRequestError(kpisResult.reason)) {
+        console.error('Failed to refresh KPIs:', kpisResult.reason);
+      }
     }
 
     if (engagementResult.status === 'fulfilled') {
       setEngagement(engagementResult.value);
     } else {
-      console.error('Failed to refresh engagement:', engagementResult.reason);
+      if (!shouldIgnoreRequestError(engagementResult.reason)) {
+        console.error('Failed to refresh engagement:', engagementResult.reason);
+      }
     }
 
     if (categoriesResult.status === 'fulfilled') {
@@ -171,18 +234,28 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    api(`/campaigns/${id}`, { token }).then(setCampaign);
+    api(`/campaigns/${id}`, { token, cache: CAMPAIGN_CACHE_KEY ? { key: CAMPAIGN_CACHE_KEY, mode: 'default' } : undefined }).then(setCampaign);
     void refreshDashboardMetrics();
-    api('/pics?active=true', { token }).then(setPics).catch(() => {});
-    api('/accounts', { token }).then(setAccounts).catch(() => {});
+    api('/pics?active=true', { token, cache: { key: PICS_CACHE_KEY, mode: 'default' } }).then(setPics).catch(() => {});
+    api('/accounts', { token, cache: { key: ACCOUNTS_CACHE_KEY, mode: 'default' } }).then(setAccounts).catch(() => {});
   }, [id, token, refreshDashboardMetrics]);
 
   const fetchPosts = useCallback(async () => {
     if (!id) return;
-    setPostsLoading(true);
+    const cachedPosts = POSTS_CACHE_KEY ? getCachedValue<any[]>(POSTS_CACHE_KEY) : null;
+    const hasCache = Array.isArray(cachedPosts) && cachedPosts.length > 0;
+    if (hasCache && !hasHydratedFromCacheRef.current) {
+      setAllPosts(cachedPosts);
+      setPostsLoading(false);
+    } else {
+      setPostsLoading(!hasCache);
+    }
     try {
       // Fetch all posts without filters or pagination for client-side filtering
-      const response = await api(`/campaigns/${id}/posts`, { token });
+      const response = await api(`/campaigns/${id}/posts`, {
+        token,
+        cache: POSTS_CACHE_KEY ? { key: POSTS_CACHE_KEY, mode: 'default' } : undefined,
+      });
       if (response.posts) {
         setAllPosts(response.posts);
       } else {

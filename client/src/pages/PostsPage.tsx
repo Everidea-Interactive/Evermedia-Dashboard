@@ -4,8 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
 import { formatDate, parseDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -285,6 +287,12 @@ export default function PostsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectChangeInProgressRef = useRef<string | null>(null);
   const initialCellValueRef = useRef<string>('');
+  const hasHydratedFromCacheRef = useRef(false);
+
+  const POSTS_CACHE_KEY = (campaignId: string) => getApiCacheKey(`/campaigns/${campaignId}/posts`);
+  const CAMPAIGNS_CACHE_KEY = getApiCacheKey('/campaigns');
+  const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
+  const ACCOUNTS_CACHE_KEY = getApiCacheKey('/accounts');
 
   const routeCampaignId = id;
   const campaignIdForPosts = routeCampaignId || form.campaignId;
@@ -294,7 +302,11 @@ export default function PostsPage() {
 
   const fetchPostsForCampaign = useCallback(
     async (campaignId: string) => {
-      const response = await api(`/campaigns/${campaignId}/posts`, { token });
+      const cacheKey = POSTS_CACHE_KEY(campaignId);
+      const response = await api(`/campaigns/${campaignId}/posts`, {
+        token,
+        cache: { key: cacheKey, mode: 'default' },
+      });
       // API returns { posts: [...], total: ... } format
       if (response && typeof response === 'object' && 'posts' in response) {
         return (response.posts as Post[]) || [];
@@ -311,11 +323,23 @@ export default function PostsPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cacheKey = POSTS_CACHE_KEY(campaignIdForPosts);
+    const cachedPosts = getCachedValue<Post[]>(cacheKey);
+    const hasCache = Array.isArray(cachedPosts) && cachedPosts.length > 0;
+    if (hasCache && !hasHydratedFromCacheRef.current) {
+      setPosts(cachedPosts);
+      setLoading(false);
+      hasHydratedFromCacheRef.current = true;
+    } else {
+      setLoading(!hasCache);
+    }
     try {
       const data = await fetchPostsForCampaign(campaignIdForPosts);
       setPosts(data);
-    } catch {
+    } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       setPosts([]);
     } finally {
       setLoading(false);
@@ -328,9 +352,25 @@ export default function PostsPage() {
 
   useEffect(() => {
     if (!token) return;
-    api('/campaigns', { token }).then(setCampaigns).catch(() => {});
-    api('/pics?active=true', { token }).then(setPics).catch(() => {});
-    api('/accounts', { token }).then(setAccounts).catch(() => {});
+
+    if (!hasHydratedFromCacheRef.current) {
+      const cachedCampaigns = getCachedValue<CampaignOption[]>(CAMPAIGNS_CACHE_KEY);
+      const cachedPics = getCachedValue<PicOption[]>(PICS_CACHE_KEY);
+      const cachedAccounts = getCachedValue<AccountOption[]>(ACCOUNTS_CACHE_KEY);
+      if (cachedCampaigns) setCampaigns(cachedCampaigns);
+      if (cachedPics) setPics(cachedPics);
+      if (cachedAccounts) setAccounts(cachedAccounts);
+    }
+
+    api('/campaigns', { token, cache: { key: CAMPAIGNS_CACHE_KEY, mode: 'default' } })
+      .then(setCampaigns)
+      .catch(() => {});
+    api('/pics?active=true', { token, cache: { key: PICS_CACHE_KEY, mode: 'default' } })
+      .then(setPics)
+      .catch(() => {});
+    api('/accounts', { token, cache: { key: ACCOUNTS_CACHE_KEY, mode: 'default' } })
+      .then(setAccounts)
+      .catch(() => {});
   }, [token]);
 
   useEffect(() => {

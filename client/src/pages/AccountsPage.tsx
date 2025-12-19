@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -66,6 +67,9 @@ export default function AccountsPage() {
     key: 'name',
     direction: 'asc',
   });
+  const hasHydratedFromCacheRef = useRef(false);
+  const ACCOUNTS_CACHE_KEY = getApiCacheKey('/accounts');
+  const CAMPAIGNS_CACHE_KEY = getApiCacheKey('/campaigns');
 
   const kpiDisplayCategories: Array<'VIEWS' | 'QTY_POST' | 'FYP_COUNT'> = ['VIEWS', 'QTY_POST', 'FYP_COUNT'];
   const kpiLabels: Record<string, string> = {
@@ -208,10 +212,17 @@ export default function AccountsPage() {
   };
 
   const fetchAccounts = async () => {
-    setLoading(true);
-    setKpiLoading(true);
+    const cachedAccounts = getCachedValue<Account[]>(ACCOUNTS_CACHE_KEY);
+    const hasCache = Array.isArray(cachedAccounts) && cachedAccounts.length > 0;
+    if (hasCache && !hasHydratedFromCacheRef.current) {
+      setAllAccounts(cachedAccounts);
+      setItems(sortAccounts(applyClientFilters(cachedAccounts)));
+      hasHydratedFromCacheRef.current = true;
+    }
+    setLoading(!hasCache);
+    setKpiLoading(!hasCache);
     try {
-      const data = await api(`/accounts`, { token });
+      const data = await api(`/accounts`, { token, cache: { key: ACCOUNTS_CACHE_KEY, mode: 'default' } });
       setAllAccounts(data);
       setItems(sortAccounts(applyClientFilters(data)));
       await fetchAccountKpis(data);
@@ -238,7 +249,16 @@ export default function AccountsPage() {
   }, [applyClientFilters, sortAccounts, allAccounts]);
 
   useEffect(() => {
-    api('/campaigns', { token }).then(setCampaigns).catch(() => setCampaigns([]));
+    if (!token) return;
+    if (!hasHydratedFromCacheRef.current) {
+      const cachedCampaigns = getCachedValue<Campaign[]>(CAMPAIGNS_CACHE_KEY);
+      if (cachedCampaigns) {
+        setCampaigns(cachedCampaigns);
+      }
+    }
+    api('/campaigns', { token, cache: { key: CAMPAIGNS_CACHE_KEY, mode: 'default' } })
+      .then(setCampaigns)
+      .catch(() => setCampaigns([]));
   }, [token]);
 
   const resetForm = () => {

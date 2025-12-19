@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -43,11 +44,23 @@ export default function UsersPage() {
     password: '',
     role: '' as 'ADMIN' | 'CAMPAIGN_MANAGER' | 'EDITOR' | 'VIEWER' | '',
   });
+  const hasHydratedFromCacheRef = useRef(false);
+  const USERS_CACHE_KEY = getApiCacheKey('/users');
 
   const fetchUsers = () => {
-    setLoading(true);
-    api('/users', { token })
-      .then(setItems)
+    const cachedUsers = getCachedValue<User[]>(USERS_CACHE_KEY);
+    const hasCache = Array.isArray(cachedUsers) && cachedUsers.length > 0;
+    if (hasCache && !hasHydratedFromCacheRef.current) {
+      setItems(cachedUsers);
+      hasHydratedFromCacheRef.current = true;
+      setLoading(false);
+    } else {
+      setLoading(!hasCache);
+    }
+    api('/users', { token, cache: { key: USERS_CACHE_KEY, mode: 'default' } })
+      .then((data) => {
+        setItems(data);
+      })
       .catch((error: any) => {
         if (shouldIgnoreRequestError(error)) {
           return;

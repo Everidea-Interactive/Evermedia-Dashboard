@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
@@ -51,12 +52,19 @@ export default function DailyPage() {
   const [loading, setLoading] = useState(true);
   const [countType, setCountType] = useState<'post' | 'edit'>('post');
   const [dateRangeType, setDateRangeType] = useState<'today' | 'thisWeek' | 'thisMonth' | 'lastWeek' | 'lastMonth' | 'lifetime'>('today');
+  const POSTS_CACHE_KEY = getApiCacheKey('/posts/all');
+  const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
 
   useEffect(() => {
     if (!token) return;
     
     const fetchData = async () => {
-      setLoading(true);
+      const cachedPosts = getCachedValue<Post[]>(POSTS_CACHE_KEY);
+      const cachedPics = getCachedValue<PicOption[]>(PICS_CACHE_KEY);
+      const hasCache = !!cachedPosts;
+      if (cachedPosts) setPosts(cachedPosts);
+      if (cachedPics) setPics(cachedPics);
+      setLoading(!hasCache);
       try {
         const [postsData, picsData] = await Promise.all([
           api('/posts/all', { token }),

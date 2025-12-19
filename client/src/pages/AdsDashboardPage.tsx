@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -39,13 +40,64 @@ export default function AdsDashboardPage() {
     limit: 25,
     offset: 0,
   });
+  const hasHydratedFromCacheRef = useRef(false);
+
+  const ACTIVE_CAMPAIGNS_CACHE_KEY = getApiCacheKey('/campaigns?status=ACTIVE');
+
+  const buildDashboardData = useCallback((campaigns: Campaign[], kpiMap: Map<string, any[]>) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return campaigns.map((campaign) => {
+      const kpis = kpiMap.get(campaign.id) ?? [];
+      const viewsKpi = kpis.find((k: any) => k.category === 'VIEWS' && !k.accountId);
+      const targetViews = viewsKpi?.target || 0;
+      const currentViews = viewsKpi?.actual || 0;
+
+      const endDate = new Date(campaign.endDate);
+      endDate.setHours(0, 0, 0, 0);
+      const eod = Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+      const remainingViews = Math.max(0, targetViews - currentViews);
+      const budgetAds = (targetViews / 60) * 500;
+      const remBudgetAds = (remainingViews / 60) * 500;
+      const todayBudget = eod > 0 ? remBudgetAds / eod : 0;
+
+      return {
+        campaign,
+        eod,
+        currentViews,
+        remainingViews,
+        budgetAds,
+        remBudgetAds,
+        todayBudget,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!token || hasHydratedFromCacheRef.current) return;
+    const cachedCampaigns = getCachedValue<Campaign[]>(ACTIVE_CAMPAIGNS_CACHE_KEY);
+    if (cachedCampaigns && cachedCampaigns.length > 0) {
+      const kpiMap = new Map<string, any[]>();
+      cachedCampaigns.forEach((campaign) => {
+        const cachedKpis = getCachedValue<any[]>(getApiCacheKey(`/campaigns/${campaign.id}/kpis`));
+        if (cachedKpis) {
+          kpiMap.set(campaign.id, cachedKpis);
+        }
+      });
+      const data = buildDashboardData(cachedCampaigns, kpiMap);
+      setAllCampaignData(data);
+      setLoading(false);
+      hasHydratedFromCacheRef.current = true;
+    }
+  }, [token, buildDashboardData]);
 
   useEffect(() => {
     fetchData();
   }, [token]);
 
   const fetchData = async () => {
-    setLoading(true);
+    setLoading(!hasHydratedFromCacheRef.current);
     try {
       // Fetch all active campaigns
       const campaigns: Campaign[] = await api('/campaigns?status=ACTIVE', { token });
@@ -56,55 +108,19 @@ export default function AdsDashboardPage() {
         return;
       }
 
-      // Fetch all KPIs in parallel (KPIs already contain the actual view counts)
-      const kpiPromises = campaigns.map(campaign => 
+      const kpiPromises = campaigns.map(campaign =>
         api(`/campaigns/${campaign.id}/kpis`, { token }).catch(() => [])
       );
 
-      // Execute all KPI calls in parallel
       const kpiResults = await Promise.all(kpiPromises);
 
-      // Process the data
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const data = campaigns.map((campaign, index) => {
-        // Get KPIs for this campaign
+      const kpiMap = new Map<string, any[]>();
+      campaigns.forEach((campaign, index) => {
         const kpis: any[] = Array.isArray(kpiResults[index]) ? kpiResults[index] : [];
-        const viewsKpi = kpis.find((k: any) => k.category === 'VIEWS' && !k.accountId);
-        const targetViews = viewsKpi?.target || 0;
-        
-        // Use KPI actual value instead of fetching all posts (much faster!)
-        // The KPI actual already contains the sum of all post.totalView values
-        const currentViews = viewsKpi?.actual || 0;
-        
-        // Calculate EoD (Days remaining until End of Date)
-        const endDate = new Date(campaign.endDate);
-        endDate.setHours(0, 0, 0, 0);
-        const eod = Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-        
-        // Calculate remaining views
-        const remainingViews = Math.max(0, targetViews - currentViews);
-        
-        // Calculate Budget Ads = Target Views/60*500
-        const budgetAds = (targetViews / 60) * 500;
-        
-        // Calculate Rem. Budget Ads = RemainingViews/60*500
-        const remBudgetAds = (remainingViews / 60) * 500;
-        
-        // Calculate Today Budget = Rem. Budget Ads/EoD (avoid division by zero)
-        const todayBudget = eod > 0 ? remBudgetAds / eod : 0;
-        
-        return {
-          campaign,
-          eod,
-          currentViews,
-          remainingViews,
-          budgetAds,
-          remBudgetAds,
-          todayBudget,
-        };
+        kpiMap.set(campaign.id, kpis);
       });
+
+      const data = buildDashboardData(campaigns, kpiMap);
       
       setAllCampaignData(data);
     } catch (error: any) {
