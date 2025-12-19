@@ -128,6 +128,7 @@ export default function CampaignsPage() {
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [campaignSearchTerm, setCampaignSearchTerm] = useState('');
   const [debouncedCampaignSearch, setDebouncedCampaignSearch] = useState('');
+  const [kpiLoading, setKpiLoading] = useState(false);
   type SortKey = 'name' | 'startDate' | 'endDate' | 'status';
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
   const [pagination, setPagination] = useState({
@@ -136,17 +137,55 @@ export default function CampaignsPage() {
   });
   const previousLocationRef = useRef<string>('');
   const campaignDropdownRef = useRef<HTMLDivElement>(null);
+  const refreshIdRef = useRef(0);
+  const staleCheckRef = useRef(0);
+  const staleCheckCooldownRef = useRef<Map<string, number>>(new Map());
+  const lastStaleCheckKeyRef = useRef('');
 
   const clearCache = useCallback(() => {
     invalidateCacheByPrefix(CAMPAIGN_CACHE_KEYS.campaigns);
   }, []);
 
+  const getLatestKpiUpdatedAt = useCallback((kpiMap: Map<string, any[]>) => {
+    let latest = 0;
+    kpiMap.forEach((kpis) => {
+      (kpis || []).forEach((kpi) => {
+        const timestamp = kpi?.updatedAt ? new Date(kpi.updatedAt).getTime() : 0;
+        if (timestamp > latest) latest = timestamp;
+      });
+    });
+    return latest;
+  }, []);
+
+  const getCampaignQtyPostActual = useCallback((campaignId: string) => {
+    const kpis = campaignKpisMap.get(campaignId) || [];
+    const qtyPostKpi = kpis.find((k: any) => !k.accountId && k.category === 'QTY_POST');
+    return qtyPostKpi?.actual ?? 0;
+  }, [campaignKpisMap]);
+
+  const fetchPostCountsForCampaigns = useCallback(async (campaigns: Campaign[]) => {
+    if (campaigns.length === 0) return {};
+    const campaignIds = campaigns.map(c => c.id).sort().join(',');
+    return api(`/campaigns/posts/counts?campaignIds=${campaignIds}`, {
+      token,
+      cache: { mode: 'reload' },
+    });
+  }, [token]);
+
   // Fetch KPIs for a given list of campaigns (optimized with batch endpoint and caching)
-  const fetchKPIsForCampaigns = useCallback(async (campaigns: Campaign[], useCache = true) => {
+  const fetchKPIsForCampaigns = useCallback(async (
+    campaigns: Campaign[],
+    options: { useCache?: boolean; recalculate?: boolean } = {}
+  ) => {
+    const { useCache = true, recalculate = false } = options;
     if (campaigns.length === 0) return new Map<string, any[]>();
     
     const campaignIds = campaigns.map(c => c.id).sort().join(',');
     const cacheKey = CAMPAIGN_CACHE_KEYS.kpisBatch(campaignIds);
+    const kpiParams = new URLSearchParams({ campaignIds, accountId: 'null' });
+    if (recalculate) {
+      kpiParams.set('recalculate', 'true');
+    }
     
       // Try cache first
       if (useCache) {
@@ -162,7 +201,7 @@ export default function CampaignsPage() {
     
     try {
       // Use batch endpoint for better performance
-      const kpisByCampaign = await api(`/campaigns/kpis/batch?campaignIds=${campaignIds}&accountId=null`, {
+      const kpisByCampaign = await api(`/campaigns/kpis/batch?${kpiParams.toString()}`, {
         token,
         cache: { key: cacheKey, mode: useCache ? 'default' : 'reload' },
       });
@@ -186,7 +225,10 @@ export default function CampaignsPage() {
       const kpiMap = new Map<string, any[]>();
       const kpiPromises = campaigns.map(async (campaign: Campaign) => {
         try {
-          const kpis = await api(`/campaigns/${campaign.id}/kpis?accountId=null`, {
+          const kpiPath = recalculate
+            ? `/campaigns/${campaign.id}/kpis?accountId=null&recalculate=true`
+            : `/campaigns/${campaign.id}/kpis?accountId=null`;
+          const kpis = await api(kpiPath, {
             token,
             cache: { mode: useCache ? 'default' : 'reload' },
           });
@@ -205,12 +247,86 @@ export default function CampaignsPage() {
     }
   }, [token]);
 
-  // Refresh KPIs for currently loaded campaigns
+  const mergeCampaignKpisMap = useCallback((incoming: Map<string, any[]>) => {
+    setCampaignKpisMap((prev) => {
+      if (prev.size === 0) return incoming;
+      const merged = new Map(prev);
+      incoming.forEach((value, key) => {
+        merged.set(key, value);
+      });
+      return merged;
+    });
+  }, []);
+
+  const loadKpisForCampaigns = useCallback(async (
+    campaigns: Campaign[],
+    useCache = false,
+    replace = true
+  ) => {
+    if (campaigns.length === 0) return;
+    setKpiLoading(true);
+    try {
+      const kpiMap = await fetchKPIsForCampaigns(campaigns, { useCache, recalculate: false });
+      if (replace) {
+        setCampaignKpisMap(kpiMap);
+      } else {
+        mergeCampaignKpisMap(kpiMap);
+      }
+    } finally {
+      setKpiLoading(false);
+    }
+  }, [fetchKPIsForCampaigns, mergeCampaignKpisMap]);
+
+  // Refresh KPIs for currently loaded campaigns (forces recalculation)
+  const refreshKpisForCampaigns = useCallback(async (campaigns: Campaign[]) => {
+    if (campaigns.length === 0) return;
+    const refreshId = refreshIdRef.current + 1;
+    refreshIdRef.current = refreshId;
+    const delays = [2000, 6000];
+    setKpiLoading(true);
+    try {
+      // Always bypass cache so KPI recalculation runs on refresh/visibility changes
+      const kpiMap = await fetchKPIsForCampaigns(campaigns, { useCache: false, recalculate: true });
+      if (refreshId !== refreshIdRef.current) return;
+      mergeCampaignKpisMap(kpiMap);
+      const initialUpdatedAt = getLatestKpiUpdatedAt(kpiMap);
+
+      const pollForUpdates = (attempt: number, lastUpdatedAt: number) => {
+        if (attempt >= delays.length) {
+          setKpiLoading(false);
+          return;
+        }
+        setTimeout(async () => {
+          if (refreshId !== refreshIdRef.current) return;
+          try {
+            const refreshedMap = await fetchKPIsForCampaigns(campaigns, { useCache: false });
+            if (refreshId !== refreshIdRef.current) return;
+            mergeCampaignKpisMap(refreshedMap);
+            const nextUpdatedAt = getLatestKpiUpdatedAt(refreshedMap);
+            if (nextUpdatedAt > lastUpdatedAt) {
+              setKpiLoading(false);
+              return;
+            }
+            pollForUpdates(attempt + 1, nextUpdatedAt);
+          } catch (error) {
+            if (refreshId === refreshIdRef.current) {
+              setKpiLoading(false);
+            }
+          }
+        }, delays[attempt]);
+      };
+
+      pollForUpdates(0, initialUpdatedAt);
+    } catch (error) {
+      if (refreshId === refreshIdRef.current) {
+        setKpiLoading(false);
+      }
+    }
+  }, [fetchKPIsForCampaigns, getLatestKpiUpdatedAt]);
+
   const fetchKPIs = useCallback(async () => {
-    if (allItems.length === 0) return;
-    const kpiMap = await fetchKPIsForCampaigns(allItems);
-    setCampaignKpisMap(kpiMap);
-  }, [allItems, fetchKPIsForCampaigns]);
+    await loadKpisForCampaigns(allItems, false);
+  }, [allItems, loadKpisForCampaigns]);
 
   // Fetch campaigns only (no KPIs) with caching
   const fetchCampaigns = useCallback(async (useCache = true) => {
@@ -265,38 +381,39 @@ export default function CampaignsPage() {
       setEngagement(cachedEngagement);
     }
     
+    const engagementPromise = api('/campaigns/all/engagement', {
+      token,
+      cache: { key: CAMPAIGN_CACHE_KEYS.engagement, mode: 'reload' },
+    }).catch((error) => {
+      if (!shouldIgnoreRequestError(error)) {
+        console.error('Failed to fetch engagement:', error);
+      }
+      return null;
+    });
+
     setLoading(true);
+    let campaignsList: Campaign[] = [];
     try {
-      // Fetch fresh data in parallel
-      const [campaigns, engagementData] = await Promise.allSettled([
-        fetchCampaigns(false), // Skip cache, fetch fresh
-        api('/campaigns/all/engagement', {
-          token,
-          cache: { key: CAMPAIGN_CACHE_KEYS.engagement, mode: 'reload' },
-        }).catch(() => null),
-      ]);
-
-      const campaignsList = campaigns.status === 'fulfilled' ? campaigns.value : [];
-      
-      // Fetch KPIs for the campaigns we just loaded
-      if (campaignsList.length > 0) {
-        const kpiMap = await fetchKPIsForCampaigns(campaignsList, false); // Skip cache, fetch fresh
-        setCampaignKpisMap(kpiMap);
-      }
-
-      // Set engagement data (views will be overridden by calculatedEngagement)
-      if (engagementData.status === 'fulfilled' && engagementData.value) {
-        setEngagement(engagementData.value);
-      }
+      campaignsList = await fetchCampaigns(false); // Skip cache, fetch fresh
     } catch (error) {
       if (shouldIgnoreRequestError(error)) {
         return;
       }
-      console.error('Failed to fetch all data:', error);
+      console.error('Failed to fetch campaigns:', error);
     } finally {
       setLoading(false);
     }
-  }, [token, fetchCampaigns, fetchKPIsForCampaigns]);
+
+    void engagementPromise.then((data) => {
+      if (data) {
+        setEngagement(data);
+      }
+    });
+
+    if (campaignsList.length > 0) {
+      void loadKpisForCampaigns(campaignsList, false);
+    }
+  }, [token, fetchCampaigns, loadKpisForCampaigns]);
 
   // Calculate engagement stats from campaign-level KPIs (to match KPI Overview exactly)
   // Views come from campaign-level KPIs, other metrics from engagement API
@@ -482,6 +599,64 @@ export default function CampaignsPage() {
       setPagination(prev => ({ ...prev, offset: maxOffset }));
     }
   }, [sortedItems.length, pagination.limit, pagination.offset]);
+
+  useEffect(() => {
+    if (paginatedItems.length === 0) return;
+    if (kpiLoading) return;
+    const hasKpis = paginatedItems.every((campaign) => campaignKpisMap.has(campaign.id));
+    if (!hasKpis) return;
+
+    const kpiUpdatedAtKey = paginatedItems
+      .map((campaign) => {
+        const kpis = campaignKpisMap.get(campaign.id) || [];
+        const latest = kpis.reduce((max: number, kpi: any) => {
+          const timestamp = kpi?.updatedAt ? new Date(kpi.updatedAt).getTime() : 0;
+          return timestamp > max ? timestamp : max;
+        }, 0);
+        return `${campaign.id}:${latest}`;
+      })
+      .join('|');
+    const visibleIdsKey = paginatedItems.map((campaign) => campaign.id).sort().join(',');
+    const checkKey = `${visibleIdsKey}|${kpiUpdatedAtKey}`;
+    if (checkKey === lastStaleCheckKeyRef.current) return;
+    lastStaleCheckKeyRef.current = checkKey;
+
+    const requestId = staleCheckRef.current + 1;
+    staleCheckRef.current = requestId;
+
+    void (async () => {
+      try {
+        const counts = await fetchPostCountsForCampaigns(paginatedItems);
+        if (staleCheckRef.current !== requestId) return;
+        const now = Date.now();
+        const staleCampaigns = paginatedItems.filter((campaign) => {
+          const count = counts?.[campaign.id];
+          if (typeof count !== 'number') return false;
+          const actual = getCampaignQtyPostActual(campaign.id);
+          if (count === actual) return false;
+          const lastAttempt = staleCheckCooldownRef.current.get(campaign.id) ?? 0;
+          if (now - lastAttempt < 30000) return false;
+          return true;
+        });
+
+        if (staleCampaigns.length > 0) {
+          staleCampaigns.forEach((campaign) => staleCheckCooldownRef.current.set(campaign.id, now));
+          void refreshKpisForCampaigns(staleCampaigns);
+        }
+      } catch (error) {
+        if (!shouldIgnoreRequestError(error)) {
+          console.error('Failed to check KPI freshness:', error);
+        }
+      }
+    })();
+  }, [
+    paginatedItems,
+    kpiLoading,
+    campaignKpisMap,
+    fetchPostCountsForCampaigns,
+    getCampaignQtyPostActual,
+    refreshKpisForCampaigns,
+  ]);
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
@@ -934,25 +1109,45 @@ export default function CampaignsPage() {
       {/* KPI Overview */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
         <Card>
-          <div className="section-title text-xs sm:text-sm">Views</div>
+          <div className="flex items-center gap-1.5">
+            <div className="section-title text-xs sm:text-sm">Views</div>
+            {kpiLoading && (
+              <span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-emerald-500" aria-hidden="true"></span>
+            )}
+          </div>
           <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
             {aggregatedKpis.views.actual.toLocaleString()}/{aggregatedKpis.views.target.toLocaleString()}
           </div>
         </Card>
         <Card>
-          <div className="section-title text-xs sm:text-sm">Posts</div>
+          <div className="flex items-center gap-1.5">
+            <div className="section-title text-xs sm:text-sm">Posts</div>
+            {kpiLoading && (
+              <span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-emerald-500" aria-hidden="true"></span>
+            )}
+          </div>
           <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
             {aggregatedKpis.qtyPost.actual.toLocaleString()}/{aggregatedKpis.qtyPost.target.toLocaleString()}
           </div>
         </Card>
         <Card>
-          <div className="section-title text-xs sm:text-sm">FYP</div>
+          <div className="flex items-center gap-1.5">
+            <div className="section-title text-xs sm:text-sm">FYP</div>
+            {kpiLoading && (
+              <span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-emerald-500" aria-hidden="true"></span>
+            )}
+          </div>
           <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
             {aggregatedKpis.fypCount.actual.toLocaleString()}/{aggregatedKpis.fypCount.target.toLocaleString()}
           </div>
         </Card>
         <Card>
-          <div className="section-title text-xs sm:text-sm">GMV (IDR)</div>
+          <div className="flex items-center gap-1.5">
+            <div className="section-title text-xs sm:text-sm">GMV (IDR)</div>
+            {kpiLoading && (
+              <span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-emerald-500" aria-hidden="true"></span>
+            )}
+          </div>
           <div className="mt-1 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-semibold leading-tight">
             {aggregatedKpis.gmv.actual.toLocaleString()}/{aggregatedKpis.gmv.target.toLocaleString()}
           </div>
@@ -1017,7 +1212,7 @@ export default function CampaignsPage() {
                 <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, sortedItems.length)} of {sortedItems.length}
                   {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
-                  {loading && ' - Refreshing...'}
+                  {loading ? ' - Refreshing...' : kpiLoading ? ' - Updating KPIs...' : ''}
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>

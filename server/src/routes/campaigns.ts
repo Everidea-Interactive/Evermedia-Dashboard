@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabase.js';
 import { requireAuth, requireRoles, AuthRequest } from '../middleware/auth.js';
-import { recalculateKPIs } from '../utils/kpiRecalculation.js';
+import { recalculateCampaignKPIs, recalculateKPIs } from '../utils/kpiRecalculation.js';
 import { logActivity, getEntityName, computeChangedFields, generateChangeDescription } from '../utils/activityLog.js';
 
 const normalizeQuotationNumber = (value: any): string | null | undefined => {
@@ -33,6 +33,12 @@ const haveSameAccountSets = (first: string[], second: string[]): boolean => {
     if (!secondSet.has(id)) return false;
   }
   return true;
+};
+
+const isTruthyParam = (value: unknown): boolean => {
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
 };
 
 const router = Router();
@@ -341,9 +347,42 @@ router.delete('/:id', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: Aut
   res.json({ ok: true });
 });
 
+router.get('/posts/counts', async (req, res) => {
+  const { campaignIds } = req.query as any;
+  if (!campaignIds) {
+    return res.status(400).json({ error: 'campaignIds query parameter is required' });
+  }
+
+  const ids = Array.isArray(campaignIds) ? campaignIds : String(campaignIds).split(',').filter(Boolean);
+  if (ids.length === 0) {
+    return res.json({});
+  }
+
+  const counts: Record<string, number> = {};
+  await Promise.all(ids.map(async (campaignId: string) => {
+    try {
+      const { count, error } = await supabase
+        .from('Post')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaignId', campaignId);
+
+      if (error) {
+        console.error(`Failed to count posts for campaign ${campaignId}:`, error);
+        return;
+      }
+
+      counts[campaignId] = count ?? 0;
+    } catch (error) {
+      console.error(`Failed to count posts for campaign ${campaignId}:`, error);
+    }
+  }));
+
+  res.json(counts);
+});
+
 // Batch endpoint to fetch KPIs for multiple campaigns
 router.get('/kpis/batch', async (req, res) => {
-  const { campaignIds, accountId } = req.query as any;
+  const { campaignIds, accountId, recalculate } = req.query as any;
   
   if (!campaignIds) {
     return res.status(400).json({ error: 'campaignIds query parameter is required' });
@@ -352,6 +391,23 @@ router.get('/kpis/batch', async (req, res) => {
   const ids = Array.isArray(campaignIds) ? campaignIds : campaignIds.split(',').filter(Boolean);
   if (ids.length === 0) {
     return res.json({});
+  }
+
+  if (isTruthyParam(recalculate)) {
+    const isCampaignLevel = accountId === undefined || accountId === null || accountId === 'null';
+    void (async () => {
+      for (const campaignId of ids) {
+        try {
+          if (isCampaignLevel) {
+            await recalculateCampaignKPIs(campaignId);
+          } else {
+            await recalculateKPIs(campaignId, String(accountId));
+          }
+        } catch (error) {
+          console.error(`Failed to recalculate KPIs for campaign ${campaignId}:`, error);
+        }
+      }
+    })();
   }
   
   let query = supabase
@@ -387,7 +443,7 @@ router.get('/kpis/batch', async (req, res) => {
 });
 
 router.get('/:id/kpis', async (req, res) => {
-  const { accountId } = req.query as any;
+  const { accountId, recalculate } = req.query as any;
   let query = supabase
     .from('KPI')
     .select('*')
@@ -397,6 +453,20 @@ router.get('/:id/kpis', async (req, res) => {
   // accountId=null means campaign-level KPIs only (where accountId IS NULL)
   // accountId=<id> means KPIs for that specific account
   // No accountId means all KPIs (backward compatible)
+  if (isTruthyParam(recalculate)) {
+    const isCampaignLevel = accountId === undefined || accountId === null || accountId === 'null';
+    void (async () => {
+      try {
+        if (isCampaignLevel) {
+          await recalculateCampaignKPIs(req.params.id);
+        } else {
+          await recalculateKPIs(req.params.id, String(accountId));
+        }
+      } catch (error) {
+        console.error(`Failed to recalculate KPIs for campaign ${req.params.id}:`, error);
+      }
+    })();
+  }
   if (accountId !== undefined) {
     if (accountId === null || accountId === 'null') {
       query = query.is('accountId', null);

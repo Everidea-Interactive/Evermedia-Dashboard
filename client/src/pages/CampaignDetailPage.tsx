@@ -192,17 +192,22 @@ export default function CampaignDetailPage() {
   ]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
 
-  const refreshDashboardMetrics = useCallback(async () => {
+  const refreshDashboardMetrics = useCallback(async (options?: { recalculate?: boolean }) => {
     if (!id) return;
+    const shouldRecalculate = options?.recalculate;
+    const kpiPath = shouldRecalculate
+      ? `/campaigns/${id}/kpis?recalculate=true`
+      : `/campaigns/${id}/kpis`;
     const [kpisResult, engagementResult, categoriesResult] = await Promise.allSettled([
-      api(`/campaigns/${id}/kpis`, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'default' } : undefined }),
+      // Always reload so KPI data isn't served from cache
+      api(kpiPath, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'reload' } : undefined }),
       api(`/campaigns/${id}/dashboard/engagement`, {
         token,
-        cache: DASHBOARD_ENGAGEMENT_CACHE_KEY ? { key: DASHBOARD_ENGAGEMENT_CACHE_KEY, mode: 'default' } : undefined,
+        cache: DASHBOARD_ENGAGEMENT_CACHE_KEY ? { key: DASHBOARD_ENGAGEMENT_CACHE_KEY, mode: 'reload' } : undefined,
       }),
       api(`/campaigns/${id}/dashboard/categories`, {
         token,
-        cache: DASHBOARD_CATEGORIES_CACHE_KEY ? { key: DASHBOARD_CATEGORIES_CACHE_KEY, mode: 'default' } : undefined,
+        cache: DASHBOARD_CATEGORIES_CACHE_KEY ? { key: DASHBOARD_CATEGORIES_CACHE_KEY, mode: 'reload' } : undefined,
       }),
     ]);
 
@@ -235,9 +240,13 @@ export default function CampaignDetailPage() {
   useEffect(() => {
     if (!id) return;
     api(`/campaigns/${id}`, { token, cache: CAMPAIGN_CACHE_KEY ? { key: CAMPAIGN_CACHE_KEY, mode: 'default' } : undefined }).then(setCampaign);
-    void refreshDashboardMetrics();
+    void refreshDashboardMetrics({ recalculate: true });
+    const followUpId = setTimeout(() => {
+      void refreshDashboardMetrics();
+    }, 3000);
     api('/pics?active=true', { token, cache: { key: PICS_CACHE_KEY, mode: 'default' } }).then(setPics).catch(() => {});
     api('/accounts', { token, cache: { key: ACCOUNTS_CACHE_KEY, mode: 'default' } }).then(setAccounts).catch(() => {});
+    return () => clearTimeout(followUpId);
   }, [id, token, refreshDashboardMetrics]);
 
   const fetchPosts = useCallback(async () => {

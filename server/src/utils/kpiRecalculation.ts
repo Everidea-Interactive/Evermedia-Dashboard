@@ -12,6 +12,7 @@ async function fetchAllPostsForKPI(campaignId: string, accountId?: string) {
       .from('Post')
       .select('totalView, contentType, yellowCart, fypType')
       .eq('campaignId', campaignId)
+      .order('id', { ascending: true })
       .range(offset, offset + pageSize - 1);
     
     if (accountId) {
@@ -64,7 +65,6 @@ export async function recalculateKPIs(campaignId: string, accountId: string) {
     QTY_POST: posts.length,
     FYP_COUNT: 0,
     VIDEO_COUNT: 0,
-    GMV_IDR: 0,
     YELLOW_CART: 0,
   };
 
@@ -141,7 +141,6 @@ export async function recalculateCampaignKPIs(campaignId: string) {
     QTY_POST: posts.length,
     FYP_COUNT: 0,
     VIDEO_COUNT: 0,
-    GMV_IDR: 0,
     YELLOW_CART: 0,
   };
 
