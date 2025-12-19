@@ -307,9 +307,10 @@ export default function PostsPage() {
   const fetchPostsForCampaign = useCallback(
     async (campaignId: string) => {
       const cacheKey = POSTS_CACHE_KEY(campaignId);
+      // Use 'reload' mode to ensure we get all posts (not limited by cache)
       const response = await api(`/campaigns/${campaignId}/posts`, {
         token,
-        cache: { key: cacheKey, mode: 'default' },
+        cache: { key: cacheKey, mode: 'reload' },
       });
       // API returns { posts: [...], total: ... } format
       if (response && typeof response === 'object' && 'posts' in response) {
