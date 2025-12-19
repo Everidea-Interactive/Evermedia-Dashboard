@@ -38,6 +38,10 @@ export default function UsersPage() {
     key: 'name',
     direction: 'asc',
   });
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -329,6 +333,32 @@ export default function UsersPage() {
     return sorted;
   }, [items, search, roleFilter, sortConfig, currentUser]);
 
+  const paginatedUsers = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return filteredUsers.slice(start, end);
+  }, [filteredUsers, pagination]);
+
+  const totalPages = Math.ceil(filteredUsers.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, offset: 0 }));
+  }, [search, roleFilter]);
+
+  useEffect(() => {
+    if (filteredUsers.length === 0) {
+      if (pagination.offset !== 0) {
+        setPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((filteredUsers.length - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [filteredUsers.length, pagination.limit, pagination.offset]);
+
   return (
     <div>
       <PageHeader
@@ -366,6 +396,7 @@ export default function UsersPage() {
                 onClick={() => {
                   setSearch('');
                   setRoleFilter('');
+                  setPagination(prev => ({ ...prev, offset: 0 }));
                 }}
                 className="text-sm py-1 px-2"
               >
@@ -394,74 +425,121 @@ export default function UsersPage() {
               </p>
             </div>
           ) : (
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    {renderSortableHeader('Name', 'name')}
-                    {renderSortableHeader('Email', 'email')}
-                    {renderSortableHeader('Role', 'role')}
-                    {renderSortableHeader('Created At', 'createdAt')}
-                    <TH>Actions</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {filteredUsers.map(user => {
-                    const badgeStyle = getRoleBadgeColor(user.role);
-                    const isCurrentUser = user.id === currentUser?.id;
-                    return (
-                      <TR key={user.id}>
-                        <TD>
-                          <div className="flex items-center gap-2">
-                            <span style={{ color: 'var(--text-primary)' }}>{user.name}</span>
-                            {isCurrentUser && (
-                              <span className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                You
-                              </span>
-                            )}
-                          </div>
-                        </TD>
-                        <TD>
-                          <span style={{ color: 'var(--text-secondary)' }}>{user.email}</span>
-                        </TD>
-                        <TD>
-                          <span className="text-xs px-2 py-1 rounded border" style={badgeStyle}>
-                            {user.role}
-                          </span>
-                        </TD>
-                        <TD>
-                          <span style={{ color: 'var(--text-tertiary)' }}>
-                            {formatDate(user.createdAt)}
-                          </span>
-                        </TD>
-                        <TD>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              color="blue"
-                              onClick={() => handleEditUser(user)}
-                              className="text-sm py-1.5"
-                              disabled={!!editingId}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              color="red"
-                              onClick={() => handleDeleteClick(user.id, user.name)}
-                              disabled={deletingIds.has(user.id) || isCurrentUser || !!editingId}
-                              className="text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {deletingIds.has(user.id) ? 'Deleting...' : 'Delete'}
-                            </Button>
-                          </div>
-                        </TD>
-                      </TR>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </TableWrap>
+            <>
+              <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, filteredUsers.length)} of {filteredUsers.length}
+                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Rows per page:
+                  </label>
+                  <Select
+                    value={pagination.limit.toString()}
+                    onChange={e => setPagination({ limit: Number(e.target.value), offset: 0 })}
+                    className="text-sm py-1 px-2 w-20"
+                  >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </Select>
+                </div>
+              </div>
+              <TableWrap>
+                <Table>
+                  <THead>
+                    <TR>
+                      {renderSortableHeader('Name', 'name')}
+                      {renderSortableHeader('Email', 'email')}
+                      {renderSortableHeader('Role', 'role')}
+                      {renderSortableHeader('Created At', 'createdAt')}
+                      <TH>Actions</TH>
+                    </TR>
+                  </THead>
+                  <tbody>
+                    {paginatedUsers.map(user => {
+                      const badgeStyle = getRoleBadgeColor(user.role);
+                      const isCurrentUser = user.id === currentUser?.id;
+                      return (
+                        <TR key={user.id}>
+                          <TD>
+                            <div className="flex items-center gap-2">
+                              <span style={{ color: 'var(--text-primary)' }}>{user.name}</span>
+                              {isCurrentUser && (
+                                <span className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                  You
+                                </span>
+                              )}
+                            </div>
+                          </TD>
+                          <TD>
+                            <span style={{ color: 'var(--text-secondary)' }}>{user.email}</span>
+                          </TD>
+                          <TD>
+                            <span className="text-xs px-2 py-1 rounded border" style={badgeStyle}>
+                              {user.role}
+                            </span>
+                          </TD>
+                          <TD>
+                            <span style={{ color: 'var(--text-tertiary)' }}>
+                              {formatDate(user.createdAt)}
+                            </span>
+                          </TD>
+                          <TD>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                color="blue"
+                                onClick={() => handleEditUser(user)}
+                                className="text-sm py-1.5"
+                                disabled={!!editingId}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                color="red"
+                                onClick={() => handleDeleteClick(user.id, user.name)}
+                                disabled={deletingIds.has(user.id) || isCurrentUser || !!editingId}
+                                className="text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {deletingIds.has(user.id) ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </div>
+                          </TD>
+                        </TR>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrap>
+              {totalPages > 1 && (
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                    disabled={pagination.offset === 0}
+                    className="text-sm"
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                    disabled={pagination.offset + pagination.limit >= filteredUsers.length}
+                    className="text-sm"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>

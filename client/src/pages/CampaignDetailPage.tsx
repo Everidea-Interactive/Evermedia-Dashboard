@@ -104,7 +104,7 @@ export default function CampaignDetailPage() {
     dateTo: '',
   });
   const [postPagination, setPostPagination] = useState({
-    limit: 5,
+    limit: 25,
     offset: 0,
   });
   const [updatingEngagement, setUpdatingEngagement] = useState(false);
@@ -295,6 +295,10 @@ export default function CampaignDetailPage() {
     setPostPagination((prev) => ({ ...prev, offset: 0 }));
   };
 
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPostPagination({ limit: newLimit, offset: 0 });
+  };
+
   // Client-side filtering
   // Clear selection when filters change
   useEffect(() => {
@@ -349,15 +353,6 @@ export default function CampaignDetailPage() {
       return true;
     });
   }, [allPosts, postFilters]);
-
-  // Client-side pagination
-  const paginatedPosts = useMemo(() => {
-    const start = postPagination.offset;
-    const end = start + postPagination.limit;
-    return filteredPosts.slice(start, end);
-  }, [filteredPosts, postPagination]);
-
-  const postsTotal = filteredPosts.length;
 
   const accountNameMap = useMemo(() => new Map(accounts.map((account: any) => [account.id, account.name || ''])), [accounts]);
   const picNameMap = useMemo(() => new Map(pics.map((pic: any) => [pic.id, pic.name || ''])), [pics]);
@@ -437,7 +432,7 @@ export default function CampaignDetailPage() {
       return a.toString().localeCompare(b.toString(), undefined, { sensitivity: 'base', numeric: true });
     };
 
-    const nextPosts = [...paginatedPosts];
+    const nextPosts = [...filteredPosts];
     nextPosts.sort((a, b) => {
       const aValue = getSortValue(a, sortConfig.key);
       const bValue = getSortValue(b, sortConfig.key);
@@ -445,7 +440,31 @@ export default function CampaignDetailPage() {
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
     return nextPosts;
-  }, [paginatedPosts, sortConfig, getAccountName, getPicName]);
+  }, [filteredPosts, sortConfig, getAccountName, getPicName]);
+
+  const paginatedPosts = useMemo(() => {
+    const start = postPagination.offset;
+    const end = start + postPagination.limit;
+    return sortedPosts.slice(start, end);
+  }, [sortedPosts, postPagination]);
+
+  const postsTotal = sortedPosts.length;
+
+  const totalPages = Math.ceil(postsTotal / postPagination.limit);
+  const currentPage = Math.floor(postPagination.offset / postPagination.limit) + 1;
+
+  useEffect(() => {
+    if (postsTotal === 0) {
+      if (postPagination.offset !== 0) {
+        setPostPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((postsTotal - 1) / postPagination.limit) * postPagination.limit);
+    if (postPagination.offset > maxOffset) {
+      setPostPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [postsTotal, postPagination.limit, postPagination.offset]);
 
   const handleSortToggle = (key: SortKey) => {
     setSortConfig((prev) => {
@@ -1684,7 +1703,7 @@ export default function CampaignDetailPage() {
         </div>
         <Card>
           <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-1.5 sm:gap-2 w-full">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-9 gap-1.5 sm:gap-2 w-full">
               <AccountDropdownFilter
                 accounts={(campaign?.accounts || []) as any[]}
                 selectedAccountId={postFilters.accountId}
@@ -1790,6 +1809,29 @@ export default function CampaignDetailPage() {
               </div>
             ) : (
               <>
+              <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Showing {postPagination.offset + 1} - {Math.min(postPagination.offset + postPagination.limit, postsTotal)} of {postsTotal}
+                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                  {postsLoading && ' - Refreshing...'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Rows per page:
+                  </label>
+                  <Select
+                    value={postPagination.limit.toString()}
+                    onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                    className="text-sm py-1 px-2 w-20"
+                  >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </Select>
+                </div>
+              </div>
               <TableWrap>
                   <Table>
                     <THead>
@@ -1830,7 +1872,7 @@ export default function CampaignDetailPage() {
                       </TR>
                     </THead>
                     <tbody>
-                      {sortedPosts.map((p: any, index) => {
+                      {paginatedPosts.map((p: any, index) => {
                         const isEditing = editingCell?.postId === p.id;
                         const isSaving = savingCell?.startsWith(`${p.id}-`);
                         const postCampaignCategoryOptions = Array.isArray(campaign?.categories) 
@@ -2552,29 +2594,27 @@ export default function CampaignDetailPage() {
                     </tbody>
                   </Table>
                 </TableWrap>
-                {Math.ceil(postsTotal / postPagination.limit) > 1 && (
+                {totalPages > 1 && (
                   <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-2 sm:px-0 pb-2 sm:pb-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => setPostPagination((prev) => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                      disabled={postPagination.offset === 0 || postsLoading}
+                      className="text-xs sm:text-sm"
+                    >
+                      Previous
+                    </Button>
                     <div className="text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      Showing {postPagination.offset + 1} - {Math.min(postPagination.offset + postPagination.limit, postsTotal)} of {postsTotal}
+                      Page {currentPage} of {totalPages}
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => setPostPagination((prev) => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
-                        disabled={postPagination.offset === 0 || postsLoading}
-                        className="text-xs sm:text-sm"
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setPostPagination((prev) => ({ ...prev, offset: prev.offset + prev.limit }))}
-                        disabled={postPagination.offset + postPagination.limit >= postsTotal || postsLoading}
-                        className="text-xs sm:text-sm"
-                      >
-                        Next
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPostPagination((prev) => ({ ...prev, offset: prev.offset + prev.limit }))}
+                      disabled={postPagination.offset + postPagination.limit >= postsTotal || postsLoading}
+                      className="text-xs sm:text-sm"
+                    >
+                      Next
+                    </Button>
                   </div>
                 )}
               </>

@@ -46,7 +46,7 @@ export default function ActivityLogsPage() {
     dateTo: '',
   });
   const [pagination, setPagination] = useState({
-    limit: 50,
+    limit: 25,
     offset: 0,
   });
 
@@ -99,6 +99,10 @@ export default function ActivityLogsPage() {
     setPagination(prev => ({ ...prev, offset: 0 }));
   };
 
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPagination({ limit: newLimit, offset: 0 });
+  };
+
   const getActionBadgeColor = (action: string) => {
     switch (action) {
       case 'CREATE':
@@ -115,6 +119,19 @@ export default function ActivityLogsPage() {
 
   const totalPages = Math.ceil(total / pagination.limit);
   const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
+  useEffect(() => {
+    if (total === 0) {
+      if (pagination.offset !== 0) {
+        setPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((total - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [total, pagination.limit, pagination.offset]);
 
   return (
     <div>
@@ -185,13 +202,10 @@ export default function ActivityLogsPage() {
         </div>
       </Card>
       <Card className="mt-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             Activity History ({total} total)
           </h2>
-          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Page {currentPage} of {totalPages || 1}
-          </div>
         </div>
         {loading ? (
           <div className="skeleton h-10 w-full" />
@@ -201,6 +215,28 @@ export default function ActivityLogsPage() {
           </div>
         ) : (
           <>
+            <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, total)} of {total}
+                {totalPages > 1 && ` (Page ${currentPage} of ${totalPages || 1})`}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Rows per page:
+                </label>
+                <Select
+                  value={pagination.limit.toString()}
+                  onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                  className="text-sm py-1 px-2 w-20"
+                >
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                </Select>
+              </div>
+            </div>
             <TableWrap>
               <Table>
                 <THead>
@@ -260,7 +296,7 @@ export default function ActivityLogsPage() {
               </Table>
             </TableWrap>
             {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between">
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <Button
                   variant="outline"
                   onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
@@ -269,7 +305,7 @@ export default function ActivityLogsPage() {
                   Previous
                 </Button>
                 <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, total)} of {total}
+                  Page {currentPage} of {totalPages || 1}
                 </div>
                 <Button
                   variant="outline"

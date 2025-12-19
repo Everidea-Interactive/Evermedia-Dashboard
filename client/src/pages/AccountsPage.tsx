@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
@@ -45,6 +45,10 @@ export default function AccountsPage() {
   const [type, setType] = useState('');
   const [crossbrand, setCrossbrand] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [kpiLoading, setKpiLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -142,6 +146,15 @@ export default function AccountsPage() {
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
   }, [sortConfig, accountKpiMap, campaigns]);
+
+  const paginatedItems = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return items.slice(start, end);
+  }, [items, pagination]);
+
+  const totalPages = Math.ceil(items.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
 
   const fetchAccountKpis = async (accountsList: Account[]) => {
     // First, collect all campaign IDs from accounts
@@ -247,6 +260,23 @@ export default function AccountsPage() {
   useEffect(() => {
     setItems(sortAccounts(applyClientFilters(allAccounts)));
   }, [applyClientFilters, sortAccounts, allAccounts]);
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, offset: 0 }));
+  }, [search, type, crossbrand, campaignFilter]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      if (pagination.offset !== 0) {
+        setPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((items.length - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [items.length, pagination.limit, pagination.offset]);
 
   useEffect(() => {
     if (!token) return;
@@ -570,6 +600,7 @@ export default function AccountsPage() {
                 setType('');
                 setCrossbrand('');
                 setCampaignFilter('');
+                setPagination(prev => ({ ...prev, offset: 0 }));
               }} className="text-sm py-1 px-2">
                 Reset Filters
               </Button>
@@ -591,117 +622,164 @@ export default function AccountsPage() {
                 </p>
               </div>
             ) : (
-              <TableWrap>
-                <Table>
-                  <THead>
-                    <TR>
-                      {renderSortableHeader('Account', 'name', 'max-w-xs')}
-                      {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
-                      {kpiDisplayCategories.map(cat =>
-                        renderSortableHeader(
-                          kpiLabels[cat],
-                          cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
-                          undefined,
-                          cat
-                        )
-                      )}
-                      {renderSortableHeader('Type', 'accountType')}
-                      {renderSortableHeader('Posts', 'postCount')}
-                      <TH className="!text-center">Actions</TH>
-                    </TR>
-                  </THead>
-                  <tbody>
-                    {items.map(a => {
-                      const kpiData = accountKpiMap.get(a.id);
-                      const getKpiEntry = (category: string) => kpiData?.[category] || { target: 0, actual: 0 };
-                      const postCount = a.postCount ?? 0;
-                      const kpiCount = a.kpiCount ?? 0;
+              <>
+                <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, items.length)} of {items.length}
+                    {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      Rows per page:
+                    </label>
+                    <Select
+                      value={pagination.limit.toString()}
+                      onChange={e => setPagination({ limit: Number(e.target.value), offset: 0 })}
+                      className="text-sm py-1 px-2 w-20"
+                    >
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
+                    </Select>
+                  </div>
+                </div>
+                <TableWrap>
+                  <Table>
+                    <THead>
+                      <TR>
+                        {renderSortableHeader('Account', 'name', 'max-w-xs')}
+                        {renderSortableHeader('Campaigns', 'campaignCount', 'w-48')}
+                        {kpiDisplayCategories.map(cat =>
+                          renderSortableHeader(
+                            kpiLabels[cat],
+                            cat === 'VIEWS' ? 'views' : cat === 'QTY_POST' ? 'qtyPost' : 'fypCount',
+                            undefined,
+                            cat
+                          )
+                        )}
+                        {renderSortableHeader('Type', 'accountType')}
+                        {renderSortableHeader('Posts', 'postCount')}
+                        <TH className="!text-center">Actions</TH>
+                      </TR>
+                    </THead>
+                    <tbody>
+                      {paginatedItems.map(a => {
+                        const kpiData = accountKpiMap.get(a.id);
+                        const getKpiEntry = (category: string) => kpiData?.[category] || { target: 0, actual: 0 };
+                        const postCount = a.postCount ?? 0;
+                        const kpiCount = a.kpiCount ?? 0;
 
-                      return (
-                        <TR key={a.id}>
-                          <TD className="max-w-xs">
-                            <div className="flex items-start gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div 
-                                  className="font-medium truncate" 
-                                  style={{ color: 'var(--text-primary)' }}
-                                  title={a.name}
-                                >
-                                  {a.name}
+                        return (
+                          <TR key={a.id}>
+                            <TD className="max-w-xs">
+                              <div className="flex items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div 
+                                    className="font-medium truncate" 
+                                    style={{ color: 'var(--text-primary)' }}
+                                    title={a.name}
+                                  >
+                                    {a.name}
+                                  </div>
+                                  {a.tiktokHandle && <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }} title={a.tiktokHandle}>{a.tiktokHandle}</div>}
+                                  {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }} title={a.notes}>{a.notes}</div>}
                                 </div>
-                                {a.tiktokHandle && <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }} title={a.tiktokHandle}>{a.tiktokHandle}</div>}
-                                {a.notes && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-tertiary)' }} title={a.notes}>{a.notes}</div>}
                               </div>
-                            </div>
-                          </TD>
-                          <TD className="w-48 align-middle text-left">
-                            {(() => {
-                              const activeCampaigns = (a.campaigns || []).filter(c => {
-                                const campaign = campaigns.find(cmp => cmp.id === c.id);
-                                return campaign?.status === 'ACTIVE';
-                              });
-                              return activeCampaigns.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 justify-start">
-                                  {activeCampaigns.map(campaign => (
-                                    <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                      {campaign.name}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No active campaigns</span>
-                              );
-                            })()}
-                          </TD>
-                          {kpiDisplayCategories.map(cat => {
-                            const entry = getKpiEntry(cat);
-                            return (
-                              <TD key={cat} className="align-middle">
-                                {kpiLoading ? (
-                                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                            </TD>
+                            <TD className="w-48 align-middle text-left">
+                              {(() => {
+                                const activeCampaigns = (a.campaigns || []).filter(c => {
+                                  const campaign = campaigns.find(cmp => cmp.id === c.id);
+                                  return campaign?.status === 'ACTIVE';
+                                });
+                                return activeCampaigns.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1 justify-start">
+                                    {activeCampaigns.map(campaign => (
+                                      <span key={campaign.id} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                        {campaign.name}
+                                      </span>
+                                    ))}
+                                  </div>
                                 ) : (
-                                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                                    {entry.actual.toLocaleString()}/{entry.target.toLocaleString()}
-                                  </span>
-                                )}
-                              </TD>
-                            );
-                          })}
-                          <TD>
-                            <span className="text-xs font-semibold px-2 py-1 rounded-full border inline-block" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-                              {a.accountType}
-                            </span>
-                          </TD>
-                          <TD>
-                            <div className="text-sm" style={{ color: 'var(--text-primary)' }}>{postCount} post(s)</div>
-                            <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpiCount} KPI(s)</div>
-                          </TD>
-                          <TD>
-                            <div className="flex gap-2 justify-center">
-                              <RequirePermission permission={canEditAccount}>
-                                <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="text-sm px-3 py-1.5">
-                                  Edit
-                                </Button>
-                              </RequirePermission>
-                              <RequirePermission permission={canDelete}>
-                                <Button 
-                                  variant="outline" 
-                                  color="red"
-                                  onClick={() => handleDeleteClick(a)} 
-                                  disabled={deletingIds.has(a.id)} 
-                                  className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
-                                </Button>
-                              </RequirePermission>
-                            </div>
-                          </TD>
-                        </TR>
-                      );
-                    })}
-                  </tbody>
-                </Table>
-              </TableWrap>
+                                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No active campaigns</span>
+                                );
+                              })()}
+                            </TD>
+                            {kpiDisplayCategories.map(cat => {
+                              const entry = getKpiEntry(cat);
+                              return (
+                                <TD key={cat} className="align-middle">
+                                  {kpiLoading ? (
+                                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                                  ) : (
+                                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                      {entry.actual.toLocaleString()}/{entry.target.toLocaleString()}
+                                    </span>
+                                  )}
+                                </TD>
+                              );
+                            })}
+                            <TD>
+                              <span className="text-xs font-semibold px-2 py-1 rounded-full border inline-block" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                                {a.accountType}
+                              </span>
+                            </TD>
+                            <TD>
+                              <div className="text-sm" style={{ color: 'var(--text-primary)' }}>{postCount} post(s)</div>
+                              <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{kpiCount} KPI(s)</div>
+                            </TD>
+                            <TD>
+                              <div className="flex gap-2 justify-center">
+                                <RequirePermission permission={canEditAccount}>
+                                  <Button variant="outline" color="blue" onClick={() => handleEditAccount(a)} className="text-sm px-3 py-1.5">
+                                    Edit
+                                  </Button>
+                                </RequirePermission>
+                                <RequirePermission permission={canDelete}>
+                                  <Button 
+                                    variant="outline" 
+                                    color="red"
+                                    onClick={() => handleDeleteClick(a)} 
+                                    disabled={deletingIds.has(a.id)} 
+                                    className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {deletingIds.has(a.id) ? 'Deleting...' : 'Delete'}
+                                  </Button>
+                                </RequirePermission>
+                              </div>
+                            </TD>
+                          </TR>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </TableWrap>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                      disabled={pagination.offset === 0}
+                      className="text-sm"
+                    >
+                      Previous
+                    </Button>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                      disabled={pagination.offset + pagination.limit >= items.length}
+                      className="text-sm"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </>
             )
           )}
         </div>
