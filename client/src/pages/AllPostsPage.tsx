@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { formatDate, parseDate } from '../lib/dateUtils';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import RequirePermission from '../components/RequirePermission';
@@ -204,6 +205,7 @@ export default function AllPostsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectChangeInProgressRef = useRef<string | null>(null);
   const initialCellValueRef = useRef<string>('');
+  const hasHydratedFromCacheRef = useRef(false);
 
   const [filters, setFilters] = useState<FilterState>({
     campaignId: '',
@@ -217,9 +219,22 @@ export default function AllPostsPage() {
     picPostingId: '',
   });
 
+  const POSTS_CACHE_KEY = getApiCacheKey('/posts/all');
+  const CAMPAIGNS_CACHE_KEY = getApiCacheKey('/campaigns');
+  const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
+  const ACCOUNTS_CACHE_KEY = getApiCacheKey('/accounts');
+
   const fetchPosts = useCallback(async () => {
     if (!token) return;
-    setLoading(true);
+    const cached = getCachedValue<Post[]>(POSTS_CACHE_KEY);
+    const hasCache = !!cached && Array.isArray(cached);
+    if (hasCache && !hasHydratedFromCacheRef.current) {
+      setPosts(cached!);
+      setLoading(false);
+      hasHydratedFromCacheRef.current = true;
+    } else {
+      setLoading(!hasCache);
+    }
     try {
       const data = await api('/posts/all', { token });
       setPosts(data as Post[]);
@@ -243,6 +258,23 @@ export default function AllPostsPage() {
     api('/campaigns', { token }).then(setCampaigns).catch(() => {});
     api('/pics?active=true', { token }).then(setPics).catch(() => {});
     api('/accounts', { token }).then(setAccounts).catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || hasHydratedFromCacheRef.current) return;
+    const cachedPosts = getCachedValue<Post[]>(POSTS_CACHE_KEY);
+    const cachedCampaigns = getCachedValue<CampaignOption[]>(CAMPAIGNS_CACHE_KEY);
+    const cachedPics = getCachedValue<PicOption[]>(PICS_CACHE_KEY);
+    const cachedAccounts = getCachedValue<AccountOption[]>(ACCOUNTS_CACHE_KEY);
+
+    if (cachedPosts) {
+      setPosts(cachedPosts);
+      setLoading(false);
+      hasHydratedFromCacheRef.current = true;
+    }
+    if (cachedCampaigns) setCampaigns(cachedCampaigns);
+    if (cachedPics) setPics(cachedPics);
+    if (cachedAccounts) setAccounts(cachedAccounts);
   }, [token]);
 
   const accountNameMap = useMemo(() => new Map(accounts.map((account) => [account.id, account.name || ''])), [accounts]);

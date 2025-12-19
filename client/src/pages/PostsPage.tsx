@@ -4,8 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { scrapeTikTokUrlsBatchWithOriginals, isTikTokUrl } from '../lib/tiktokScraper';
 import { formatDate, parseDate } from '../lib/dateUtils';
+import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import RequirePermission from '../components/RequirePermission';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -253,6 +255,10 @@ export default function PostsPage() {
   } | null>(null);
   const [postFilters, setPostFilters] = useState<PostFilters>(createDefaultPostFilters);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
   const [form, setForm] = useState<FormState>({
     campaignId: id ?? '',
     campaignCategory: '',
@@ -285,6 +291,12 @@ export default function PostsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectChangeInProgressRef = useRef<string | null>(null);
   const initialCellValueRef = useRef<string>('');
+  const hasHydratedFromCacheRef = useRef(false);
+
+  const POSTS_CACHE_KEY = (campaignId: string) => getApiCacheKey(`/campaigns/${campaignId}/posts`);
+  const CAMPAIGNS_CACHE_KEY = getApiCacheKey('/campaigns');
+  const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
+  const ACCOUNTS_CACHE_KEY = getApiCacheKey('/accounts');
 
   const routeCampaignId = id;
   const campaignIdForPosts = routeCampaignId || form.campaignId;
@@ -294,7 +306,11 @@ export default function PostsPage() {
 
   const fetchPostsForCampaign = useCallback(
     async (campaignId: string) => {
-      const response = await api(`/campaigns/${campaignId}/posts`, { token });
+      const cacheKey = POSTS_CACHE_KEY(campaignId);
+      const response = await api(`/campaigns/${campaignId}/posts`, {
+        token,
+        cache: { key: cacheKey, mode: 'default' },
+      });
       // API returns { posts: [...], total: ... } format
       if (response && typeof response === 'object' && 'posts' in response) {
         return (response.posts as Post[]) || [];
@@ -311,11 +327,23 @@ export default function PostsPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cacheKey = POSTS_CACHE_KEY(campaignIdForPosts);
+    const cachedPosts = getCachedValue<Post[]>(cacheKey);
+    const hasCache = Array.isArray(cachedPosts) && cachedPosts.length > 0;
+    if (hasCache && !hasHydratedFromCacheRef.current) {
+      setPosts(cachedPosts);
+      setLoading(false);
+      hasHydratedFromCacheRef.current = true;
+    } else {
+      setLoading(!hasCache);
+    }
     try {
       const data = await fetchPostsForCampaign(campaignIdForPosts);
       setPosts(data);
-    } catch {
+    } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return;
+      }
       setPosts([]);
     } finally {
       setLoading(false);
@@ -328,9 +356,25 @@ export default function PostsPage() {
 
   useEffect(() => {
     if (!token) return;
-    api('/campaigns', { token }).then(setCampaigns).catch(() => {});
-    api('/pics?active=true', { token }).then(setPics).catch(() => {});
-    api('/accounts', { token }).then(setAccounts).catch(() => {});
+
+    if (!hasHydratedFromCacheRef.current) {
+      const cachedCampaigns = getCachedValue<CampaignOption[]>(CAMPAIGNS_CACHE_KEY);
+      const cachedPics = getCachedValue<PicOption[]>(PICS_CACHE_KEY);
+      const cachedAccounts = getCachedValue<AccountOption[]>(ACCOUNTS_CACHE_KEY);
+      if (cachedCampaigns) setCampaigns(cachedCampaigns);
+      if (cachedPics) setPics(cachedPics);
+      if (cachedAccounts) setAccounts(cachedAccounts);
+    }
+
+    api('/campaigns', { token, cache: { key: CAMPAIGNS_CACHE_KEY, mode: 'default' } })
+      .then(setCampaigns)
+      .catch(() => {});
+    api('/pics?active=true', { token, cache: { key: PICS_CACHE_KEY, mode: 'default' } })
+      .then(setPics)
+      .catch(() => {});
+    api('/accounts', { token, cache: { key: ACCOUNTS_CACHE_KEY, mode: 'default' } })
+      .then(setAccounts)
+      .catch(() => {});
   }, [token]);
 
   useEffect(() => {
@@ -524,6 +568,28 @@ export default function PostsPage() {
     return nextPosts;
   }, [filteredPosts, sortConfig, getAccountName, getCampaignName, getPicName]);
 
+  const paginatedPosts = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return sortedPosts.slice(start, end);
+  }, [sortedPosts, pagination]);
+
+  const totalPages = Math.ceil(sortedPosts.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
+  useEffect(() => {
+    if (sortedPosts.length === 0) {
+      if (pagination.offset !== 0) {
+        setPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((sortedPosts.length - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [sortedPosts.length, pagination.limit, pagination.offset]);
+
   const handleSortToggle = (key: SortKey) => {
     setSortConfig((prev) => {
       if (prev.key === key) {
@@ -578,10 +644,16 @@ export default function PostsPage() {
 
   const handleFilterChange = (key: keyof PostFilters, value: string) => {
     setPostFilters((prev) => ({ ...prev, [key]: value }));
+    setPagination((prev) => ({ ...prev, offset: 0 }));
   };
 
   const handleResetFilters = () => {
     setPostFilters(createDefaultPostFilters());
+    setPagination((prev) => ({ ...prev, offset: 0 }));
+  };
+
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPagination({ limit: newLimit, offset: 0 });
   };
 
   const handleExportCsv = useCallback(() => {
@@ -2236,7 +2308,7 @@ export default function PostsPage() {
               </div>
               <div className="mb-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-3 mb-4">
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-1.5 sm:gap-2 w-full">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-9 gap-1.5 sm:gap-2 w-full">
                     <AccountDropdownFilter
                       accounts={campaignAccountOptions}
                       selectedAccountId={postFilters.accountId}
@@ -2334,15 +2406,38 @@ export default function PostsPage() {
                 </div>
               </div>
               {sortedPosts.length === 0 ? (
-                <div className="py-12 text-center">
-                  <p className="text-gray-500 text-lg">No posts found</p>
-                  <p className="text-gray-400 text-sm mt-2">
-                    {hasActiveFilters
-                      ? 'Try adjusting your filters to see more results.'
-                      : 'There are no posts available. Import posts from CSV to get started.'}
-                  </p>
+              <div className="py-12 text-center">
+                <p className="text-gray-500 text-lg">No posts found</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  {hasActiveFilters
+                    ? 'Try adjusting your filters to see more results.'
+                  : 'There are no posts available. Import posts from CSV to get started.'}
+                </p>
+              </div>
+            ) : (
+                <>
+                <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, sortedPosts.length)} of {sortedPosts.length}
+                    {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      Rows per page:
+                    </label>
+                    <Select
+                      value={pagination.limit.toString()}
+                      onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                      className="text-sm py-1 px-2 w-20"
+                    >
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
+                    </Select>
+                  </div>
                 </div>
-              ) : (
                 <TableWrap>
                   <Table>
                     <THead>
@@ -2385,7 +2480,7 @@ export default function PostsPage() {
                       </TR>
                     </THead>
                     <tbody>
-                      {sortedPosts.map((p, i) => {
+                      {paginatedPosts.map((p, i) => {
                         const picTalentName = getPicName(p.picTalentId, p.picTalent) || '—';
                         const picEditorName = getPicName(p.picEditorId, p.picEditor) || '—';
                         const picPostingName = getPicName(p.picPostingId, p.picPosting) || '—';
@@ -2408,7 +2503,7 @@ export default function PostsPage() {
                                 className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 dark:text-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
                               />
                             </TD>
-                            <TD>{i + 1}</TD>
+                            <TD>{pagination.offset + i + 1}</TD>
                             <TD className="!text-center">
                               {p.totalView >= 50000 ? (
                                 <div className="flex items-center justify-center gap-3">
@@ -3160,9 +3255,33 @@ export default function PostsPage() {
                     </tbody>
                   </Table>
                 </TableWrap>
-              )}
-            </div>
-          </Card>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                      disabled={pagination.offset === 0}
+                      className="text-sm"
+                    >
+                      Previous
+                    </Button>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                      disabled={pagination.offset + pagination.limit >= sortedPosts.length}
+                      className="text-sm"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Card>
         )
       )}
 

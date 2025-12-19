@@ -38,6 +38,10 @@ export default function PicsPage() {
     active: true,
     roles: [] as string[],
   });
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
 
   const fetchPics = () => {
     setLoading(true);
@@ -73,6 +77,32 @@ export default function PicsPage() {
     }
     return filtered;
   }, [allPics, search, role, active]);
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, offset: 0 }));
+  }, [search, role, active]);
+
+  useEffect(() => {
+    if (filteredItems.length === 0) {
+      if (pagination.offset !== 0) {
+        setPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((filteredItems.length - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [filteredItems.length, pagination.limit, pagination.offset]);
+
+  const paginatedItems = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return filteredItems.slice(start, end);
+  }, [filteredItems, pagination]);
+
+  const totalPages = Math.ceil(filteredItems.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
 
   const resetForm = () => {
     setForm({
@@ -278,6 +308,7 @@ export default function PicsPage() {
                   setSearch('');
                   setRole('');
                   setActive('true');
+                  setPagination(prev => ({ ...prev, offset: 0 }));
                 }}
                 className="text-sm py-1 px-2"
               >
@@ -308,76 +339,123 @@ export default function PicsPage() {
               </p>
             </div>
           ) : (
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>PIC</TH>
-                    <TH className="!text-center">Roles</TH>
-                    <TH>Status</TH>
-                    <TH className="!text-center">Actions</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {filteredItems.map(p => (
-                    <TR key={p.id}>
-                      <TD>
-                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
-                      </TD>
-                      <TD className="text-center">
-                        {p.roles.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 justify-center">
-                            {p.roles.map(roleName => (
-                              <span key={roleName} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
-                                {roleName}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No roles</span>
-                        )}
-                      </TD>
-                      <TD>
-                        <span
-                          className="badge border"
-                          style={p.active ? {
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            borderColor: 'rgba(16, 185, 129, 0.3)',
-                            color: '#10b981',
-                          } : {
-                            backgroundColor: 'var(--bg-tertiary)',
-                            borderColor: 'var(--border-color)',
-                            color: 'var(--text-tertiary)',
-                          }}
-                        >
-                          {p.active ? 'Active' : 'Inactive'}
-                        </span>
-                      </TD>
-                      <TD>
-                        <div className="flex gap-2 justify-center">
-                          <RequirePermission permission={canManagePics}>
-                            <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="text-sm px-3 py-1.5">
-                              Edit
-                            </Button>
-                          </RequirePermission>
-                          <RequirePermission permission={canDelete}>
-                            <Button
-                              variant="outline"
-                              color="red"
-                              onClick={() => handleDeleteClick(p.id, p.name)}
-                              disabled={deletingIds.has(p.id)}
-                              className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
-                            </Button>
-                          </RequirePermission>
-                        </div>
-                      </TD>
+            <>
+              <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, filteredItems.length)} of {filteredItems.length}
+                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Rows per page:
+                  </label>
+                  <Select
+                    value={pagination.limit.toString()}
+                    onChange={e => setPagination({ limit: Number(e.target.value), offset: 0 })}
+                    className="text-sm py-1 px-2 w-20"
+                  >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </Select>
+                </div>
+              </div>
+              <TableWrap>
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>PIC</TH>
+                      <TH className="!text-center">Roles</TH>
+                      <TH>Status</TH>
+                      <TH className="!text-center">Actions</TH>
                     </TR>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrap>
+                  </THead>
+                  <tbody>
+                    {paginatedItems.map(p => (
+                      <TR key={p.id}>
+                        <TD>
+                          <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
+                        </TD>
+                        <TD className="text-center">
+                          {p.roles.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 justify-center">
+                              {p.roles.map(roleName => (
+                                <span key={roleName} className="text-xs px-2 py-0.5 rounded border" style={{ color: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#93c5fd' }}>
+                                  {roleName}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No roles</span>
+                          )}
+                        </TD>
+                        <TD>
+                          <span
+                            className="badge border"
+                            style={p.active ? {
+                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                              borderColor: 'rgba(16, 185, 129, 0.3)',
+                              color: '#10b981',
+                            } : {
+                              backgroundColor: 'var(--bg-tertiary)',
+                              borderColor: 'var(--border-color)',
+                              color: 'var(--text-tertiary)',
+                            }}
+                          >
+                            {p.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </TD>
+                        <TD>
+                          <div className="flex gap-2 justify-center">
+                            <RequirePermission permission={canManagePics}>
+                              <Button variant="outline" color="blue" onClick={() => handleEditPic(p)} className="text-sm px-3 py-1.5">
+                                Edit
+                              </Button>
+                            </RequirePermission>
+                            <RequirePermission permission={canDelete}>
+                              <Button
+                                variant="outline"
+                                color="red"
+                                onClick={() => handleDeleteClick(p.id, p.name)}
+                                disabled={deletingIds.has(p.id)}
+                                className="text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {deletingIds.has(p.id) ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </RequirePermission>
+                          </div>
+                        </TD>
+                      </TR>
+                    ))}
+                  </tbody>
+                </Table>
+              </TableWrap>
+              {totalPages > 1 && (
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                    disabled={pagination.offset === 0}
+                    className="text-sm"
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                    disabled={pagination.offset + pagination.limit >= filteredItems.length}
+                    className="text-sm"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>

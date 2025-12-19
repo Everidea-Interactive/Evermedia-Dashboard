@@ -3,9 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/dateUtils';
+import { getApiCacheKey, getCachedValue } from '../lib/cache';
 import { shouldIgnoreRequestError } from '../lib/requestUtils';
 import Card from '../components/ui/Card';
 import Select from '../components/ui/Select';
+import Button from '../components/ui/Button';
 import PageHeader from '../components/PageHeader';
 import { TableWrap, Table, THead, TH, TR, TD } from '../components/ui/Table';
 
@@ -51,12 +53,23 @@ export default function DailyPage() {
   const [loading, setLoading] = useState(true);
   const [countType, setCountType] = useState<'post' | 'edit'>('post');
   const [dateRangeType, setDateRangeType] = useState<'today' | 'thisWeek' | 'thisMonth' | 'lastWeek' | 'lastMonth' | 'lifetime'>('today');
+  const [pagination, setPagination] = useState({
+    limit: 25,
+    offset: 0,
+  });
+  const POSTS_CACHE_KEY = getApiCacheKey('/posts/all');
+  const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
 
   useEffect(() => {
     if (!token) return;
     
     const fetchData = async () => {
-      setLoading(true);
+      const cachedPosts = getCachedValue<Post[]>(POSTS_CACHE_KEY);
+      const cachedPics = getCachedValue<PicOption[]>(PICS_CACHE_KEY);
+      const hasCache = !!cachedPosts;
+      if (cachedPosts) setPosts(cachedPosts);
+      if (cachedPics) setPics(cachedPics);
+      setLoading(!hasCache);
       try {
         const [postsData, picsData] = await Promise.all([
           api('/posts/all', { token }),
@@ -219,6 +232,36 @@ export default function DailyPage() {
     return { totals, grandTotal };
   }, [dailyData, relevantPics]);
 
+  const paginatedDailyData = useMemo(() => {
+    const start = pagination.offset;
+    const end = start + pagination.limit;
+    return dailyData.slice(start, end);
+  }, [dailyData, pagination]);
+
+  const totalPages = Math.ceil(dailyData.length / pagination.limit);
+  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, offset: 0 }));
+  }, [dateRangeType, countType]);
+
+  useEffect(() => {
+    if (dailyData.length === 0) {
+      if (pagination.offset !== 0) {
+        setPagination((prev) => ({ ...prev, offset: 0 }));
+      }
+      return;
+    }
+    const maxOffset = Math.max(0, Math.floor((dailyData.length - 1) / pagination.limit) * pagination.limit);
+    if (pagination.offset > maxOffset) {
+      setPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [dailyData.length, pagination.limit, pagination.offset]);
+
+  const handleRowsPerPageChange = (newLimit: number) => {
+    setPagination({ limit: newLimit, offset: 0 });
+  };
+
   return (
     <div>
       <PageHeader
@@ -282,109 +325,156 @@ export default function DailyPage() {
                 {countType === 'post' ? 'POSTING' : 'EDITOR'} role.
               </div>
             ) : (
-              <TableWrap className="sticky-table" style={stickyVars}>
-                <Table>
-                  <THead>
-                    <TR>
-                      <TH className="sticky-col sticky-col--no sticky-col--header">
-                        NO
-                      </TH>
-                      <TH className="sticky-col sticky-col--date sticky-col--header">
-                        POSTING DATE
-                      </TH>
-                      {relevantPics.map((pic) => {
-                        return (
-                          <TH
-                            key={pic.id}
-                            style={{
-                              backgroundColor: 'var(--bg-secondary)',
-                              minWidth: '100px',
-                            }}
-                          >
-                            {pic.name}
-                          </TH>
-                        );
-                      })}
-                      <TH className="total-col total-col--header" style={{ minWidth: '120px' }}>
-                        TOTAL POST ALL
-                      </TH>
-                    </TR>
-                  </THead>
-                  <tbody>
-                    {/* Summary Row */}
-                    <TR className="summary-row">
-                      <TD
-                        className="font-semibold sticky-col sticky-col--no sticky-col--summary"
-                        style={{
-                          color: '#10b981',
-                        }}
+              <>
+                {dailyData.length > 0 && (
+                  <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      Showing {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, dailyData.length)} of {dailyData.length}
+                      {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        Rows per page:
+                      </label>
+                      <Select
+                        value={pagination.limit.toString()}
+                        onChange={e => handleRowsPerPageChange(Number(e.target.value))}
+                        className="text-sm py-1 px-2 w-20"
                       >
-                        -
-                      </TD>
-                      <TD
-                        className="font-semibold sticky-col sticky-col--date sticky-col--summary"
-                        style={{
-                          color: '#10b981',
-                        }}
-                      >
-                        TOTAL
-                      </TD>
-                      {relevantPics.map((pic) => {
-                        const count = picTotals.totals[pic.id] || 0;
-                        return (
-                          <TD
-                            key={pic.id}
-                            className="font-semibold"
-                            style={{
-                              backgroundColor: 'var(--bg-tertiary)',
-                              color: '#10b981',
-                            }}
-                          >
-                            {formatNumber(count)}
-                          </TD>
-                        );
-                      })}
-                      <TD
-                        className="font-semibold underline total-col"
-                        style={{ color: '#10b981' }}
-                      >
-                        {formatNumber(picTotals.grandTotal)}
-                      </TD>
-                    </TR>
-
-                    {/* Data Rows */}
-                    {dailyData.length === 0 ? (
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+                <TableWrap className="sticky-table" style={stickyVars}>
+                  <Table>
+                    <THead>
                       <TR>
+                        <TH className="sticky-col sticky-col--no sticky-col--header">
+                          NO
+                        </TH>
+                        <TH className="sticky-col sticky-col--date sticky-col--header">
+                          POSTING DATE
+                        </TH>
+                        {relevantPics.map((pic) => {
+                          return (
+                            <TH
+                              key={pic.id}
+                              style={{
+                                backgroundColor: 'var(--bg-secondary)',
+                                minWidth: '100px',
+                              }}
+                            >
+                              {pic.name}
+                            </TH>
+                          );
+                        })}
+                        <TH className="total-col total-col--header" style={{ minWidth: '120px' }}>
+                          TOTAL POST ALL
+                        </TH>
+                      </TR>
+                    </THead>
+                    <tbody>
+                      {/* Summary Row */}
+                      <TR className="summary-row">
                         <TD
-                          colSpan={relevantPics.length + 3}
-                          className="text-center py-8"
-                          style={{ color: 'var(--text-tertiary)' }}
+                          className="font-semibold sticky-col sticky-col--no sticky-col--summary"
+                          style={{
+                            color: '#10b981',
+                          }}
                         >
-                          No data available
+                          -
+                        </TD>
+                        <TD
+                          className="font-semibold sticky-col sticky-col--date sticky-col--summary"
+                          style={{
+                            color: '#10b981',
+                          }}
+                        >
+                          TOTAL
+                        </TD>
+                        {relevantPics.map((pic) => {
+                          const count = picTotals.totals[pic.id] || 0;
+                          return (
+                            <TD
+                              key={pic.id}
+                              className="font-semibold"
+                              style={{
+                                backgroundColor: 'var(--bg-tertiary)',
+                                color: '#10b981',
+                              }}
+                            >
+                              {formatNumber(count)}
+                            </TD>
+                          );
+                        })}
+                        <TD
+                          className="font-semibold underline total-col"
+                          style={{ color: '#10b981' }}
+                        >
+                          {formatNumber(picTotals.grandTotal)}
                         </TD>
                       </TR>
-                    ) : (
-                      dailyData.map((day, index) => (
-                        <TR key={day.dateKey}>
-                          <TD className="sticky-col sticky-col--no">
-                            {index + 1}
-                          </TD>
-                          <TD className="sticky-col sticky-col--date">
-                            {day.date}
-                          </TD>
-                          {relevantPics.map((pic) => {
-                            const count = day.picCounts[pic.id] || 0;
-                            return <TD key={pic.id}>{count > 0 ? formatNumber(count) : '0'}</TD>;
-                          })}
-                          <TD className="underline total-col">
-                            {formatNumber(day.total)}
+
+                      {/* Data Rows */}
+                      {dailyData.length === 0 ? (
+                        <TR>
+                          <TD
+                            colSpan={relevantPics.length + 3}
+                            className="text-center py-8"
+                            style={{ color: 'var(--text-tertiary)' }}
+                          >
+                            No data available
                           </TD>
                         </TR>
-                      ))
-                    )}
-                  </tbody>
-                </Table>
-              </TableWrap>
+                      ) : (
+                        paginatedDailyData.map((day, index) => (
+                          <TR key={day.dateKey}>
+                            <TD className="sticky-col sticky-col--no">
+                              {pagination.offset + index + 1}
+                            </TD>
+                            <TD className="sticky-col sticky-col--date">
+                              {day.date}
+                            </TD>
+                            {relevantPics.map((pic) => {
+                              const count = day.picCounts[pic.id] || 0;
+                              return <TD key={pic.id}>{count > 0 ? formatNumber(count) : '0'}</TD>;
+                            })}
+                            <TD className="underline total-col">
+                              {formatNumber(day.total)}
+                            </TD>
+                          </TR>
+                        ))
+                      )}
+                    </tbody>
+                  </Table>
+                </TableWrap>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setPagination(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
+                      disabled={pagination.offset === 0}
+                    >
+                      Previous
+                    </Button>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPagination(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
+                      disabled={pagination.offset + pagination.limit >= dailyData.length}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Card>
