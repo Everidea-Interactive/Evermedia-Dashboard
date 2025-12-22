@@ -220,6 +220,7 @@ const normalizeAccountType = (value?: string) => {
   const normalized = value.trim().replace(/[\s-]+/g, '_').toUpperCase();
   return ACCOUNT_TYPES.includes(normalized as AccountOption['accountType']) ? (normalized as AccountOption['accountType']) : '';
 };
+const normalizeAccountKey = (value?: string) => (value ? value.trim().replace(/\s+/g, ' ').toLowerCase() : '');
 
 // Helper function to remove leading zeros from number input
 const sanitizeNumberInput = (value: string): string => {
@@ -787,8 +788,9 @@ export default function PostsPage() {
 
       const accountLookup = new Map<string, AccountOption>();
       accounts.forEach((account) => {
-        if (account.name) {
-          accountLookup.set(account.name.trim().toLowerCase(), account);
+        const key = normalizeAccountKey(account.name);
+        if (key) {
+          accountLookup.set(key, account);
         }
       });
 
@@ -823,7 +825,7 @@ export default function PostsPage() {
             );
           }
 
-          const normalizedAccountName = accountName.trim().toLowerCase();
+          const normalizedAccountName = normalizeAccountKey(accountName);
           let account = accountLookup.get(normalizedAccountName);
           const accountType = normalizeAccountType(getCsvValue(row, headerMap, 'Tipe Akun')) || 'CROSSBRAND';
           if (!account) {
@@ -836,7 +838,7 @@ export default function PostsPage() {
                   accountType,
                 },
               })) as AccountOption;
-              accountLookup.set(created.name.trim().toLowerCase(), created);
+              accountLookup.set(normalizeAccountKey(created.name), created);
               setAccounts((prev) => [...prev, created]);
               account = created;
             } catch (accountError: any) {
@@ -1065,9 +1067,9 @@ export default function PostsPage() {
   };
 
   const matchingAccount = useMemo(() => {
-    const candidate = form.accountName.trim();
+    const candidate = normalizeAccountKey(form.accountName);
     if (!candidate) return undefined;
-    return accounts.find((a) => a.name.toLowerCase() === candidate.toLowerCase());
+    return accounts.find((a) => normalizeAccountKey(a.name) === candidate);
   }, [form.accountName, accounts]);
 
   const filteredAccounts = useMemo(() => {
