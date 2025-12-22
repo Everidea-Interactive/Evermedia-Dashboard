@@ -12,6 +12,10 @@ function withCrossbrand(account: any, campaignCount: number) {
   return { ...account, isCrossbrand: campaignCount >= 2 };
 }
 
+function normalizeAccountKey(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 /**
  * Generates a TikTok handle from an account name
  * Converts to lowercase, removes special characters, replaces spaces
@@ -196,13 +200,66 @@ router.get('/', async (req, res) => {
 router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER', 'EDITOR'), async (req: AuthRequest, res) => {
   const { name, tiktokHandle, accountType, brand, notes, campaignIds } = req.body;
   if (!name || !accountType) return res.status(400).json({ error: 'Missing fields' });
-  
+  const trimmedName = String(name).trim();
+  if (!trimmedName) return res.status(400).json({ error: 'Missing fields' });
+
+  const normalizedName = normalizeAccountKey(trimmedName);
+  const searchPattern = trimmedName.replace(/\s+/g, '%');
+  const { data: existingCandidates, error: existingError } = await supabase
+    .from('Account')
+    .select('*')
+    .ilike('name', searchPattern);
+
+  if (existingError) return res.status(500).json({ error: existingError.message });
+
+  const existingAccount = (existingCandidates || []).find(
+    (account: any) => normalizeAccountKey(account.name) === normalizedName
+  );
+
+  if (existingAccount) {
+    if (campaignIds?.length) {
+      const { data: oldLinks } = await supabase
+        .from('_CampaignToAccount')
+        .select('A')
+        .eq('B', existingAccount.id);
+
+      const existingCampaignIds = oldLinks?.map((link: any) => link.A) || [];
+      const newCampaignIds = campaignIds.filter((id: string) => !existingCampaignIds.includes(id));
+
+      if (newCampaignIds.length > 0) {
+        const links = newCampaignIds.map((campaignId: string) => ({
+          A: campaignId,
+          B: existingAccount.id,
+        }));
+        await supabase.from('_CampaignToAccount').insert(links);
+
+        for (const campaignId of newCampaignIds) {
+          await recalculateKPIs(campaignId, existingAccount.id);
+        }
+      }
+    }
+
+    const { data: campaignLinks } = await supabase
+      .from('_CampaignToAccount')
+      .select('A')
+      .eq('B', existingAccount.id);
+
+    const campaignIdsFromDb = campaignLinks?.map((link: any) => link.A) || [];
+    const { data: campaigns } = await supabase
+      .from('Campaign')
+      .select('id, name, categories')
+      .in('id', campaignIdsFromDb);
+
+    const result = withCrossbrand({ ...existingAccount, campaigns: campaigns || [] }, campaigns?.length || 0);
+    return res.status(200).json(result);
+  }
+
   // Auto-generate handle if not provided
-  const finalTiktokHandle = tiktokHandle || await generateUniqueHandle(name);
+  const finalTiktokHandle = tiktokHandle || await generateUniqueHandle(trimmedName);
   
   const { data: account, error } = await supabase
     .from('Account')
-    .insert({ name, tiktokHandle: finalTiktokHandle, accountType, brand, notes })
+    .insert({ name: trimmedName, tiktokHandle: finalTiktokHandle, accountType, brand, notes })
     .select()
     .single();
   

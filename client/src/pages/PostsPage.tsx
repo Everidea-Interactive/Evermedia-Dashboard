@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/api';
@@ -54,6 +54,7 @@ type CampaignOption = {
   id: string;
   name: string;
   categories: string[];
+  status?: string;
 };
 
 type PicOption = {
@@ -219,6 +220,7 @@ const normalizeAccountType = (value?: string) => {
   const normalized = value.trim().replace(/[\s-]+/g, '_').toUpperCase();
   return ACCOUNT_TYPES.includes(normalized as AccountOption['accountType']) ? (normalized as AccountOption['accountType']) : '';
 };
+const normalizeAccountKey = (value?: string) => (value ? value.trim().replace(/\s+/g, ' ').toLowerCase() : '');
 
 // Helper function to remove leading zeros from number input
 const sanitizeNumberInput = (value: string): string => {
@@ -230,6 +232,7 @@ const sanitizeNumberInput = (value: string): string => {
 
 export default function PostsPage() {
   const { id } = useParams<{ id?: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { token } = useAuth();
   const { canAddPost, canDeletePost, canManageCampaigns } = usePermissions();
@@ -397,6 +400,15 @@ export default function PostsPage() {
   const accountNameMap = useMemo(() => new Map(accounts.map((account) => [account.id, account.name || ''])), [accounts]);
   const campaignNameMap = useMemo(() => new Map(campaigns.map((campaign) => [campaign.id, campaign.name || ''])), [campaigns]);
   const picNameMap = useMemo(() => new Map(pics.map((pic) => [pic.id, pic.name || ''])), [pics]);
+
+  // Filter campaigns to only show ACTIVE ones when on /posts/new route
+  const isNewPostPage = location.pathname === '/posts/new';
+  const filteredCampaigns = useMemo(() => {
+    if (isNewPostPage) {
+      return campaigns.filter((campaign) => campaign.status === 'ACTIVE');
+    }
+    return campaigns;
+  }, [campaigns, isNewPostPage]);
 
   const getAccountName = useCallback((post: Post) => {
     if (post.account?.name) return post.account.name;
@@ -776,8 +788,9 @@ export default function PostsPage() {
 
       const accountLookup = new Map<string, AccountOption>();
       accounts.forEach((account) => {
-        if (account.name) {
-          accountLookup.set(account.name.trim().toLowerCase(), account);
+        const key = normalizeAccountKey(account.name);
+        if (key) {
+          accountLookup.set(key, account);
         }
       });
 
@@ -812,7 +825,7 @@ export default function PostsPage() {
             );
           }
 
-          const normalizedAccountName = accountName.trim().toLowerCase();
+          const normalizedAccountName = normalizeAccountKey(accountName);
           let account = accountLookup.get(normalizedAccountName);
           const accountType = normalizeAccountType(getCsvValue(row, headerMap, 'Tipe Akun')) || 'CROSSBRAND';
           if (!account) {
@@ -825,7 +838,7 @@ export default function PostsPage() {
                   accountType,
                 },
               })) as AccountOption;
-              accountLookup.set(created.name.trim().toLowerCase(), created);
+              accountLookup.set(normalizeAccountKey(created.name), created);
               setAccounts((prev) => [...prev, created]);
               account = created;
             } catch (accountError: any) {
@@ -1054,9 +1067,9 @@ export default function PostsPage() {
   };
 
   const matchingAccount = useMemo(() => {
-    const candidate = form.accountName.trim();
+    const candidate = normalizeAccountKey(form.accountName);
     if (!candidate) return undefined;
-    return accounts.find((a) => a.name.toLowerCase() === candidate.toLowerCase());
+    return accounts.find((a) => normalizeAccountKey(a.name) === candidate);
   }, [form.accountName, accounts]);
 
   const filteredAccounts = useMemo(() => {
@@ -1958,7 +1971,7 @@ export default function PostsPage() {
                 required
               >
                 <option value="">Select campaign</option>
-                {campaigns.map((campaign) => (
+                {filteredCampaigns.map((campaign) => (
                   <option key={campaign.id} value={campaign.id}>
                     {campaign.name}
                   </option>

@@ -26,12 +26,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 border-b" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', transition: 'background-color 0.2s ease, border-color 0.2s ease' }}>
         <div className="container-pro">
           {/* Main header bar */}
-          <div className="h-16 flex items-center justify-between gap-2 min-w-0">
+          <div className="h-16 flex items-center gap-2 min-w-0 relative">
             {/* Logo and brand */}
             <Link
               to="/"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-3 rounded-lg px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 flex-shrink-0"
+              className="flex items-center gap-3 rounded-lg px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 flex-shrink-0 absolute left-0"
             >
               <img src="/favicon.svg" alt="Evermedia Dashboard" className="h-9 w-9 rounded-lg" />
               <div className="hidden sm:block">
@@ -39,8 +39,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </Link>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center gap-1 min-w-0 flex-1 overflow-x-auto scrollbar-hide">
+            {/* Desktop Navigation - Centered */}
+            <nav className="hidden lg:flex items-center gap-1 min-w-0 mx-auto overflow-x-auto scrollbar-hide">
               <NavLink
                 to="/campaigns"
                 className={({ isActive }) => {
@@ -176,7 +176,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </nav>
 
             {/* Right side actions */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 absolute right-0">
               {/* Light toggle button */}
               <button
                 onClick={toggleTheme}
