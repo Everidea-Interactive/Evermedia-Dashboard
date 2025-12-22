@@ -46,6 +46,51 @@ async function fetchAllPosts(selectFields: string, filterFn?: (query: any) => an
   return allPosts;
 }
 
+router.get('/campaigns/dashboard/engagement/batch', async (req, res) => {
+  const { campaignIds } = req.query as any;
+  if (!campaignIds) {
+    return res.status(400).json({ error: 'campaignIds query parameter is required' });
+  }
+
+  const ids = Array.isArray(campaignIds) ? campaignIds : String(campaignIds).split(',').filter(Boolean);
+  if (ids.length === 0) {
+    return res.json({});
+  }
+
+  try {
+    const posts = await fetchAllPosts(
+      'campaignId, totalView, totalLike, totalComment, totalShare, totalSaved',
+      (query) => query.in('campaignId', ids)
+    );
+
+    const totals = new Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>();
+    ids.forEach((campaignId) => {
+      totals.set(campaignId, { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 });
+    });
+
+    posts.forEach((post: any) => {
+      const campaignId = post.campaignId;
+      if (!campaignId) return;
+      const sum = totals.get(campaignId) ?? { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      sum.views += Number(post.totalView) || 0;
+      sum.likes += Number(post.totalLike) || 0;
+      sum.comments += Number(post.totalComment) || 0;
+      sum.shares += Number(post.totalShare) || 0;
+      sum.saves += Number(post.totalSaved) || 0;
+      totals.set(campaignId, sum);
+    });
+
+    const data: Record<string, any> = {};
+    totals.forEach((sum, campaignId) => {
+      data[campaignId] = { ...sum, engagementRate: engagementRate(sum) };
+    });
+
+    res.json(data);
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/campaigns/:id/dashboard/engagement', async (req, res) => {
   const campaignId = req.params.id;
   

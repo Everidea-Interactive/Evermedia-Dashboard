@@ -36,6 +36,8 @@ const statusPills: Record<string, { bg: string; border: string; text: string }> 
 const CAMPAIGN_CACHE_KEYS = {
   campaigns: getApiCacheKey('/campaigns'),
   engagement: getApiCacheKey('/campaigns/all/engagement'),
+  engagementBatch: (campaignIds: string) =>
+    getApiCacheKey(`/campaigns/dashboard/engagement/batch?campaignIds=${campaignIds}`),
   kpisBatch: (campaignIds: string) =>
     getApiCacheKey(`/campaigns/kpis/batch?campaignIds=${campaignIds}&accountId=null`),
 };
@@ -102,6 +104,7 @@ export default function CampaignsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [engagement, setEngagement] = useState<EngagementSnapshot | null>(null);
+  const [campaignEngagementMap, setCampaignEngagementMap] = useState<Map<string, EngagementSnapshot>>(new Map());
   const [form, setForm] = useState({
     name: '',
     categories: [] as string[],
@@ -257,6 +260,55 @@ export default function CampaignsPage() {
       return merged;
     });
   }, []);
+
+  const mergeCampaignEngagementMap = useCallback((incoming: Map<string, EngagementSnapshot>) => {
+    setCampaignEngagementMap((prev) => {
+      if (prev.size === 0) return incoming;
+      const merged = new Map(prev);
+      incoming.forEach((value, key) => {
+        merged.set(key, value);
+      });
+      return merged;
+    });
+  }, []);
+
+  const fetchEngagementForCampaigns = useCallback(async (
+    campaigns: Campaign[],
+    useCache = true
+  ) => {
+    if (campaigns.length === 0) return new Map<string, EngagementSnapshot>();
+    const campaignIds = campaigns.map(c => c.id).sort().join(',');
+    const cacheKey = CAMPAIGN_CACHE_KEYS.engagementBatch(campaignIds);
+
+    if (useCache) {
+      const cached = getCachedValue<Record<string, EngagementSnapshot>>(cacheKey);
+      if (cached && typeof cached === 'object') {
+        const engagementMap = new Map<string, EngagementSnapshot>();
+        Object.entries(cached).forEach(([key, value]) => {
+          if (value) engagementMap.set(key, value);
+        });
+        return engagementMap;
+      }
+    }
+
+    try {
+      const response = await api(`/campaigns/dashboard/engagement/batch?campaignIds=${campaignIds}`, {
+        token,
+        cache: { key: cacheKey, mode: useCache ? 'default' : 'reload' },
+      });
+      const engagementMap = new Map<string, EngagementSnapshot>();
+      Object.entries(response || {}).forEach(([campaignId, value]) => {
+        if (value) engagementMap.set(campaignId, value as EngagementSnapshot);
+      });
+      return engagementMap;
+    } catch (error) {
+      if (shouldIgnoreRequestError(error)) {
+        return new Map<string, EngagementSnapshot>();
+      }
+      console.error('Failed to fetch campaign engagement batch:', error);
+      return new Map<string, EngagementSnapshot>();
+    }
+  }, [token]);
 
   const loadKpisForCampaigns = useCallback(async (
     campaigns: Campaign[],
@@ -657,6 +709,19 @@ export default function CampaignsPage() {
     getCampaignQtyPostActual,
     refreshKpisForCampaigns,
   ]);
+
+  useEffect(() => {
+    if (paginatedItems.length === 0) return;
+    const missingEngagement = paginatedItems.filter((campaign) => !campaignEngagementMap.has(campaign.id));
+    if (missingEngagement.length === 0) return;
+
+    void (async () => {
+      const engagementMap = await fetchEngagementForCampaigns(missingEngagement, true);
+      if (engagementMap.size > 0) {
+        mergeCampaignEngagementMap(engagementMap);
+      }
+    })();
+  }, [paginatedItems, campaignEngagementMap, fetchEngagementForCampaigns, mergeCampaignEngagementMap]);
 
   useEffect(() => {
     api('/accounts', { token }).then(setAccounts).catch(() => setAccounts([]));
@@ -1286,6 +1351,10 @@ export default function CampaignsPage() {
                       const viewsKpi = kpiSummary?.views ?? EMPTY_KPI;
                       const qtyPostKpi = kpiSummary?.qtyPost ?? EMPTY_KPI;
                       const fypCountKpi = kpiSummary?.fypCount ?? EMPTY_KPI;
+                      const engagementRate = campaignEngagementMap.get(c.id)?.engagementRate;
+                      const engagementRateLabel = typeof engagementRate === 'number'
+                        ? `${(engagementRate * 100).toFixed(2)}%`
+                        : '-';
                       
                       return (
                         <TR key={c.id}>
@@ -1303,6 +1372,10 @@ export default function CampaignsPage() {
                               <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
                                 <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>FYP COUNT</div>
                                 <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{fypCountKpi.actual.toLocaleString()}/{fypCountKpi.target.toLocaleString()}</div>
+                              </div>
+                              <div className="rounded-lg border px-2 py-1.5 text-center min-w-[70px]" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+                                <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>ER</div>
+                                <div className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{engagementRateLabel}</div>
                               </div>
                             </div>
                           </TD>
