@@ -112,6 +112,7 @@ export default function CampaignDetailPage() {
   const [engagementUpdateResult, setEngagementUpdateResult] = useState<EngagementUpdateResult | null>(null);
   const [retryingUpdateRows, setRetryingUpdateRows] = useState<Record<string, boolean>>({});
   const hasHydratedFromCacheRef = useRef(false);
+  const kpiRefreshIdRef = useRef(0);
   const CAMPAIGN_CACHE_KEY = id ? getApiCacheKey(`/campaigns/${id}`) : '';
   const PICS_CACHE_KEY = getApiCacheKey('/pics?active=true');
   const ACCOUNTS_CACHE_KEY = getApiCacheKey('/accounts');
@@ -192,15 +193,52 @@ export default function CampaignDetailPage() {
   ]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'postDate', direction: 'desc' });
 
-  const refreshDashboardMetrics = useCallback(async (options?: { recalculate?: boolean }) => {
-    if (!id) return;
+  const getLatestKpiUpdatedAt = useCallback((kpiList: any[]) => {
+    let latest = 0;
+    (kpiList || []).forEach((kpi) => {
+      const timestamp = kpi?.updatedAt ? new Date(kpi.updatedAt).getTime() : 0;
+      if (timestamp > latest) latest = timestamp;
+    });
+    return latest;
+  }, []);
+
+  const fetchKpis = useCallback(async (options?: { recalculate?: boolean }) => {
+    if (!id) return [];
     const shouldRecalculate = options?.recalculate;
     const kpiPath = shouldRecalculate
       ? `/campaigns/${id}/kpis?recalculate=true`
       : `/campaigns/${id}/kpis`;
+    const response = await api(kpiPath, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'reload' } : undefined });
+    return Array.isArray(response) ? response : [];
+  }, [id, token, KPIS_CACHE_KEY]);
+
+  const triggerAccountKpiRecalculation = useCallback(async (accountIds: string[]) => {
+    if (!id || accountIds.length === 0) return;
+    await Promise.allSettled(accountIds.map(async (accountId) => {
+      try {
+        const encodedAccountId = encodeURIComponent(accountId);
+        await api(`/campaigns/${id}/kpis?accountId=${encodedAccountId}&recalculate=true`, {
+          token,
+          cache: { mode: 'reload' },
+        });
+      } catch (error) {
+        if (!shouldIgnoreRequestError(error)) {
+          console.error(`Failed to recalculate KPIs for account ${accountId}:`, error);
+        }
+      }
+    }));
+  }, [id, token]);
+
+  const refreshDashboardMetrics = useCallback(async (options?: { recalculate?: boolean }) => {
+    if (!id) return;
+    const shouldRecalculate = options?.recalculate;
+    const refreshId = shouldRecalculate ? kpiRefreshIdRef.current + 1 : kpiRefreshIdRef.current;
+    if (shouldRecalculate) {
+      kpiRefreshIdRef.current = refreshId;
+    }
     const [kpisResult, engagementResult, categoriesResult] = await Promise.allSettled([
       // Always reload so KPI data isn't served from cache
-      api(kpiPath, { token, cache: KPIS_CACHE_KEY ? { key: KPIS_CACHE_KEY, mode: 'reload' } : undefined }),
+      fetchKpis({ recalculate: shouldRecalculate }),
       api(`/campaigns/${id}/dashboard/engagement`, {
         token,
         cache: DASHBOARD_ENGAGEMENT_CACHE_KEY ? { key: DASHBOARD_ENGAGEMENT_CACHE_KEY, mode: 'reload' } : undefined,
@@ -212,7 +250,39 @@ export default function CampaignDetailPage() {
     ]);
 
     if (kpisResult.status === 'fulfilled') {
-      setKpis(kpisResult.value);
+      const nextKpis = kpisResult.value;
+      setKpis(nextKpis);
+      if (shouldRecalculate) {
+        const accountIds = Array.from(new Set((nextKpis || [])
+          .map((kpi: any) => kpi?.accountId)
+          .filter((accountId: string | null | undefined): accountId is string => Boolean(accountId))));
+        if (accountIds.length > 0) {
+          void triggerAccountKpiRecalculation(accountIds);
+        }
+        const initialUpdatedAt = getLatestKpiUpdatedAt(nextKpis);
+        const delays = [2000, 6000];
+        const pollForUpdates = (attempt: number, lastUpdatedAt: number) => {
+          if (attempt >= delays.length) return;
+          setTimeout(async () => {
+            if (refreshId !== kpiRefreshIdRef.current) return;
+            try {
+              const refreshedKpis = await fetchKpis();
+              if (refreshId !== kpiRefreshIdRef.current) return;
+              setKpis(refreshedKpis);
+              const nextUpdatedAt = getLatestKpiUpdatedAt(refreshedKpis);
+              if (nextUpdatedAt > lastUpdatedAt) {
+                return;
+              }
+              pollForUpdates(attempt + 1, nextUpdatedAt);
+            } catch (error) {
+              if (!shouldIgnoreRequestError(error)) {
+                console.error('Failed to refresh KPIs:', error);
+              }
+            }
+          }, delays[attempt]);
+        };
+        pollForUpdates(0, initialUpdatedAt);
+      }
     } else {
       if (!shouldIgnoreRequestError(kpisResult.reason)) {
         console.error('Failed to refresh KPIs:', kpisResult.reason);
@@ -235,7 +305,15 @@ export default function CampaignDetailPage() {
       }
       setCategoryOverview([]);
     }
-  }, [id, token]);
+  }, [
+    id,
+    token,
+    fetchKpis,
+    triggerAccountKpiRecalculation,
+    getLatestKpiUpdatedAt,
+    DASHBOARD_ENGAGEMENT_CACHE_KEY,
+    DASHBOARD_CATEGORIES_CACHE_KEY,
+  ]);
 
   useEffect(() => {
     if (!id) return;
