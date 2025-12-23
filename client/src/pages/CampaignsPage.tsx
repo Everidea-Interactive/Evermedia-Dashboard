@@ -102,6 +102,8 @@ export default function CampaignsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [duplicatingIds, setDuplicatingIds] = useState<Set<string>>(new Set());
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{ id: string; name: string; newName: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [engagement, setEngagement] = useState<EngagementSnapshot | null>(null);
   const [campaignEngagementMap, setCampaignEngagementMap] = useState<Map<string, EngagementSnapshot>>(new Map());
@@ -978,6 +980,45 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleDuplicateClick = (campaign: Campaign) => {
+    setDuplicateConfirm({
+      id: campaign.id,
+      name: campaign.name,
+      newName: `${campaign.name} (Copy)`,
+    });
+  };
+
+  const handleDuplicateConfirm = async () => {
+    if (!duplicateConfirm) return;
+    const { id, newName } = duplicateConfirm;
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+      setToast({ message: 'Campaign name is required', type: 'error' });
+      return;
+    }
+    setDuplicatingIds(prev => new Set(prev).add(id));
+    setDuplicateConfirm(null);
+    try {
+      const duplicated = await api(`/campaigns/${id}/duplicate`, {
+        method: 'POST',
+        token,
+        body: { name: trimmedName },
+      });
+      clearCache();
+      fetchAllData();
+      setToast({ message: `Campaign duplicated as "${duplicated?.name || trimmedName}"`, type: 'success' });
+    } catch (error: any) {
+      const errorMessage = error?.error || error?.message || 'Failed to duplicate campaign';
+      setToast({ message: errorMessage, type: 'error' });
+    } finally {
+      setDuplicatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   const handleDeleteClick = (id: string, name: string) => {
     setDeleteConfirm({ id, name });
   };
@@ -1399,6 +1440,17 @@ export default function CampaignsPage() {
                               <Link to={`/campaigns/${c.id}`} className="btn btn-outline-blue text-xs px-1.5 py-0.5">
                                 View
                               </Link>
+                              <RequirePermission permission={canManageCampaigns}>
+                                <Button
+                                  variant="outline"
+                                  color="green"
+                                  onClick={() => handleDuplicateClick(c)}
+                                  disabled={duplicatingIds.has(c.id)}
+                                  className="text-xs px-1.5 py-0.5"
+                                >
+                                  {duplicatingIds.has(c.id) ? 'Duplicating...' : 'Duplicate'}
+                                </Button>
+                              </RequirePermission>
                               <RequirePermission permission={canDelete}>
                                 <Button
                                   variant="outline"
@@ -1741,6 +1793,38 @@ export default function CampaignsPage() {
           </form>
         </Dialog>
       </RequirePermission>
+
+      <Dialog
+        open={!!duplicateConfirm}
+        onClose={() => setDuplicateConfirm(null)}
+        title="Duplicate Campaign"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDuplicateConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" color="green" onClick={handleDuplicateConfirm}>
+              Duplicate
+            </Button>
+          </>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Duplicate <strong>"{duplicateConfirm?.name}"</strong> with posts, KPIs, and account links?
+        </p>
+        <div className="mt-3">
+          <Input
+            label="New campaign name"
+            value={duplicateConfirm?.newName || ''}
+            onChange={e => setDuplicateConfirm(prev => (prev ? { ...prev, newName: e.target.value } : prev))}
+            autoFocus
+            required
+          />
+        </div>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          Posts will be copied to the new campaign, and existing accounts will stay linked.
+        </p>
+      </Dialog>
 
       <Dialog
         open={!!deleteConfirm}

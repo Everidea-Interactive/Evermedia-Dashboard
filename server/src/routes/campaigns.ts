@@ -41,6 +41,50 @@ const isTruthyParam = (value: unknown): boolean => {
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 };
 
+const DUPLICATE_BATCH_SIZE = 500;
+
+const chunkArray = <T>(items: T[], size: number): T[][] => {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const fetchAllCampaignPosts = async (campaignId: string) => {
+  const posts: any[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('Post')
+      .select('*')
+      .eq('campaignId', campaignId)
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) return { data: null, error };
+
+    const batch = data || [];
+    posts.push(...batch);
+
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return { data: posts, error: null };
+};
+
+const insertInChunks = async (table: string, rows: any[]) => {
+  if (rows.length === 0) return;
+  for (const chunk of chunkArray(rows, DUPLICATE_BATCH_SIZE)) {
+    const { error } = await supabase.from(table).insert(chunk);
+    if (error) throw error;
+  }
+};
+
 const router = Router();
 router.use(requireAuth);
 
@@ -124,6 +168,132 @@ router.post('/', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequ
   }
   
   res.status(201).json(campaign);
+});
+
+router.post('/:id/duplicate', requireRoles('ADMIN', 'CAMPAIGN_MANAGER'), async (req: AuthRequest, res) => {
+  const { name } = req.body as any;
+  const sourceId = req.params.id;
+
+  const { data: sourceCampaign, error: sourceError } = await supabase
+    .from('Campaign')
+    .select('*')
+    .eq('id', sourceId)
+    .single();
+
+  if (sourceError || !sourceCampaign) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  const duplicateName = typeof name === 'string' && name.trim()
+    ? name.trim()
+    : `${sourceCampaign.name} (Copy)`;
+
+  const { data: newCampaign, error: createError } = await supabase
+    .from('Campaign')
+    .insert({
+      name: duplicateName,
+      categories: Array.isArray(sourceCampaign.categories) ? sourceCampaign.categories : [],
+      startDate: sourceCampaign.startDate,
+      endDate: sourceCampaign.endDate,
+      status: sourceCampaign.status,
+      description: sourceCampaign.description,
+      quotationNumber: sourceCampaign.quotationNumber ?? null,
+      targetViewsForFYP: sourceCampaign.targetViewsForFYP ?? null,
+      brandName: sourceCampaign.brandName,
+    })
+    .select()
+    .single();
+
+  if (createError || !newCampaign) {
+    return res.status(500).json({ error: createError?.message || 'Failed to duplicate campaign' });
+  }
+
+  try {
+    const [{ data: accountLinks, error: accountLinksError }, { data: kpis, error: kpisError }, postsResult] = await Promise.all([
+      supabase.from('_CampaignToAccount').select('B').eq('A', sourceId),
+      supabase.from('KPI').select('*').eq('campaignId', sourceId),
+      fetchAllCampaignPosts(sourceId),
+    ]);
+
+    if (accountLinksError) throw accountLinksError;
+    if (kpisError) throw kpisError;
+    if (postsResult.error) throw postsResult.error;
+
+    const posts = postsResult.data || [];
+    const linkedAccountIds = (accountLinks || []).map((link: any) => link.B);
+    const postAccountIds = posts.map((post: any) => post.accountId).filter(Boolean);
+    const accountIds = Array.from(new Set([...linkedAccountIds, ...postAccountIds]));
+
+    if (accountIds.length > 0) {
+      const links = accountIds.map((accountId: string) => ({ A: newCampaign.id, B: accountId }));
+      await insertInChunks('_CampaignToAccount', links);
+    }
+
+    if (kpis && kpis.length > 0) {
+      const kpiRows = kpis.map((kpi: any) => ({
+        campaignId: newCampaign.id,
+        accountId: kpi.accountId ?? null,
+        category: kpi.category,
+        target: kpi.target ?? 0,
+        actual: kpi.actual ?? 0,
+      }));
+      await insertInChunks('KPI', kpiRows);
+    }
+
+    if (posts.length > 0) {
+      const postRows = posts.map((post: any) => ({
+        campaignId: newCampaign.id,
+        accountId: post.accountId,
+        postDate: post.postDate,
+        postDay: post.postDay,
+        picTalentId: post.picTalentId,
+        picEditorId: post.picEditorId,
+        picPostingId: post.picPostingId,
+        contentCategory: post.contentCategory,
+        campaignCategory: post.campaignCategory ?? null,
+        adsOnMusic: !!post.adsOnMusic,
+        yellowCart: !!post.yellowCart,
+        postTitle: post.postTitle,
+        contentType: post.contentType,
+        status: post.status,
+        contentLink: post.contentLink,
+        totalView: post.totalView ?? 0,
+        totalLike: post.totalLike ?? 0,
+        totalComment: post.totalComment ?? 0,
+        totalShare: post.totalShare ?? 0,
+        totalSaved: post.totalSaved ?? 0,
+        fypType: post.fypType ?? null,
+      }));
+      await insertInChunks('Post', postRows);
+    }
+
+    const newValues = {
+      name: newCampaign.name,
+      categories: newCampaign.categories,
+      startDate: newCampaign.startDate,
+      endDate: newCampaign.endDate,
+      status: newCampaign.status,
+      description: newCampaign.description,
+      quotationNumber: newCampaign.quotationNumber,
+      targetViewsForFYP: newCampaign.targetViewsForFYP,
+      brandName: newCampaign.brandName,
+      accountIds,
+    };
+
+    await logActivity(req, {
+      action: 'CREATE',
+      entityType: 'Campaign',
+      entityId: newCampaign.id,
+      entityName: getEntityName('Campaign', newCampaign),
+      newValues,
+      description: generateChangeDescription('CREATE', 'Campaign', getEntityName('Campaign', newCampaign), undefined, newValues),
+    });
+
+    res.status(201).json(newCampaign);
+  } catch (error: any) {
+    await supabase.from('Campaign').delete().eq('id', newCampaign.id);
+    res.status(500).json({ error: error?.message || 'Failed to duplicate campaign' });
+  }
 });
 
 router.get('/:id', async (req, res) => {
